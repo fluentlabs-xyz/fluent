@@ -9,8 +9,11 @@ use reth_rpc_types::engine::{
     ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3, ExecutionPayloadV1, PayloadAttributes,
     PayloadId,
 };
-use revm_primitives::{BlockEnv, CfgEnv};
-
+use reth_rpc_types_compat::engine::payload::{
+    convert_block_to_payload_field_v2, convert_standalonewithdraw_to_withdrawal,
+    try_block_to_payload_v1, try_block_to_payload_v3,
+};
+use revm_primitives::{BlobExcessGasAndPrice, BlockEnv, CfgEnv, SpecId};
 /// Contains the built payload.
 ///
 /// According to the [engine API specification](https://github.com/ethereum/execution-apis/blob/main/src/engine/README.md) the execution layer should build the initial version of the payload with an empty transaction set and then keep update it in order to maximize the revenue.
@@ -76,7 +79,7 @@ impl BuiltPayload {
 // V1 engine_getPayloadV1 response
 impl From<BuiltPayload> for ExecutionPayloadV1 {
     fn from(value: BuiltPayload) -> Self {
-        value.block.into()
+        try_block_to_payload_v1(value.block)
     }
 }
 
@@ -85,7 +88,10 @@ impl From<BuiltPayload> for ExecutionPayloadEnvelopeV2 {
     fn from(value: BuiltPayload) -> Self {
         let BuiltPayload { block, fees, .. } = value;
 
-        ExecutionPayloadEnvelopeV2 { block_value: fees, execution_payload: block.into() }
+        ExecutionPayloadEnvelopeV2 {
+            block_value: fees,
+            execution_payload: convert_block_to_payload_field_v2(block),
+        }
     }
 }
 
@@ -94,7 +100,7 @@ impl From<BuiltPayload> for ExecutionPayloadEnvelopeV3 {
         let BuiltPayload { block, fees, sidecars, .. } = value;
 
         ExecutionPayloadEnvelopeV3 {
-            execution_payload: block.into(),
+            execution_payload: try_block_to_payload_v3(block),
             block_value: fees,
             // From the engine API spec:
             //
@@ -137,13 +143,23 @@ impl PayloadBuilderAttributes {
     /// Derives the unique [PayloadId] for the given parent and attributes
     pub fn new(parent: H256, attributes: PayloadAttributes) -> Self {
         let id = payload_id(&parent, &attributes);
+
+        let withdraw = attributes.withdrawals.map(
+            |withdrawals: Vec<reth_rpc_types::engine::payload::Withdrawal>| {
+                withdrawals
+                    .into_iter()
+                    .map(convert_standalonewithdraw_to_withdrawal) // Removed the parentheses here
+                    .collect::<Vec<_>>()
+            },
+        );
+
         Self {
             id,
             parent,
             timestamp: attributes.timestamp.as_u64(),
             suggested_fee_recipient: attributes.suggested_fee_recipient,
             prev_randao: attributes.prev_randao,
-            withdrawals: attributes.withdrawals.unwrap_or_default(),
+            withdrawals: withdraw.unwrap_or_default(),
             parent_beacon_block_root: attributes.parent_beacon_block_root,
         }
     }
@@ -161,8 +177,26 @@ impl PayloadBuilderAttributes {
         // configure evm env based on parent block
         let mut cfg = CfgEnv::default();
         cfg.chain_id = chain_spec.chain().id();
+
         // ensure we're not missing any timestamp based hardforks
         cfg.spec_id = revm_spec_by_timestamp_after_merge(chain_spec, self.timestamp);
+
+        // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is
+        // cancun now, we need to set the excess blob gas to the default value
+        let blob_excess_gas_and_price = parent
+            .next_block_blob_fee()
+            .map_or_else(
+                || {
+                    if cfg.spec_id == SpecId::CANCUN {
+                        // default excess blob gas is zero
+                        Some(0)
+                    } else {
+                        None
+                    }
+                },
+                Some,
+            )
+            .map(BlobExcessGasAndPrice::new);
 
         let block_env = BlockEnv {
             number: U256::from(parent.number + 1),
@@ -176,7 +210,7 @@ impl PayloadBuilderAttributes {
                 parent.next_block_base_fee(chain_spec.base_fee_params).unwrap_or_default(),
             ),
             // calculate excess gas based on parent block's blob gas usage
-            excess_blob_gas: parent.next_block_blob_fee(),
+            blob_excess_gas_and_price,
         };
 
         (cfg, block_env)

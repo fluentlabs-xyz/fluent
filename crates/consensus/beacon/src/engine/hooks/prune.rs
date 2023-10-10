@@ -9,11 +9,14 @@ use crate::{
 use futures::FutureExt;
 use metrics::Counter;
 use reth_db::database::Database;
-use reth_interfaces::sync::SyncState;
+use reth_interfaces::RethError;
 use reth_primitives::BlockNumber;
 use reth_prune::{Pruner, PrunerError, PrunerWithResult};
 use reth_tasks::TaskSpawner;
-use std::task::{ready, Context, Poll};
+use std::{
+    fmt,
+    task::{ready, Context, Poll},
+};
 use tokio::sync::oneshot;
 
 /// Manages pruning under the control of the engine.
@@ -25,6 +28,15 @@ pub struct PruneHook<DB> {
     /// The type that can spawn the pruner task.
     pruner_task_spawner: Box<dyn TaskSpawner>,
     metrics: Metrics,
+}
+
+impl<DB: fmt::Debug> fmt::Debug for PruneHook<DB> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PruneHook")
+            .field("pruner_state", &self.pruner_state)
+            .field("metrics", &self.metrics)
+            .finish()
+    }
 }
 
 impl<DB: Database + 'static> PruneHook<DB> {
@@ -62,8 +74,8 @@ impl<DB: Database + 'static> PruneHook<DB> {
                             EngineHookError::Internal(Box::new(err))
                         }
                         PrunerError::Interface(err) => err.into(),
-                        PrunerError::Database(err) => reth_interfaces::Error::Database(err).into(),
-                        PrunerError::Provider(err) => reth_interfaces::Error::Provider(err).into(),
+                        PrunerError::Database(err) => RethError::Database(err).into(),
+                        PrunerError::Provider(err) => RethError::Provider(err).into(),
                     })),
                 }
             }
@@ -73,13 +85,7 @@ impl<DB: Database + 'static> PruneHook<DB> {
             }
         };
 
-        let action = if matches!(event, EngineHookEvent::Finished(Ok(_))) {
-            Some(EngineHookAction::RestoreCanonicalHashes)
-        } else {
-            None
-        };
-
-        Poll::Ready((event, action))
+        Poll::Ready((event, None))
     }
 
     /// This will try to spawn the pruner if it is idle:
@@ -110,14 +116,7 @@ impl<DB: Database + 'static> PruneHook<DB> {
                     self.metrics.runs.increment(1);
                     self.pruner_state = PrunerState::Running(rx);
 
-                    Some((
-                        EngineHookEvent::Started,
-                        // Engine can't process any FCU/payload messages from CL while we're
-                        // pruning, as pruner needs an exclusive write access to the database. To
-                        // prevent CL from sending us unneeded updates, we need to respond `true`
-                        // on `eth_syncing` request.
-                        Some(EngineHookAction::UpdateSyncState(SyncState::Syncing)),
-                    ))
+                    Some((EngineHookEvent::Started, None))
                 } else {
                     self.pruner_state = PrunerState::Idle(Some(pruner));
                     Some((EngineHookEvent::NotReady, None))
@@ -163,6 +162,7 @@ impl<DB: Database + 'static> EngineHook for PruneHook<DB> {
 /// running, it acquires the write lock over the database. This means that we cannot forward to the
 /// blockchain tree any messages that would result in database writes, since it would result in a
 /// deadlock.
+#[derive(Debug)]
 enum PrunerState<DB> {
     /// Pruner is idle.
     Idle(Option<Pruner<DB>>),

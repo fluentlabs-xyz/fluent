@@ -1,12 +1,12 @@
-use reth_interfaces::sync::SyncState;
+use reth_interfaces::RethError;
 use reth_primitives::BlockNumber;
 use std::{
-    fmt::Debug,
+    fmt,
     task::{Context, Poll},
 };
 
 mod controller;
-pub(crate) use controller::EngineHooksController;
+pub(crate) use controller::{EngineHooksController, PolledHook};
 
 mod prune;
 pub use prune::PruneHook;
@@ -15,6 +15,12 @@ pub use prune::PruneHook;
 #[derive(Default)]
 pub struct EngineHooks {
     inner: Vec<Box<dyn EngineHook>>,
+}
+
+impl fmt::Debug for EngineHooks {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EngineHooks").field("inner", &self.inner.len()).finish()
+    }
 }
 
 impl EngineHooks {
@@ -85,13 +91,7 @@ impl EngineHookEvent {
 
 /// An action that the caller of [hook][`EngineHook`] should act upon.
 #[derive(Debug, Copy, Clone)]
-pub enum EngineHookAction {
-    /// Notify about a [SyncState] update.
-    UpdateSyncState(SyncState),
-    /// Read the last relevant canonical hashes from the database and update the block indices of
-    /// the blockchain tree.
-    RestoreCanonicalHashes,
-}
+pub enum EngineHookAction {}
 
 /// An error returned by [hook][`EngineHook`].
 #[derive(Debug, thiserror::Error)]
@@ -99,15 +99,16 @@ pub enum EngineHookError {
     /// Hook channel closed.
     #[error("Hook channel closed")]
     ChannelClosed,
-    /// Common error. Wrapper around [reth_interfaces::Error].
+    /// Common error. Wrapper around [RethError].
     #[error(transparent)]
-    Common(#[from] reth_interfaces::Error),
+    Common(#[from] RethError),
     /// An internal error occurred.
     #[error("Internal hook error occurred.")]
     Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Level of database access the hook needs for execution.
+#[derive(Debug, Copy, Clone)]
 pub enum EngineHookDBAccessLevel {
     /// Read-only database access.
     ReadOnly,
