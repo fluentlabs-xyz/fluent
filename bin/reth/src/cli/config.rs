@@ -1,6 +1,9 @@
 //! Config traits for various node components.
 
+#[cfg(feature = "revm")]
 use reth_revm::primitives::bytes::BytesMut;
+#[cfg(feature = "rwasm")]
+use reth_rwasm::primitives::bytes::BytesMut;
 use reth_rlp::Encodable;
 use reth_rpc::{eth::gas_oracle::GasPriceOracleConfig, JwtError, JwtSecret};
 use reth_rpc_builder::{

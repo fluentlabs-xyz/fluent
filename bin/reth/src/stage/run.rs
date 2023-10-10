@@ -194,7 +194,10 @@ impl Command {
                 }
                 StageEnum::Senders => (Box::new(SenderRecoveryStage::new(batch_size)), None),
                 StageEnum::Execution => {
+                    #[cfg(feature = "revm")]
                     let factory = reth_revm::Factory::new(self.chain.clone());
+                    #[cfg(feature = "rwasm")]
+                    let factory = reth_rwasm::Factory::new(self.chain.clone());
                     (
                         Box::new(ExecutionStage::new(
                             factory,

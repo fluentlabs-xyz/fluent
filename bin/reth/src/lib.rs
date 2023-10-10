@@ -62,7 +62,10 @@ pub mod blockchain_tree {
 
 /// Re-exported from `reth_revm`.
 pub mod revm {
+    #[cfg(feature = "revm")]
     pub use reth_revm::*;
+    #[cfg(feature = "rwasm")]
+    pub use reth_rwasm::*;
 }
 
 /// Re-exported from `reth_tasks`.

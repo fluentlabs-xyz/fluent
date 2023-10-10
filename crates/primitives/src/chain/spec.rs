@@ -225,13 +225,38 @@ pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             (Hardfork::MuirGlacier, ForkCondition::Block(0)),
             (Hardfork::Berlin, ForkCondition::Block(0)),
             (Hardfork::London, ForkCondition::Block(0)),
-            (
-                Hardfork::Paris,
-                ForkCondition::TTD { fork_block: Some(0), total_difficulty: U256::from(0) },
-            ),
-            (Hardfork::Shanghai, ForkCondition::Timestamp(0)),
+            // (
+            //     Hardfork::Paris,
+            //     ForkCondition::TTD { fork_block: Some(0), total_difficulty: U256::from(0) },
+            // ),
+            // (Hardfork::Shanghai, ForkCondition::Timestamp(0)),
         ]),
         deposit_contract: None, // TODO: do we even have?
+        ..Default::default()
+    }
+    .into()
+});
+
+pub static FLUENT_DEVNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
+    let genesis = serde_json::from_str(include_str!("../../res/genesis/fluent-devnet.json"))
+        .expect("Can't deserialize FluentDevnet testnet genesis json");
+    ChainSpec {
+        chain: Chain::dev(),
+        genesis,
+        hardforks: BTreeMap::from([
+            (Hardfork::Frontier, ForkCondition::Block(0)),
+            (Hardfork::Homestead, ForkCondition::Block(0)),
+            (Hardfork::Dao, ForkCondition::Block(0)),
+            (Hardfork::Tangerine, ForkCondition::Block(0)),
+            (Hardfork::SpuriousDragon, ForkCondition::Block(0)),
+            (Hardfork::Byzantium, ForkCondition::Block(0)),
+            (Hardfork::Constantinople, ForkCondition::Block(0)),
+            (Hardfork::Petersburg, ForkCondition::Block(0)),
+            (Hardfork::Istanbul, ForkCondition::Block(0)),
+            (Hardfork::MuirGlacier, ForkCondition::Block(0)),
+            (Hardfork::Berlin, ForkCondition::Block(0)),
+            (Hardfork::London, ForkCondition::Block(0)),
+        ]),
         ..Default::default()
     }
     .into()
@@ -488,8 +513,8 @@ impl ChainSpec {
         for (_, cond) in self.forks_iter() {
             // handle block based forks and the sepolia merge netsplit block edge case (TTD
             // ForkCondition with Some(block))
-            if let ForkCondition::Block(block) |
-            ForkCondition::TTD { fork_block: Some(block), .. } = cond
+            if let ForkCondition::Block(block)
+            | ForkCondition::TTD { fork_block: Some(block), .. } = cond
             {
                 if cond.active_at_head(head) {
                     if block != current_applied {
@@ -499,7 +524,7 @@ impl ChainSpec {
                 } else {
                     // we can return here because this block fork is not active, so we set the
                     // `next` value
-                    return ForkId { hash: forkhash, next: block }
+                    return ForkId { hash: forkhash, next: block };
                 }
             }
         }
@@ -520,7 +545,7 @@ impl ChainSpec {
                 // can safely return here because we have already handled all block forks and
                 // have handled all active timestamp forks, and set the next value to the
                 // timestamp that is known but not active yet
-                return ForkId { hash: forkhash, next: timestamp }
+                return ForkId { hash: forkhash, next: timestamp };
             }
         }
 
@@ -918,9 +943,9 @@ impl ForkCondition {
     /// - The condition is satisfied by the timestamp;
     /// - or the condition is satisfied by the total difficulty
     pub fn active_at_head(&self, head: &Head) -> bool {
-        self.active_at_block(head.number) ||
-            self.active_at_timestamp(head.timestamp) ||
-            self.active_at_ttd(head.total_difficulty, head.difficulty)
+        self.active_at_block(head.number)
+            || self.active_at_timestamp(head.timestamp)
+            || self.active_at_ttd(head.total_difficulty, head.difficulty)
     }
 
     /// Get the total terminal difficulty for this fork condition.

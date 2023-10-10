@@ -23,8 +23,9 @@ reth-primitives = { workspace = true, features = ["arbitrary"] }
 reth-db = { path = "../../crates/storage/db", features = ["mdbx", "test-utils"] }
 # TODO: Temporary use of the test-utils feature
 reth-provider = { workspace = true, features = ["test-utils"] }
-reth-revm = { path = "../../crates/revm" }
-reth-revm-inspectors = { path = "../../crates/revm/revm-inspectors" }
+reth-revm = { path = "../../crates/revm", optional = true }
+reth-revm-inspectors = { path = "../../crates/revm/revm-inspectors", optional = true }
+reth-rwasm = { path = "../../crates/rwasm", optional = true }
 reth-stages = { path = "../../crates/stages" }
 reth-interfaces = { workspace = true, features = ["test-utils", "clap"] }
 reth-transaction-pool.workspace = true
@@ -107,7 +108,7 @@ jemallocator = { version = "0.5.0", optional = true }
 jemalloc-ctl = { version = "0.5.0", optional = true }
 
 [features]
-default = ["jemalloc"]
+default = ["jemalloc", "rwasm"]
 jemalloc = ["dep:jemallocator", "dep:jemalloc-ctl"]
 jemalloc-prof = ["jemalloc", "jemallocator?/profiling"]
 min-error-logs = ["tracing/release_max_level_error"]
@@ -115,6 +116,8 @@ min-warn-logs = ["tracing/release_max_level_warn"]
 min-info-logs = ["tracing/release_max_level_info"]
 min-debug-logs = ["tracing/release_max_level_debug"]
 min-trace-logs = ["tracing/release_max_level_trace"]
+rwasm = ["dep:reth-rwasm"]
+revm = ["dep:reth-revm", "dep:reth-revm-inspectors"]
 
 [build-dependencies]
 vergen = { version = "8.0.0", features = ["build", "cargo", "git", "gitcl"] }

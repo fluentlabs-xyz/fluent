@@ -7,7 +7,10 @@ use reth_db::{
 };
 use reth_primitives::{stage::StageCheckpoint, ChainSpec};
 use reth_provider::ProviderFactory;
+#[cfg(feature = "revm")]
 use reth_revm::Factory;
+#[cfg(feature = "rwasm")]
+use reth_rwasm::Factory;
 use reth_stages::{stages::ExecutionStage, Stage, UnwindInput};
 use std::{path::PathBuf, sync::Arc};
 use tracing::info;

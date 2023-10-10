@@ -34,6 +34,8 @@ members = [
     "crates/rpc/rpc-engine-api",
     "crates/rpc/rpc-types",
     "crates/rpc/rpc-testing-util",
+    "crates/rwasm",
+    "crates/rwasm/rwasm-primitives",
     "crates/stages",
     "crates/storage/codecs",
     "crates/storage/db",
@@ -100,6 +102,10 @@ reth-rpc-types-compat = { path = "./crates/rpc/rpc-types-compat" }
 # revm
 revm = { git = "https://github.com/bluealloy/revm" }
 revm-primitives = { git = "https://github.com/bluealloy/revm" }
+
+# rwasm
+fluentbase-rwasm = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel" }
+fluentbase-runtime = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel" }
 
 ## eth
 ethers-core = { version = "2.0", default-features = false }

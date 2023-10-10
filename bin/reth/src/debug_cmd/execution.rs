@@ -113,7 +113,10 @@ impl Command {
         let stage_conf = &config.stages;
 
         let (tip_tx, tip_rx) = watch::channel(H256::zero());
+        #[cfg(feature = "revm")]
         let factory = reth_revm::Factory::new(self.chain.clone());
+        #[cfg(feature = "rwasm")]
+        let factory = reth_rwasm::Factory::new(self.chain.clone());
 
         let header_mode = HeaderSyncMode::Tip(tip_rx);
         let pipeline = Pipeline::builder()

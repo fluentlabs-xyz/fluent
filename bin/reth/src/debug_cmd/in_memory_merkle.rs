@@ -164,7 +164,10 @@ impl Command {
             )
             .await?;
 
+        #[cfg(feature = "revm")]
         let executor_factory = reth_revm::Factory::new(self.chain.clone());
+        #[cfg(feature = "rwasm")]
+        let executor_factory = reth_rwasm::Factory::new(self.chain.clone());
         let mut executor =
             executor_factory.with_state(LatestStateProviderRef::new(provider.tx_ref()));
 

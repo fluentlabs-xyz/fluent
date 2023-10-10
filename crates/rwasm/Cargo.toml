@@ -1,0 +1,27 @@
+[package]
+name = "reth-rwasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "reth specific rwasm utilities"
+
+[dependencies]
+# reth 
+reth-primitives.workspace = true
+reth-interfaces.workspace = true
+reth-provider.workspace = true
+reth-rwasm-primitives = { path = "rwasm-primitives" }
+reth-consensus-common = { path = "../consensus/common" }
+
+# rwasm
+fluentbase-rwasm.workspace = true
+fluentbase-runtime.workspace = true
+
+# revm
+revm.workspace = true
+
+# common
+tracing.workspace = true

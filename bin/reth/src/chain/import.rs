@@ -157,7 +157,10 @@ impl ImportCommand {
             .into_task();
 
         let (tip_tx, tip_rx) = watch::channel(H256::zero());
+        #[cfg(feature = "revm")]
         let factory = reth_revm::Factory::new(self.chain.clone());
+        #[cfg(feature = "rwasm")]
+        let factory = reth_rwasm::Factory::new(self.chain.clone());
 
         let max_block = file_client.max_block().unwrap_or(0);
         let mut pipeline = Pipeline::builder()

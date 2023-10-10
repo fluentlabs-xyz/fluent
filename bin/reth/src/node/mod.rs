@@ -59,7 +59,11 @@ use reth_provider::{
     providers::BlockchainProvider, BlockHashReader, BlockReader, CanonStateSubscriptions,
     HeaderProvider, ProviderFactory, StageCheckpointReader,
 };
+#[cfg(feature = "revm")]
 use reth_revm::Factory;
+#[cfg(feature = "rwasm")]
+use reth_rwasm::Factory;
+#[cfg(feature = "revm")]
 use reth_revm_inspectors::stack::Hook;
 use reth_rpc_engine_api::EngineApi;
 use reth_stages::{
@@ -806,9 +810,14 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
         }
 
         let (tip_tx, tip_rx) = watch::channel(H256::zero());
+        #[cfg(feature = "revm")]
         use reth_revm_inspectors::stack::InspectorStackConfig;
+        #[cfg(feature = "revm")]
         let factory = reth_revm::Factory::new(self.chain.clone());
+        #[cfg(feature = "rwasm")]
+        let factory = reth_rwasm::Factory::new(self.chain.clone());
 
+        #[cfg(feature = "revm")]
         let stack_config = InspectorStackConfig {
             use_printer_tracer: self.debug.print_inspector,
             hook: if let Some(hook_block) = self.debug.hook_block {
@@ -822,6 +831,7 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
             },
         };
 
+        #[cfg(feature = "revm")]
         let factory = factory.with_stack_config(stack_config);
 
         let prune_modes = prune_config.map(|prune| prune.parts).unwrap_or_default();

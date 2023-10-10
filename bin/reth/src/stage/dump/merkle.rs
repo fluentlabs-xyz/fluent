@@ -66,9 +66,14 @@ async fn unwind_and_copy<DB: Database>(
 
     MerkleStage::default_unwind().unwind(&provider, unwind).await?;
 
+    #[cfg(feature = "revm")]
+    let execution_factory = reth_revm::Factory::new(db_tool.chain.clone());
+    #[cfg(feature = "rwasm")]
+    let execution_factory = reth_rwasm::Factory::new(db_tool.chain.clone());
+
     // Bring Plainstate to TO (hashing stage execution requires it)
     let mut exec_stage = ExecutionStage::new(
-        reth_revm::Factory::new(db_tool.chain.clone()),
+        execution_factory,
         ExecutionStageThresholds {
             max_blocks: Some(u64::MAX),
             max_changes: None,

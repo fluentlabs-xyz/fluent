@@ -201,8 +201,10 @@ impl Command {
                     checkpoint.block_number != execution_checkpoint_block ||
                         checkpoint.stage_checkpoint.is_some()
                 });
-
+        #[cfg(feature = "revm")]
         let factory = reth_revm::Factory::new(self.chain.clone());
+        #[cfg(feature = "rwasm")]
+        let factory = reth_rwasm::Factory::new(self.chain.clone());
         let mut execution_stage = ExecutionStage::new(
             factory,
             ExecutionStageThresholds {

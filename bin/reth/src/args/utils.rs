@@ -1,9 +1,12 @@
 //! Clap parser utilities
 
 use reth_primitives::{
-    fs, AllGenesisFormats, BlockHashOrNumber, ChainSpec, DEV, GOERLI, HOLESKY, MAINNET, SEPOLIA,
+    fs, AllGenesisFormats, BlockHashOrNumber, ChainSpec, DEV, GOERLI, HOLESKY, MAINNET, SEPOLIA, FLUENT_DEVNET,
 };
+#[cfg(feature = "revm")]
 use reth_revm::primitives::B256 as H256;
+#[cfg(feature = "rwasm")]
+use reth_rwasm::primitives::B256 as H256;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs},
     path::PathBuf,
@@ -27,6 +30,7 @@ pub fn chain_spec_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Er
         "sepolia" => SEPOLIA.clone(),
         "holesky" => HOLESKY.clone(),
         "dev" => DEV.clone(),
+        "fluent-devnet" => FLUENT_DEVNET.clone(),
         _ => {
             let raw = fs::read_to_string(PathBuf::from(shellexpand::full(s)?.into_owned()))?;
             serde_json::from_str(&raw)?
@@ -43,6 +47,7 @@ pub fn genesis_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error
         "sepolia" => SEPOLIA.clone(),
         "holesky" => HOLESKY.clone(),
         "dev" => DEV.clone(),
+        "fluent-devnet" => FLUENT_DEVNET.clone(),
         _ => {
             let raw = fs::read_to_string(PathBuf::from(shellexpand::full(s)?.into_owned()))?;
             let genesis: AllGenesisFormats = serde_json::from_str(&raw)?;
