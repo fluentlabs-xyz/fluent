@@ -105,8 +105,10 @@ reth-eth-wire = { path = "./crates/net/eth-wire" }
 reth-ecies = { path = "./crates/net/ecies" }
 
 # revm
-revm = { git = "https://github.com/bluealloy/revm", rev = "516f62cc" }
-revm-primitives = { git = "https://github.com/bluealloy/revm", rev = "516f62cc" }
+#revm = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
+#revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
+revm = { path = "../revm-rwasm/crates/revm" }
+revm-primitives = { path = "../revm-rwasm/crates/primitives" }
 
 # rwasm
 fluentbase-rwasm = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel" }

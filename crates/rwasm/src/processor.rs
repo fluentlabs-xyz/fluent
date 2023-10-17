@@ -3,13 +3,9 @@ use crate::{
     env::{fill_cfg_and_block_env, fill_tx_env},
     into_reth_log,
     state_change::post_block_balance_increments,
-    State,
 };
 use fluentbase_runtime::Runtime;
-use reth_interfaces::{
-    executor::{BlockExecutionError, BlockValidationError},
-    Error,
-};
+use reth_interfaces::{executor::{BlockExecutionError, BlockValidationError}, RethError};
 use reth_primitives::{
     Address, Block, BlockNumber, Bloom, ChainSpec, Hardfork, Header, PruneMode, PruneModes,
     PrunePartError, Receipt, ReceiptWithBloom, TransactionSigned, H256, MINIMUM_PRUNING_DISTANCE,
@@ -19,15 +15,20 @@ use reth_provider::{
     BlockExecutor, BlockExecutorStats, BundleStateWithReceipts, PrunableBlockExecutor,
     StateProvider,
 };
-use reth_rwasm_primitives::db::states::bundle_state::BundleRetention;
 use reth_rwasm_primitives::primitives::{
-    Bytes, Env, Eval, ExecutionResult, Output, ResultAndState,
+    Bytes, Env, Eval, ExecutionResult, Output,
 };
-use reth_rwasm_primitives::{DatabaseCommit, StateDBBox};
 use std::any::Any;
+use revm::{
+    db::{states::bundle_state::BundleRetention, StateDBBox},
+    primitives::ResultAndState,
+    DatabaseCommit, State,
+};
 use std::marker::PhantomData;
 use std::{sync::Arc, time::Instant};
 use tracing::{debug, trace};
+use reth_rwasm_primitives::Database;
+use crate::primitives::TransactTo;
 
 /// RwasmProcessor is a block executor that uses revm to execute blocks or multiple blocks.
 ///
@@ -48,6 +49,7 @@ pub struct RwasmProcessor<'a> {
     /// The configured chain-spec
     chain_spec: Arc<ChainSpec>,
     env: Env,
+    revm_state: Option<StateDBBox<'a, RethError>>,
     /// The collection of receipts.
     /// Outer vector stores receipts for each block sequentially.
     /// The inner vector stores receipts ordered by transaction number.
@@ -81,6 +83,7 @@ impl<'a> RwasmProcessor<'a> {
         RwasmProcessor {
             chain_spec,
             env: Default::default(),
+            revm_state: None,
             receipts: Vec::new(),
             first_block: None,
             tip: None,
@@ -96,14 +99,20 @@ impl<'a> RwasmProcessor<'a> {
         chain_spec: Arc<ChainSpec>,
         db: StateProviderDatabase<DB>,
     ) -> Self {
-        RwasmProcessor::new_with_state(chain_spec)
+        let state = State::builder()
+            .with_database_boxed(Box::new(db))
+            .with_bundle_update()
+            .without_state_clear()
+            .build();
+        RwasmProcessor::new_with_state(chain_spec, state)
     }
 
     /// Create a new EVM processor with the given revm state.
-    pub fn new_with_state(chain_spec: Arc<ChainSpec>) -> Self {
+    pub fn new_with_state(chain_spec: Arc<ChainSpec>, revm_state: StateDBBox<'a, RethError>,) -> Self {
         RwasmProcessor {
             chain_spec,
             env: Default::default(),
+            revm_state: Some(revm_state),
             receipts: Vec::new(),
             first_block: None,
             tip: None,
@@ -115,8 +124,11 @@ impl<'a> RwasmProcessor<'a> {
     }
 
     /// Returns a reference to the database
-    pub fn db_mut(&mut self) -> &mut StateDBBox<'a, Error> {
-        panic!("not supported yet")
+    pub fn db_mut(&mut self) -> &mut StateDBBox<'a, RethError> {
+        // Option will be removed from EVM in the future.
+        // as it is always some.
+        // https://github.com/bluealloy/revm/issues/697
+        self.revm_state.as_mut().expect("Database inside EVM is always set")
     }
 
     fn recover_senders(
@@ -182,6 +194,45 @@ impl<'a> RwasmProcessor<'a> {
         Ok(())
     }
 
+    fn transact_rwasm(
+        &mut self,
+        transaction: &TransactionSigned,
+        sender: Address,
+        to: Address,
+    ) -> Result<Option<ResultAndState>, BlockExecutionError> {
+        let account = self.revm_state.as_mut().unwrap().basic(to).unwrap();
+        if account.is_none() {
+            return Ok(None)
+        }
+        let account = account.unwrap();
+        if account.code.is_none() {
+            return Ok(None)
+        }
+        let code = account.code.unwrap();
+        let runtime_linker = Runtime::new_linker();
+        let result = Runtime::run_with_linker(code.bytecode.as_ref(), transaction.input().as_ref(), &runtime_linker, true);
+        // some internal error, we can't handle this
+        if result.is_err() {
+            let res = ResultAndState {
+                result: ExecutionResult::Revert { gas_used: 0, output: Default::default() },
+                state: Default::default(),
+            };
+            return Ok(Some(res));
+        }
+        let result = result.unwrap();
+        let boxed_output = Box::leak(result.data().output().clone().into_boxed_slice());
+        Ok(Some(ResultAndState {
+            result: ExecutionResult::Success {
+                reason: Eval::Stop,
+                gas_used: 0,
+                gas_refunded: 0,
+                logs: vec![],
+                output: Output::Call(Bytes::from_static(boxed_output)),
+            },
+            state: Default::default(),
+        }))
+    }
+
     /// Runs a single transaction in the configured environment and proceeds
     /// to return the result and state diff (without applying it).
     ///
@@ -193,26 +244,22 @@ impl<'a> RwasmProcessor<'a> {
     ) -> Result<ResultAndState, BlockExecutionError> {
         // Fill revm structure.
         fill_tx_env(&mut self.env.tx, transaction, sender);
+        let mut gas_used = 21000;
+        let mut gas_refunded = 0;
         // main execution.
-        let runtime_linker = Runtime::new_linker();
-        let result = Runtime::run_with_linker(&[], &[], &runtime_linker, true);
-        // some internal error, we can't handle this
-        if result.is_err() {
-            let res = ResultAndState {
-                result: ExecutionResult::Revert { gas_used: 0, output: Default::default() },
-                state: Default::default(),
-            };
-            return Ok(res);
+        match self.env.tx.transact_to {
+            TransactTo::Call(to) => {
+                self.transact_rwasm(transaction, sender, to)?;
+            }
+            TransactTo::Create(_) => {}
         }
-        let result = result.unwrap();
-        let boxed_output = Box::leak(result.data().output().clone().into_boxed_slice());
         Ok(ResultAndState {
             result: ExecutionResult::Success {
                 reason: Eval::Stop,
-                gas_used: 0,
-                gas_refunded: 0,
+                gas_used,
+                gas_refunded,
                 logs: vec![],
-                output: Output::Call(Bytes::from_static(boxed_output)),
+                output: Output::Call(Bytes::new()),
             },
             state: Default::default(),
         })
@@ -255,7 +302,7 @@ impl<'a> RwasmProcessor<'a> {
                     transaction_gas_limit: transaction.gas_limit(),
                     block_available_gas,
                 }
-                .into());
+                    .into());
             }
             // Execute transaction.
             let ResultAndState { result, state } = self.transact(transaction, sender)?;
@@ -323,7 +370,7 @@ impl<'a> RwasmProcessor<'a> {
                     })
                     .unwrap_or_default(),
             }
-            .into());
+                .into());
         }
         let time = Instant::now();
         self.apply_post_execution_state_change(block, total_difficulty)?;
@@ -451,13 +498,12 @@ impl<'a> BlockExecutor for RwasmProcessor<'a> {
     }
 
     fn take_output_state(&mut self) -> BundleStateWithReceipts {
-        // let receipts = std::mem::take(&mut self.receipts);
-        // BundleStateWithReceipts::new(
-        //     self.evm.db().unwrap().take_bundle(),
-        //     receipts,
-        //     self.first_block.unwrap_or_default(),
-        // )
-        panic!("not implemented yet")
+        let receipts = std::mem::take(&mut self.receipts);
+        BundleStateWithReceipts::new(
+            self.revm_state.as_mut().unwrap().take_bundle(),
+            receipts,
+            self.first_block.unwrap_or_default(),
+        )
     }
 
     fn stats(&self) -> BlockExecutorStats {
@@ -465,8 +511,7 @@ impl<'a> BlockExecutor for RwasmProcessor<'a> {
     }
 
     fn size_hint(&self) -> Option<usize> {
-        // self.evm.db.as_ref().map(|db| db.bundle_size_hint())
-        panic!("not implemented yet")
+        self.revm_state.as_ref().map(|db| db.bundle_size_hint())
     }
 }
 
@@ -494,7 +539,7 @@ pub fn verify_receipt<'a>(
             got: receipts_root,
             expected: expected_receipts_root,
         }
-        .into());
+            .into());
     }
 
     // Create header log bloom.
@@ -504,7 +549,7 @@ pub fn verify_receipt<'a>(
             expected: Box::new(expected_logs_bloom),
             got: Box::new(logs_bloom),
         }
-        .into());
+            .into());
     }
 
     Ok(())
