@@ -103,9 +103,9 @@ where
         };
 
         // TODO: remove when HistoricalStateProviderRef::proof is implemented
-        // if !is_latest_block {
-        //     return Err(EthApiError::InvalidBlockRange)
-        // }
+        if !is_latest_block {
+            return Err(EthApiError::InvalidBlockRange)
+        }
 
         let this = self.clone();
         self.inner
