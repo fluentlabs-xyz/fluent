@@ -10,7 +10,7 @@ use reth_db::{
     transaction::DbTx,
     BlockNumberList,
 };
-use reth_interfaces::RethResult;
+use reth_interfaces::{RethError, RethResult};
 use reth_primitives::{
     trie::AccountProof, Account, Address, BlockNumber, Bytecode, StorageKey, StorageValue, B256,
 };
@@ -240,8 +240,10 @@ impl<'b, TX: DbTx> StateProvider for HistoricalStateProviderRef<'b, TX> {
     }
 
     /// Get account and storage proofs.
-    fn proof(&self, _address: Address, _keys: &[B256]) -> RethResult<AccountProof> {
-        Err(ProviderError::StateRootNotAvailableForHistoricalBlock.into())
+    fn proof(&self, address: Address, keys: &[B256]) -> RethResult<AccountProof> {
+        let proof = reth_trie::proof::Proof::new(self.tx);
+        proof.account_proof(address, keys)
+            .map_err(|_| RethError::Custom("proof generation failed".to_string()))
     }
 }
 
