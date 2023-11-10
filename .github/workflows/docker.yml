@@ -36,5 +36,7 @@ jobs:
         run: |
           docker run --privileged --rm tonistiigi/binfmt --install arm64,amd64
           docker buildx create --use --name cross-builder
+      - name: Install openssl
+        run: sudo apt-get install -y libssl-dev
       - name: Build and push image
         run: make PROFILE=maxperf docker-build-latest
