@@ -391,13 +391,13 @@ impl<DB: Database, EF: ExecutorFactory> BlockchainTree<DB, EF> {
                 })?;
 
             // Pass the parent total difficulty to short-circuit unnecessary calculations.
-            if !self.externals.chain_spec.fork(Hardfork::Paris).active_at_ttd(parent_td, U256::ZERO)
-            {
-                return Err(InsertBlockError::execution_error(
-                    BlockValidationError::BlockPreMerge { hash: block.hash }.into(),
-                    block.block,
-                ))
-            }
+            // if !self.externals.chain_spec.fork(Hardfork::Paris).active_at_ttd(parent_td, U256::ZERO)
+            // {
+            //     return Err(InsertBlockError::execution_error(
+            //         BlockValidationError::BlockPreMerge { hash: block.hash }.into(),
+            //         block.block,
+            //     ))
+            // }
 
             let parent_header = provider
                 .header(&block.parent_hash)
@@ -928,12 +928,12 @@ impl<DB: Database, EF: ExecutorFactory> BlockchainTree<DB, EF> {
                     hash: *block_hash,
                 }),
             )?;
-            if !self.externals.chain_spec.fork(Hardfork::Paris).active_at_ttd(td, U256::ZERO) {
-                return Err(CanonicalError::from(BlockValidationError::BlockPreMerge {
-                    hash: *block_hash,
-                })
-                .into())
-            }
+            // if !self.externals.chain_spec.fork(Hardfork::Paris).active_at_ttd(td, U256::ZERO) {
+            //     return Err(CanonicalError::from(BlockValidationError::BlockPreMerge {
+            //         hash: *block_hash,
+            //     })
+            //     .into())
+            // }
             return Ok(CanonicalOutcome::AlreadyCanonical { header })
         }
 
