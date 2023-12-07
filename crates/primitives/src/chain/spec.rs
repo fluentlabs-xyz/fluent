@@ -229,7 +229,7 @@ pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             (Hardfork::Istanbul, ForkCondition::Block(0)),
             (Hardfork::MuirGlacier, ForkCondition::Block(0)),
             (Hardfork::Berlin, ForkCondition::Block(0)),
-            // (Hardfork::London, ForkCondition::Block(0)),
+            (Hardfork::London, ForkCondition::Block(0)),
             // (
             //     Hardfork::Paris,
             //     ForkCondition::TTD { fork_block: Some(0), total_difficulty: U256::from(0) },
