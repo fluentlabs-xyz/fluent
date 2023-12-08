@@ -339,6 +339,9 @@ pub enum RpcInvalidTransactionError {
     #[error(transparent)]
     #[cfg(feature = "optimism")]
     Optimism(#[from] OptimismInvalidTransactionError),
+    /// rWASM compilation failed
+    #[error("rWASM compilation failed")]
+    RwasmCompilationFailed,
 }
 
 /// Optimism specific invalid transaction errors
@@ -469,6 +472,7 @@ impl From<revm::primitives::InvalidTransaction> for RpcInvalidTransactionError {
             InvalidTransaction::HaltedDepositPostRegolith => RpcInvalidTransactionError::Optimism(
                 OptimismInvalidTransactionError::HaltedDepositPostRegolith,
             ),
+            InvalidTransaction::RwasmCompilationFailed => RpcInvalidTransactionError::RwasmCompilationFailed,
         }
     }
 }

@@ -2840,9 +2840,9 @@ dependencies = [
 
 [[package]]
 name = "eyre"
-version = "0.6.9"
+version = "0.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80f656be11ddf91bd709454d15d5bd896fbaf4cc3314e69349e4d1569f5b46cd"
+checksum = "8bbb8258be8305fb0237d7b295f47bb24ff1b136a535f473baf40e70468515aa"
 dependencies = [
  "indenter",
  "once_cell",
@@ -7379,7 +7379,7 @@ dependencies = [
 [[package]]
 name = "revm"
 version = "3.5.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#b75ba765ce71617d1119662f2a684fa7067c93f8"
+source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#722ecac702b6dbc7f768b21db5fe9b6601f9ebab"
 dependencies = [
  "auto_impl",
  "fluentbase-runtime",
@@ -7395,7 +7395,7 @@ dependencies = [
 [[package]]
 name = "revm-interpreter"
 version = "1.3.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#b75ba765ce71617d1119662f2a684fa7067c93f8"
+source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#722ecac702b6dbc7f768b21db5fe9b6601f9ebab"
 dependencies = [
  "fluentbase-sdk",
  "revm-primitives",
@@ -7405,7 +7405,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "2.2.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#b75ba765ce71617d1119662f2a684fa7067c93f8"
+source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#722ecac702b6dbc7f768b21db5fe9b6601f9ebab"
 dependencies = [
  "aurora-engine-modexp",
  "c-kzg",
@@ -7421,7 +7421,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "1.3.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#b75ba765ce71617d1119662f2a684fa7067c93f8"
+source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#722ecac702b6dbc7f768b21db5fe9b6601f9ebab"
 dependencies = [
  "alloy-primitives 0.4.2",
  "alloy-rlp",
@@ -7620,9 +7620,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.26"
+version = "0.38.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9470c4bf8246c8daf25f9598dca807fb6510347b1e1cfa55749113850c79d88a"
+checksum = "bfeae074e687625746172d639330f1de242a178bf3189b51e35a7a21573513ac"
 dependencies = [
  "bitflags 2.4.1",
  "errno",
@@ -9199,9 +9199,9 @@ dependencies = [
 
 [[package]]
 name = "try-lock"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
+checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "trybuild"
@@ -9949,9 +9949,9 @@ checksum = "dff9641d1cd4be8d1a070daf9e3773c5f67e78b4d9d42263020c057706765c04"
 
 [[package]]
 name = "winnow"
-version = "0.5.25"
+version = "0.5.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7e87b8dfbe3baffbe687eef2e164e32286eff31a5ee16463ce03d991643ec94"
+checksum = "b67b5f0a4e7a27a64c651977932b9dc5667ca7fc31ac44b03ed37a0cf42fdfff"
 dependencies = [
  "memchr",
 ]
