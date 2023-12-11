@@ -112,8 +112,8 @@ reth-tracing = { path = "./crates/tracing" }
 reth-tokio-util = { path = "crates/tokio-util" }
 
 # revm
-revm = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
-revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
+revm = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "main" }
+revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "main" }
 
 # eth
 alloy-primitives = "0.4"
