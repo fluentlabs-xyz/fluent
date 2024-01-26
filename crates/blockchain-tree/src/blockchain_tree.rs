@@ -923,7 +923,7 @@ impl<DB: Database, EF: ExecutorFactory> BlockchainTree<DB, EF> {
         if let Some(header) = canonical_header {
             info!(target: "blockchain_tree", ?block_hash, "Block is already canonical, ignoring.");
             // TODO: this could be fetched from the chainspec first
-            let td = self.externals.database().provider()?.header_td(block_hash)?.ok_or(
+            let _td = self.externals.database().provider()?.header_td(block_hash)?.ok_or(
                 CanonicalError::from(BlockValidationError::MissingTotalDifficulty {
                     hash: *block_hash,
                 }),
