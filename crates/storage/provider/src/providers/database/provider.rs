@@ -1434,7 +1434,8 @@ impl<TX: DbTx> EvmEnvProvider for DatabaseProvider<TX> {
     ) -> RethResult<()> {
         let total_difficulty = self
             .header_td_by_number(header.number)?
-            .ok_or_else(|| ProviderError::HeaderNotFound(header.number.into()))?;
+            .unwrap_or_default();
+            // .ok_or_else(|| ProviderError::HeaderNotFound(header.number.into()))?;
         fill_cfg_and_block_env(cfg, block_env, &self.chain_spec, header, total_difficulty);
         Ok(())
     }
