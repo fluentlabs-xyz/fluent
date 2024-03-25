@@ -18,7 +18,7 @@ env:
 jobs:
   build:
     name: build and push
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     permissions:
       packages: write
       contents: read
@@ -39,6 +39,10 @@ jobs:
       - name: Build and push image, tag as "latest"
         if: ${{ contains(github.event.ref, 'beta') }}
         run: make PROFILE=maxperf docker-build-push-latest
+      - name: Install openssl
+        run: |
+          sudo apt-get install -y libssl-dev python3
+          which python3
       - name: Build and push image
         if: ${{ ! contains(github.event.ref, 'beta') }}
         run: make PROFILE=maxperf docker-build-push

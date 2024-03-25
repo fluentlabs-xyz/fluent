@@ -1289,13 +1289,14 @@ impl ChainSpecBuilder {
     /// [`Self::genesis`])
     pub fn build(self) -> ChainSpec {
         let paris_block_and_final_difficulty = {
-            self.hardforks.get(&Hardfork::Paris).and_then(|cond| {
-                if let ForkCondition::TTD { fork_block, total_difficulty } = cond {
-                    fork_block.map(|fork_block| (fork_block, *total_difficulty))
-                } else {
-                    None
-                }
-            })
+            // self.hardforks.get(&Hardfork::Paris).and_then(|cond| {
+            //     if let ForkCondition::TTD { fork_block, total_difficulty } = cond {
+            //         fork_block.map(|fork_block| (fork_block, *total_difficulty))
+            //     } else {
+            //         None
+            //     }
+            // })
+            None
         };
         ChainSpec {
             chain: self.chain.expect("The chain is required"),

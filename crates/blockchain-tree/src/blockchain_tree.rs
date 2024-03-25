@@ -362,18 +362,18 @@ impl<DB: Database, EVM: ExecutorFactory> BlockchainTree<DB, EVM> {
             .ok_or_else(|| BlockchainTreeError::CanonicalChain { block_hash: block.parent_hash })?;
 
         // Pass the parent total difficulty to short-circuit unnecessary calculations.
-        if !self
-            .externals
-            .provider_factory
-            .chain_spec()
-            .fork(Hardfork::Paris)
-            .active_at_ttd(parent_td, U256::ZERO)
-        {
-            return Err(BlockExecutionError::Validation(BlockValidationError::BlockPreMerge {
-                hash: block.hash(),
-            })
-            .into())
-        }
+        // if !self
+        //     .externals
+        //     .provider_factory
+        //     .chain_spec()
+        //     .fork(Hardfork::Paris)
+        //     .active_at_ttd(parent_td, U256::ZERO)
+        // {
+        //     return Err(BlockExecutionError::Validation(BlockValidationError::BlockPreMerge {
+        //         hash: block.hash(),
+        //     })
+        //     .into())
+        // }
 
         let parent_header = provider
             .header(&block.parent_hash)?
@@ -935,18 +935,18 @@ impl<DB: Database, EVM: ExecutorFactory> BlockchainTree<DB, EVM> {
                     hash: *block_hash,
                 }),
             )?;
-            if !self
-                .externals
-                .provider_factory
-                .chain_spec()
-                .fork(Hardfork::Paris)
-                .active_at_ttd(td, U256::ZERO)
-            {
-                return Err(CanonicalError::from(BlockValidationError::BlockPreMerge {
-                    hash: *block_hash,
-                })
-                .into())
-            }
+            // if !self
+            //     .externals
+            //     .provider_factory
+            //     .chain_spec()
+            //     .fork(Hardfork::Paris)
+            //     .active_at_ttd(td, U256::ZERO)
+            // {
+            //     return Err(CanonicalError::from(BlockValidationError::BlockPreMerge {
+            //         hash: *block_hash,
+            //     })
+            //     .into())
+            // }
             return Ok(CanonicalOutcome::AlreadyCanonical { header })
         }
 
