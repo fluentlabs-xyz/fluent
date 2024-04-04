@@ -186,7 +186,8 @@ reth-trie = { path = "crates/trie" }
 reth-trie-parallel = { path = "crates/trie-parallel" }
 
 # revm
-revm = { version = "7.1.0", features = ["std", "secp256k1"], default-features = false }
+#revm = { version = "7.1.0", features = ["std", "secp256k1"], default-features = false }
+revm = { package = "fluentbase-revm2", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/revm2", features = ["std", "secp256k1"], default-features = false }
 revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
 revm-inspectors = { git = "https://github.com/paradigmxyz/evm-inspectors", rev = "f96bc1f" }
 
