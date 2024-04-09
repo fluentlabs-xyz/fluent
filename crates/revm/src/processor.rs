@@ -17,7 +17,6 @@ use reth_provider::{
 use revm::{
     db::{states::bundle_state::BundleRetention, EmptyDBTyped, StateDBBox},
     inspector_handle_register,
-    interpreter::Host,
     primitives::{CfgEnvWithHandlerCfg, ResultAndState},
     Evm, State, StateBuilder,
 };

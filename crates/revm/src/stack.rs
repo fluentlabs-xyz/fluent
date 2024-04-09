@@ -1,9 +1,4 @@
-use revm::{
-    inspectors::CustomPrintTracer,
-    interpreter::{CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter},
-    primitives::{Address, Env, Log, B256, U256},
-    Database, EvmContext, Inspector,
-};
+use revm::{inspectors::CustomPrintTracer, primitives::{Address, Env, Log, B256, U256}, Database, EvmContext, Inspector, interpreter::{Interpreter, CallInputs, CallOutcome, CreateInputs, CreateOutcome}};
 use std::fmt::Debug;
 
 /// A hook to inspect the execution of the EVM.

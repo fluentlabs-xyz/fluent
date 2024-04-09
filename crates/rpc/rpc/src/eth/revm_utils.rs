@@ -1,6 +1,7 @@
 //! utilities for working with revm
 
 use std::cmp::min;
+use std::iter;
 
 use crate::eth::error::{EthApiError, EthResult, RpcInvalidTransactionError};
 #[cfg(feature = "optimism")]
@@ -20,7 +21,6 @@ use revm::primitives::{Bytes, OptimismFields};
 use revm::{
     db::CacheDB,
     inspector_handle_register,
-    precompile::{PrecompileSpecId, Precompiles},
     primitives::{
         db::DatabaseRef, BlockEnv, Bytecode, CfgEnvWithHandlerCfg, EnvWithHandlerCfg,
         ResultAndState, SpecId, TransactTo, TxEnv,
@@ -117,9 +117,8 @@ impl FillableTransaction for TransactionSigned {
 
 /// Returns the addresses of the precompiles corresponding to the SpecId.
 #[inline]
-pub(crate) fn get_precompiles(spec_id: SpecId) -> impl IntoIterator<Item = Address> {
-    let spec = PrecompileSpecId::from_spec_id(spec_id);
-    Precompiles::new(spec).addresses().copied().map(Address::from)
+pub(crate) fn get_precompiles(_spec_id: SpecId) -> impl IntoIterator<Item = Address> {
+    iter::empty()
 }
 
 /// Executes the [EnvWithHandlerCfg] against the given [Database] without committing state changes.

@@ -254,7 +254,8 @@ reth-trie-parallel = { path = "crates/trie-parallel" }
 #revm = { package = "fluentbase-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/revm2", features = ["std", "secp256k1"], default-features = false }
 revm = { package = "fluentbase-revm", path = "../fluentbase/crates/revm", features = ["std", "secp256k1"], default-features = false }
 revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
-revm-inspectors = { git = "https://github.com/paradigmxyz/evm-inspectors", rev = "0ad0338" }
+#revm-inspectors = { git = "https://github.com/paradigmxyz/evm-inspectors", rev = "0ad0338" }
+revm-inspectors = { path = "../../fluent/revm-inspectors" }
 
 # eth
 alloy-chains = { version = "0.1", feature = ["serde", "rlp", "arbitrary"] }

@@ -4,7 +4,7 @@ use reth_primitives::{
     constants::SYSTEM_ADDRESS, revm::env::fill_tx_env_with_beacon_root_contract_call, Address,
     ChainSpec, Header, Withdrawal, B256, U256,
 };
-use revm::{interpreter::Host, Database, DatabaseCommit, Evm};
+use revm::{Database, DatabaseCommit, Evm};
 use std::collections::HashMap;
 
 /// Collect all balance changes at the end of the block.
