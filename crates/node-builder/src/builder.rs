@@ -7,13 +7,15 @@ use crate::{
         ComponentsBuilder, FullNodeComponents, FullNodeComponentsAdapter, NodeComponents,
         NodeComponentsBuilder, PoolBuilder,
     },
+    exex::{BoxedLaunchExEx, ExExContext},
     hooks::NodeHooks,
-    node::{FullNode, FullNodeTypes, FullNodeTypesAdapter, NodeTypes},
+    node::FullNode,
     rpc::{RethRpcServerHandles, RpcContext, RpcHooks},
     Node, NodeHandle,
 };
 use eyre::Context;
-use futures::{future::Either, stream, stream_select, StreamExt};
+use futures::{future::Either, stream, stream_select, Future, StreamExt};
+use rayon::ThreadPoolBuilder;
 use reth_beacon_consensus::{
     hooks::{EngineHooks, PruneHook, StaticFileHook},
     BeaconConsensusEngine,
@@ -28,6 +30,7 @@ use reth_db::{
 };
 use reth_interfaces::p2p::either::EitherDownloader;
 use reth_network::{NetworkBuilder, NetworkConfig, NetworkEvents, NetworkHandle};
+use reth_node_api::{FullNodeTypes, FullNodeTypesAdapter, NodeTypes};
 use reth_node_core::{
     cli::config::{PayloadBuilderConfig, RethRpcConfig, RethTransactionPoolConfig},
     dirs::{ChainPath, DataDirPath, MaybePlatformPath},
@@ -39,19 +42,16 @@ use reth_node_core::{
     primitives::{kzg::KzgSettings, Head},
     utils::write_peers_to_file,
 };
-use reth_primitives::{
-    constants::eip4844::{LoadKzgSettingsError, MAINNET_KZG_TRUSTED_SETUP},
-    format_ether, ChainSpec,
-};
+use reth_primitives::{constants::eip4844::MAINNET_KZG_TRUSTED_SETUP, format_ether, ChainSpec};
 use reth_provider::{providers::BlockchainProvider, ChainSpecProvider, ProviderFactory};
 use reth_prune::PrunerBuilder;
 use reth_revm::EvmProcessorFactory;
 use reth_rpc_engine_api::EngineApi;
 use reth_static_file::StaticFileProducer;
 use reth_tasks::TaskExecutor;
-use reth_tracing::tracing::{debug, info};
+use reth_tracing::tracing::{debug, error, info};
 use reth_transaction_pool::{PoolConfig, TransactionPool};
-use std::{str::FromStr, sync::Arc};
+use std::{cmp::max, str::FromStr, sync::Arc, thread::available_parallelism};
 use tokio::sync::{mpsc::unbounded_channel, oneshot};
 
 /// The builtin provider type of the reth node.
@@ -62,6 +62,7 @@ type RethFullProviderType<DB, Evm> =
 type RethFullAdapter<DB, N> =
     FullNodeTypesAdapter<N, DB, RethFullProviderType<DB, <N as NodeTypes>::Evm>>;
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Declaratively construct a node.
 ///
 /// [`NodeBuilder`] provides a [builder-like interface][builder] for composing
@@ -114,6 +115,26 @@ type RethFullAdapter<DB, N> =
 /// All hooks accept a closure that is then invoked at the appropriate time in the node's launch
 /// process.
 ///
+/// ## Flow
+///
+/// The [NodeBuilder] is intended to sit behind a CLI that provides the necessary [NodeConfig]
+/// input: [NodeBuilder::new]
+///
+/// From there the builder is configured with the node's types, components, and hooks, then launched
+/// with the [NodeBuilder::launch] method. On launch all the builtin internals, such as the
+/// `Database` and its providers [BlockchainProvider] are initialized before the configured
+/// [NodeComponentsBuilder] is invoked with the [BuilderContext] to create the transaction pool,
+/// network, and payload builder components. When the RPC is configured, the corresponding hooks are
+/// invoked to allow for custom rpc modules to be injected into the rpc server:
+/// [NodeBuilder::extend_rpc_modules]
+///
+/// Finally all components are created and all services are launched and a [NodeHandle] is returned
+/// that can be used to interact with the node: [FullNode]
+///
+/// The following diagram shows the flow of the node builder from CLI to a launched node.
+///
+/// include_mmd!("docs/mermaid/builder.mmd")
+///
 /// ## Internals
 ///
 /// The node builder is fully type safe, it uses the [NodeTypes] trait to enforce that all
@@ -154,7 +175,7 @@ impl<DB, State> NodeBuilder<DB, State> {
         let config_path = self.config.config.clone().unwrap_or_else(|| data_dir.config_path());
 
         let mut config = confy::load_path::<reth_config::Config>(&config_path)
-            .wrap_err_with(|| format!("Could not load config file {:?}", config_path))?;
+            .wrap_err_with(|| format!("Could not load config file {config_path:?}"))?;
 
         info!(target: "reth::cli", path = ?config_path, "Configuration loaded");
 
@@ -298,6 +319,7 @@ where
                 components_builder,
                 hooks: NodeHooks::new(),
                 rpc: RpcHooks::new(),
+                exexs: Vec::new(),
             },
         }
     }
@@ -332,6 +354,7 @@ where
                 components_builder: f(self.state.components_builder),
                 hooks: self.state.hooks,
                 rpc: self.state.rpc,
+                exexs: self.state.exexs,
             },
         }
     }
@@ -409,6 +432,26 @@ where
         self
     }
 
+    /// Installs an ExEx (Execution Extension) in the node.
+    pub fn install_exex<F, R, E>(mut self, exex: F) -> Self
+    where
+        F: Fn(
+                ExExContext<
+                    FullNodeComponentsAdapter<
+                        FullNodeTypesAdapter<Types, DB, RethFullProviderType<DB, Types::Evm>>,
+                        Components::Pool,
+                    >,
+                >,
+            ) -> R
+            + Send
+            + 'static,
+        R: Future<Output = eyre::Result<E>> + Send,
+        E: Future<Output = eyre::Result<()>> + Send,
+    {
+        self.state.exexs.push(Box::new(exex));
+        self
+    }
+
     /// Launches the node and returns a handle to it.
     ///
     /// This bootstraps the node internals, creates all the components with the provider
@@ -432,13 +475,21 @@ where
 
         let Self {
             config,
-            state: ComponentsState { types, components_builder, hooks, rpc },
+            state: ComponentsState { types, components_builder, hooks, rpc, exexs: _ },
             database,
         } = self;
 
         // Raise the fd limit of the process.
         // Does not do anything on windows.
         fdlimit::raise_fd_limit()?;
+
+        // Limit the global rayon thread pool, reserving 2 cores for the rest of the system
+        let _ = ThreadPoolBuilder::new()
+            .num_threads(
+                available_parallelism().map_or(25, |cpus| max(cpus.get().saturating_sub(2), 2)),
+            )
+            .build_global()
+            .map_err(|e| error!("Failed to build global thread pool: {:?}", e));
 
         let provider_factory = ProviderFactory::new(
             database.clone(),
@@ -470,7 +521,7 @@ where
         let sync_metrics_listener = reth_stages::MetricsListener::new(sync_metrics_rx);
         executor.spawn_critical("stages metrics listener task", sync_metrics_listener);
 
-        let prune_config = config.prune_config()?.or(reth_config.prune.clone());
+        let prune_config = config.prune_config()?.or_else(|| reth_config.prune.clone());
 
         let evm_config = types.evm_config();
         let tree_config = BlockchainTreeConfig::default();
@@ -495,18 +546,13 @@ where
         let blockchain_db =
             BlockchainProvider::new(provider_factory.clone(), blockchain_tree.clone())?;
 
-        let ctx = BuilderContext {
-            head,
-            provider: blockchain_db,
-            executor,
-            data_dir,
-            config,
-            reth_config,
-        };
+        let ctx = BuilderContext::new(head, blockchain_db, executor, data_dir, config, reth_config);
 
         debug!(target: "reth::cli", "creating components");
         let NodeComponents { transaction_pool, network, payload_builder } =
             components_builder.build_components(&ctx).await?;
+
+        // TODO(alexey): launch ExExs and consume their events
 
         let BuilderContext {
             provider: blockchain_db,
@@ -631,6 +677,7 @@ where
         let mut pruner = PrunerBuilder::new(prune_config.clone())
             .max_reorg_depth(tree_config.max_reorg_depth() as usize)
             .prune_delete_limit(config.chain.prune_delete_limit)
+            .timeout(PrunerBuilder::DEFAULT_TIMEOUT)
             .build(provider_factory.clone());
 
         let pruner_events = pruner.events();
@@ -1038,7 +1085,6 @@ where
 }
 
 /// Captures the necessary context for building the components of the node.
-#[derive(Debug)]
 pub struct BuilderContext<Node: FullNodeTypes> {
     /// The current head of the blockchain at launch.
     head: Head,
@@ -1054,7 +1100,31 @@ pub struct BuilderContext<Node: FullNodeTypes> {
     reth_config: reth_config::Config,
 }
 
+impl<Node: FullNodeTypes> std::fmt::Debug for BuilderContext<Node> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BuilderContext")
+            .field("head", &self.head)
+            .field("provider", &std::any::type_name::<Node::Provider>())
+            .field("executor", &self.executor)
+            .field("data_dir", &self.data_dir)
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
 impl<Node: FullNodeTypes> BuilderContext<Node> {
+    /// Create a new instance of [BuilderContext]
+    pub fn new(
+        head: Head,
+        provider: Node::Provider,
+        executor: TaskExecutor,
+        data_dir: ChainPath<DataDirPath>,
+        config: NodeConfig,
+        reth_config: reth_config::Config,
+    ) -> Self {
+        Self { head, provider, executor, data_dir, config, reth_config }
+    }
+
     /// Returns the configured provider to interact with the blockchain.
     pub fn provider(&self) -> &Node::Provider {
         &self.provider
@@ -1094,16 +1164,9 @@ impl<Node: FullNodeTypes> BuilderContext<Node> {
         self.config().txpool.pool_config()
     }
 
-    /// Loads the trusted setup params from a given file path or falls back to
-    /// `MAINNET_KZG_TRUSTED_SETUP`.
+    /// Loads `MAINNET_KZG_TRUSTED_SETUP`.
     pub fn kzg_settings(&self) -> eyre::Result<Arc<KzgSettings>> {
-        if let Some(ref trusted_setup_file) = self.config().trusted_setup_file {
-            let trusted_setup = KzgSettings::load_trusted_setup_file(trusted_setup_file)
-                .map_err(LoadKzgSettingsError::KzgError)?;
-            Ok(Arc::new(trusted_setup))
-        } else {
-            Ok(Arc::clone(&MAINNET_KZG_TRUSTED_SETUP))
-        }
+        Ok(Arc::clone(&MAINNET_KZG_TRUSTED_SETUP))
     }
 
     /// Returns the config for payload building.
@@ -1191,7 +1254,6 @@ where
 ///
 /// Additionally, this state captures additional hooks that are called at specific points in the
 /// node's launch lifecycle.
-#[derive(Debug)]
 pub struct ComponentsState<Types, Components, FullNode: FullNodeComponents> {
     /// The types of the node.
     types: Types,
@@ -1201,4 +1263,20 @@ pub struct ComponentsState<Types, Components, FullNode: FullNodeComponents> {
     hooks: NodeHooks<FullNode>,
     /// Additional RPC hooks.
     rpc: RpcHooks<FullNode>,
+    /// The ExExs (execution extensions) of the node.
+    exexs: Vec<Box<dyn BoxedLaunchExEx<FullNode>>>,
+}
+
+impl<Types, Components, FullNode: FullNodeComponents> std::fmt::Debug
+    for ComponentsState<Types, Components, FullNode>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComponentsState")
+            .field("types", &std::any::type_name::<Types>())
+            .field("components_builder", &std::any::type_name::<Components>())
+            .field("hooks", &self.hooks)
+            .field("rpc", &self.rpc)
+            .field("exexs", &self.exexs.len())
+            .finish()
+    }
 }

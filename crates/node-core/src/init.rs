@@ -100,9 +100,10 @@ pub fn insert_genesis_state<DB: Database>(
     tx: &<DB as Database>::TXMut,
     genesis: &reth_primitives::Genesis,
 ) -> ProviderResult<()> {
-    let mut state_init: BundleStateInit = HashMap::new();
-    let mut reverts_init = HashMap::new();
-    let mut contracts: HashMap<B256, Bytecode> = HashMap::new();
+    let capacity = genesis.alloc.len();
+    let mut state_init: BundleStateInit = HashMap::with_capacity(capacity);
+    let mut reverts_init = HashMap::with_capacity(capacity);
+    let mut contracts: HashMap<B256, Bytecode> = HashMap::with_capacity(capacity);
 
     for (address, account) in &genesis.alloc {
         let bytecode_hash = if let Some(code) = &account.code {
@@ -318,7 +319,7 @@ mod tests {
         let chain_spec = Arc::new(ChainSpec {
             chain: Chain::from_id(1),
             genesis: Genesis {
-                alloc: HashMap::from([
+                alloc: BTreeMap::from([
                     (
                         address_with_balance,
                         GenesisAccount { balance: U256::from(1), ..Default::default() },
@@ -326,7 +327,7 @@ mod tests {
                     (
                         address_with_storage,
                         GenesisAccount {
-                            storage: Some(HashMap::from([(storage_key, B256::random())])),
+                            storage: Some(BTreeMap::from([(storage_key, B256::random())])),
                             ..Default::default()
                         },
                     ),

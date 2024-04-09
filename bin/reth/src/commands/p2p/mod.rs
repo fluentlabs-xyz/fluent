@@ -12,7 +12,7 @@ use crate::{
 use backon::{ConstantBuilder, Retryable};
 use clap::{Parser, Subcommand};
 use reth_config::Config;
-use reth_db::open_db;
+use reth_db::create_db;
 use reth_discv4::NatResolver;
 use reth_interfaces::p2p::bodies::client::BodiesClient;
 use reth_primitives::{BlockHashOrNumber, ChainSpec, NodeRecord};
@@ -100,11 +100,11 @@ impl Command {
     /// Execute `p2p` command
     pub async fn execute(&self) -> eyre::Result<()> {
         let tempdir = tempfile::TempDir::new()?;
-        let noop_db = Arc::new(open_db(&tempdir.into_path(), self.db.database_args())?);
+        let noop_db = Arc::new(create_db(tempdir.into_path(), self.db.database_args())?);
 
         // add network name to data dir
         let data_dir = self.datadir.unwrap_or_chain_default(self.chain.chain);
-        let config_path = self.config.clone().unwrap_or(data_dir.config_path());
+        let config_path = self.config.clone().unwrap_or_else(|| data_dir.config_path());
 
         let mut config: Config = confy::load_path(&config_path).unwrap_or_default();
 

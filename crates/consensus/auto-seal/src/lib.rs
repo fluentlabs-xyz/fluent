@@ -409,8 +409,8 @@ impl StorageInner {
         // calculate the state root
         let state_root = client
             .latest()
-            .map_err(|_| BlockExecutionError::ProviderError)?
-            .state_root(bundle_state)
+            .map_err(BlockExecutionError::LatestBlock)?
+            .state_root(bundle_state.state())
             .unwrap();
         header.state_root = state_root;
         Ok(header)
@@ -439,7 +439,9 @@ impl StorageInner {
 
         // now execute the block
         let db = State::builder()
-            .with_database_boxed(Box::new(StateProviderDatabase::new(client.latest().unwrap())))
+            .with_database_boxed(Box::new(StateProviderDatabase::new(
+                client.latest().map_err(BlockExecutionError::LatestBlock)?,
+            )))
             .with_bundle_update()
             .build();
         let mut executor = EVMProcessor::new_with_state(chain_spec.clone(), db, evm_config);
@@ -449,16 +451,17 @@ impl StorageInner {
         let Block { header, body, .. } = block.block;
         let body = BlockBody { transactions: body, ommers: vec![], withdrawals: None };
 
-        let mut blob_gas_used = None;
-        if chain_spec.is_cancun_active_at_timestamp(header.timestamp) {
+        let blob_gas_used = if chain_spec.is_cancun_active_at_timestamp(header.timestamp) {
             let mut sum_blob_gas_used = 0;
             for tx in &body.transactions {
                 if let Some(blob_tx) = tx.transaction.as_eip4844() {
                     sum_blob_gas_used += blob_tx.blob_gas();
                 }
             }
-            blob_gas_used = Some(sum_blob_gas_used);
-        }
+            Some(sum_blob_gas_used)
+        } else {
+            None
+        };
 
         trace!(target: "consensus::auto", ?bundle_state, ?header, ?body, "executed block, calculating state root and completing header");
 

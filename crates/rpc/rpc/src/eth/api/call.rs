@@ -99,6 +99,7 @@ where
         let transaction_index = transaction_index.unwrap_or_default();
 
         let target_block = block_number.unwrap_or(BlockId::Number(BlockNumberOrTag::Latest));
+        let is_block_target_pending = target_block.is_pending();
 
         let ((cfg, block_env, _), block) = futures::try_join!(
             self.evm_env_at(target_block),
@@ -113,9 +114,11 @@ where
         let mut at = block.parent_hash;
         let mut replay_block_txs = true;
 
-        // but if all transactions are to be replayed, we can use the state at the block itself
         let num_txs = transaction_index.index().unwrap_or(block.body.len());
-        if num_txs == block.body.len() {
+        // but if all transactions are to be replayed, we can use the state at the block itself,
+        // however only if we're not targeting the pending block, because for pending we can't rely
+        // on the block's state being available
+        if !is_block_target_pending && num_txs == block.body.len() {
             at = block.hash();
             replay_block_txs = false;
         }
@@ -256,8 +259,10 @@ where
 
         // Exceptional case: init used too much gas, we need to increase the gas limit and try
         // again
-        if let Err(EthApiError::InvalidTransaction(RpcInvalidTransactionError::GasTooHigh)) = ethres
-        {
+        if matches!(
+            ethres,
+            Err(EthApiError::InvalidTransaction(RpcInvalidTransactionError::GasTooHigh))
+        ) {
             // if price or limit was included in the request then we can execute the request
             // again with the block's gas limit to check if revert is gas related or not
             if request_gas.is_some() || request_gas_price.is_some() {
@@ -339,9 +344,10 @@ where
 
             // Exceptional case: init used too much gas, we need to increase the gas limit and try
             // again
-            if let Err(EthApiError::InvalidTransaction(RpcInvalidTransactionError::GasTooHigh)) =
-                ethres
-            {
+            if matches!(
+                ethres,
+                Err(EthApiError::InvalidTransaction(RpcInvalidTransactionError::GasTooHigh))
+            ) {
                 // increase the lowest gas limit
                 lowest_gas_limit = mid_gas_limit;
 

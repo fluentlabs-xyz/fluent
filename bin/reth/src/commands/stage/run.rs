@@ -126,7 +126,7 @@ impl Command {
 
         // add network name to data dir
         let data_dir = self.datadir.unwrap_or_chain_default(self.chain.chain);
-        let config_path = self.config.clone().unwrap_or(data_dir.config_path());
+        let config_path = self.config.clone().unwrap_or_else(|| data_dir.config_path());
 
         let config: Config = confy::load_path(config_path).unwrap_or_default();
         info!(target: "reth::cli", "reth {} starting stage {:?}", SHORT_VERSION, self.stage);
@@ -157,7 +157,7 @@ impl Command {
             .await?;
         }
 
-        let batch_size = self.batch_size.unwrap_or(self.to - self.from + 1);
+        let batch_size = self.batch_size.unwrap_or(self.to.saturating_sub(self.from) + 1);
 
         let etl_config = EtlConfig::new(
             Some(
@@ -247,10 +247,10 @@ impl Command {
                     (Box::new(TransactionLookupStage::new(batch_size, etl_config, None)), None)
                 }
                 StageEnum::AccountHashing => {
-                    (Box::new(AccountHashingStage::new(1, batch_size)), None)
+                    (Box::new(AccountHashingStage::new(1, batch_size, etl_config)), None)
                 }
                 StageEnum::StorageHashing => {
-                    (Box::new(StorageHashingStage::new(1, batch_size)), None)
+                    (Box::new(StorageHashingStage::new(1, batch_size, etl_config)), None)
                 }
                 StageEnum::Merkle => (
                     Box::new(MerkleStage::default_execution()),
@@ -261,7 +261,7 @@ impl Command {
                 _ => return Ok(()),
             };
         if let Some(unwind_stage) = &unwind_stage {
-            assert!(exec_stage.type_id() == unwind_stage.type_id());
+            assert_eq!(exec_stage.type_id(), unwind_stage.type_id());
         }
 
         let checkpoint = provider_rw.get_stage_checkpoint(exec_stage.id())?.unwrap_or_default();

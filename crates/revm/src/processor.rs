@@ -19,7 +19,7 @@ use revm::{
     inspector_handle_register,
     interpreter::Host,
     primitives::{CfgEnvWithHandlerCfg, ResultAndState},
-    Evm, Handler, State, StateBuilder,
+    Evm, State, StateBuilder,
 };
 use std::{sync::Arc, time::Instant};
 
@@ -180,7 +180,9 @@ where
             total_difficulty,
         );
         *self.evm.cfg_mut() = cfg.cfg_env;
-        self.evm.handler = Handler::new(cfg.handler_cfg);
+
+        // This will update the spec in case it changed
+        self.evm.modify_spec_id(cfg.handler_cfg.spec_id);
     }
 
     /// Applies the pre-block call to the EIP-4788 beacon block root contract.
@@ -869,10 +871,8 @@ mod tests {
         // there is no system contract call so there should be NO STORAGE CHANGES
         // this means we'll check the transition state
         let state = executor.evm.context.evm.inner.db;
-        let transition_state = state
-            .transition_state
-            .clone()
-            .expect("the evm should be initialized with bundle updates");
+        let transition_state =
+            state.transition_state.expect("the evm should be initialized with bundle updates");
 
         // assert that it is the default (empty) transition state
         assert_eq!(transition_state, TransitionState::default());
