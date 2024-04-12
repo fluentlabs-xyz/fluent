@@ -137,7 +137,8 @@ where
                         .effective_tip_per_gas(basefee)
                         .ok_or_else(|| RpcInvalidTransactionError::FeeCapTooLow)?;
                     tx.try_fill_tx_env(evm.tx_mut())?;
-                    let ResultAndState { result, state } = evm.transact()?;
+                    let ResultAndState { result, state } = evm.transact()
+                        .map_err(|err| EthApiError::EvmCustom(format!("{}", err)))?;
 
                     let gas_used = result.gas_used();
                     total_gas_used += gas_used;

@@ -19,6 +19,9 @@ reth-rpc-types.workspace = true
 revm.workspace = true
 revm-primitives = { workspace = true, features = ["serde"] }
 
+# fluentbase
+fluentbase-poseidon.workspace = true
+
 # ethereum
 alloy-chains = { workspace = true, features = ["serde", "rlp"] }
 alloy-primitives = { workspace = true, features = ["rand", "rlp"] }

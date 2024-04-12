@@ -5,7 +5,8 @@ use crate::{
 use revm::{
     primitives::{MergeSpec, ShanghaiSpec},
 };
-use revm::handler::mainnet::validate_initial_tx_gas_inner;
+use revm::gas::validate_initial_tx_gas;
+use revm_primitives::POSEIDON_EMPTY;
 
 /// Check equality between Revm and Reth `Log`s.
 pub fn is_log_equal(revm_log: &Log, reth_log: &RethLog) -> bool {
@@ -19,10 +20,12 @@ pub fn is_log_equal(revm_log: &Log, reth_log: &RethLog) -> bool {
 /// Sets `bytecode_hash` to `None` if `code_hash` is [`KECCAK_EMPTY`].
 pub fn into_reth_acc(revm_acc: AccountInfo) -> Account {
     let code_hash = revm_acc.code_hash;
+    let rwasm_code_hash = revm_acc.rwasm_code_hash;
     Account {
         balance: revm_acc.balance,
         nonce: revm_acc.nonce,
         bytecode_hash: (code_hash != KECCAK_EMPTY).then_some(code_hash),
+        rwasm_hash: (revm_acc.rwasm_code_hash != POSEIDON_EMPTY).then_some(rwasm_code_hash),
     }
 }
 
@@ -34,7 +37,9 @@ pub fn into_revm_acc(reth_acc: Account) -> AccountInfo {
         balance: reth_acc.balance,
         nonce: reth_acc.nonce,
         code_hash: reth_acc.bytecode_hash.unwrap_or(KECCAK_EMPTY),
+        rwasm_code_hash: reth_acc.rwasm_hash.unwrap_or(POSEIDON_EMPTY),
         code: None,
+        rwasm_code: None,
     }
 }
 
@@ -49,8 +54,8 @@ pub fn calculate_intrinsic_gas_after_merge(
     is_shanghai: bool,
 ) -> u64 {
     if is_shanghai {
-        validate_initial_tx_gas_inner::<ShanghaiSpec>(input, kind.is_create(), access_list)
+        validate_initial_tx_gas::<ShanghaiSpec>(input, kind.is_create(), access_list)
     } else {
-        validate_initial_tx_gas_inner::<MergeSpec>(input, kind.is_create(), access_list)
+        validate_initial_tx_gas::<MergeSpec>(input, kind.is_create(), access_list)
     }
 }

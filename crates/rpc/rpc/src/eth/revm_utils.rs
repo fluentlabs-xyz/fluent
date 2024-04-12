@@ -131,7 +131,8 @@ where
     <DB as Database>::Error: Into<EthApiError>,
 {
     let mut evm = revm::Evm::builder().with_db(db).with_env_with_handler_cfg(env).build();
-    let res = evm.transact()?;
+    let res = evm.transact()
+        .map_err(|err| EthApiError::EvmCustom(format!("{}", err)))?;
     let (_, env) = evm.into_db_and_env_with_handler_cfg();
     Ok((res, env))
 }
@@ -153,7 +154,8 @@ where
         .with_env_with_handler_cfg(env)
         .append_handler_register(inspector_handle_register)
         .build();
-    let res = evm.transact()?;
+    let res = evm.transact()
+        .map_err(|err| EthApiError::EvmCustom(format!("{}", err)))?;
     let (_, env) = evm.into_db_and_env_with_handler_cfg();
     Ok((res, env))
 }
@@ -178,7 +180,8 @@ where
         .with_env_with_handler_cfg(env)
         .append_handler_register(inspector_handle_register)
         .build();
-    let res = evm.transact()?;
+    let res = evm.transact()
+        .map_err(|err| EthApiError::EvmCustom(format!("{}", err)))?;
     let (db, env) = evm.into_db_and_env_with_handler_cfg();
     Ok((res, env, db))
 }
@@ -219,7 +222,8 @@ where
         }
 
         tx.try_fill_tx_env(evm.tx_mut())?;
-        evm.transact_commit()?;
+        evm.transact_commit()
+            .map_err(|err| EthApiError::EvmCustom(format!("{}", err)))?;
         index += 1;
     }
     Ok(index)
@@ -637,11 +641,12 @@ where
                     .into_iter()
                     .map(|(slot, value)| (U256::from_be_bytes(slot.0), value))
                     .collect(),
-            )?;
+            ).map_err(|err| EthApiError::EvmCustom(format!("{}", err)))?;
         }
         (None, Some(account_state_diff)) => {
             for (slot, value) in account_state_diff {
-                db.insert_account_storage(account, U256::from_be_bytes(slot.0), value)?;
+                db.insert_account_storage(account, U256::from_be_bytes(slot.0), value)
+                    .map_err(|err| EthApiError::EvmCustom(format!("{}", err)))?;
             }
         }
     };

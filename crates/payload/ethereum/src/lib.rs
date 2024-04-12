@@ -281,7 +281,7 @@ where
                     }
                     err => {
                         // this is an error that we should treat as fatal for this attempt
-                        return Err(PayloadBuilderError::EvmExecutionError(err))
+                        return Err(PayloadBuilderError::EvmExecutionError(EVMError::Custom(format!("{}", err))))
                     }
                 }
             }

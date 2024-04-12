@@ -152,7 +152,7 @@ impl PendingBlockEnv {
                         }
                         err => {
                             // this is an error that we should treat as fatal for this attempt
-                            return Err(err.into())
+                            return Err(EthApiError::EvmCustom(format!("{}", err)))
                         }
                     }
                 }
@@ -204,7 +204,8 @@ impl PendingBlockEnv {
         );
 
         // increment account balances for withdrawals
-        db.increment_balances(balance_increments)?;
+        db.increment_balances(balance_increments)
+            .map_err(|err| EthApiError::EvmCustom(format!("{}", err)))?;
 
         // merge all transitions into bundle state.
         db.merge_transitions(BundleRetention::PlainState);

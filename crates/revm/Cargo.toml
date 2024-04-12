@@ -19,12 +19,19 @@ reth-provider.workspace = true
 reth-consensus-common.workspace = true
 reth-node-api.workspace = true
 
+# fluentbase
+fluentbase-sdk.workspace = true
+fluentbase-runtime.workspace = true
+fluentbase-core.workspace = true
+fluentbase-types.workspace = true
+
 # revm
 revm.workspace = true
 revm-inspectors.workspace = true
 
 # common
 tracing.workspace = true
+auto_impl = "1.0"
 
 [dev-dependencies]
 reth-trie.workspace = true

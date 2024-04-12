@@ -3,6 +3,7 @@ use reth_primitives::{
     TxHashOrNumber, TxNumber, B256, U256,
 };
 use std::path::PathBuf;
+use fluentbase_types::ExitCode;
 use thiserror::Error;
 
 /// Provider result type.
@@ -134,6 +135,9 @@ pub enum ProviderError {
     /// Consistent view error.
     #[error("failed to initialize consistent view: {0}")]
     ConsistentView(Box<ConsistentViewError>),
+    /// WASM exit code.
+    #[error("transact exit code: {0}")]
+    ExitCode(ExitCode),
 }
 
 impl From<reth_primitives::fs::FsPathError> for ProviderError {

@@ -11,7 +11,7 @@
 use crate::metrics::PayloadBuilderMetrics;
 use futures_core::ready;
 use futures_util::FutureExt;
-use reth_interfaces::RethResult;
+use reth_interfaces::{RethError, RethResult};
 use reth_node_api::{BuiltPayload, PayloadBuilderAttributes};
 use reth_payload_builder::{
     database::CachedReads, error::PayloadBuilderError, KeepPayloadJobAlive, PayloadId, PayloadJob,
@@ -828,7 +828,7 @@ pub fn commit_withdrawals<DB: Database<Error = ProviderError>>(
     let balance_increments =
         post_block_withdrawals_balance_increments(chain_spec, timestamp, &withdrawals);
 
-    db.increment_balances(balance_increments)?;
+    db.increment_balances(balance_increments).map_err(|err| RethError::Custom(format!("{}", err)))?;
 
     let withdrawals_root = proofs::calculate_withdrawals_root(&withdrawals);
 

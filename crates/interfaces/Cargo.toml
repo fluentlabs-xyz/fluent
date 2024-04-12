@@ -16,6 +16,9 @@ reth-rpc-types.workspace = true
 reth-network-api.workspace = true
 reth-eth-wire-types.workspace = true
 
+# fluentbase
+fluentbase-types.workspace = true
+
 # async
 futures.workspace = true
 tokio = { workspace = true, features = ["sync"] }

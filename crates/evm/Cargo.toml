@@ -15,4 +15,4 @@ workspace = true
 reth-primitives.workspace = true
 revm-primitives.workspace = true
 revm.workspace = true
-
+fluentbase-types.workspace = true

@@ -21,6 +21,7 @@ use revm::{
     Evm, State, StateBuilder,
 };
 use std::{sync::Arc, time::Instant};
+use fluentbase_types::ExitCode;
 
 #[cfg(feature = "optimism")]
 use reth_primitives::revm::env::fill_op_tx_env;
@@ -33,6 +34,7 @@ use reth_provider::BundleStateWithReceipts;
 use revm::DatabaseCommit;
 #[cfg(not(feature = "optimism"))]
 use tracing::{debug, trace};
+use crate::primitives::EVMError;
 
 /// EVMProcessor is a block executor that uses revm to execute blocks or multiple blocks.
 ///
@@ -262,7 +264,7 @@ where
         }
 
         let hash = transaction.hash_ref();
-        let should_inspect = self.evm.context.external.should_inspect(self.evm.env(), hash);
+        let should_inspect = self.evm.context.external.should_inspect(&self.evm.context.evm.env, hash);
         let out = if should_inspect {
             // push inspector handle register.
             self.evm.handler.append_handler_register_plain(inspector_handle_register);
@@ -282,7 +284,7 @@ where
 
         out.map_err(move |e| {
             // Ensure hash is calculated for error log, if not already done
-            BlockValidationError::EVM { hash: transaction.recalculate_hash(), error: e.into() }
+            BlockValidationError::EVM { hash: transaction.recalculate_hash(), error: EVMError::<ProviderError>::Database(ProviderError::ExitCode(ExitCode::TransactError)).into() }
                 .into()
         })
     }

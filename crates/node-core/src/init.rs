@@ -20,6 +20,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
+use fluentbase_poseidon::poseidon_hash;
 use tracing::debug;
 
 /// Database initialization error type.
@@ -109,8 +110,10 @@ pub fn insert_genesis_state<DB: Database>(
         let bytecode_hash = if let Some(code) = &account.code {
             let bytecode = Bytecode::new_raw(code.clone());
             let hash = bytecode.hash_slow();
-            contracts.insert(hash, bytecode);
-            Some(hash)
+            let rwasm_hash: B256 = poseidon_hash(bytecode.original_bytes().as_ref()).into();
+            contracts.insert(hash, bytecode.clone());
+            contracts.insert(rwasm_hash, bytecode);
+            Some((hash, rwasm_hash))
         } else {
             None
         };
@@ -141,7 +144,8 @@ pub fn insert_genesis_state<DB: Database>(
                 Some(Account {
                     nonce: account.nonce.unwrap_or_default(),
                     balance: account.balance,
-                    bytecode_hash,
+                    bytecode_hash: bytecode_hash.map(|v| v.0),
+                    rwasm_hash: bytecode_hash.map(|v| v.1),
                 }),
                 storage,
             ),

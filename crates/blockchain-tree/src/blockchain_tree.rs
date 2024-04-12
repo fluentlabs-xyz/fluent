@@ -366,18 +366,18 @@ where
             .ok_or_else(|| BlockchainTreeError::CanonicalChain { block_hash: block.parent_hash })?;
 
         // Pass the parent total difficulty to short-circuit unnecessary calculations.
-        // if !self
-        //     .externals
-        //     .provider_factory
-        //     .chain_spec()
-        //     .fork(Hardfork::Paris)
-        //     .active_at_ttd(parent_td, U256::ZERO)
-        // {
-        //     return Err(BlockExecutionError::Validation(BlockValidationError::BlockPreMerge {
-        //         hash: block.hash(),
-        //     })
-        //     .into())
-        // }
+        if !self
+            .externals
+            .provider_factory
+            .chain_spec()
+            .fork(Hardfork::Paris)
+            .active_at_ttd(parent_td, U256::ZERO)
+        {
+            return Err(BlockExecutionError::Validation(BlockValidationError::BlockPreMerge {
+                hash: block.hash(),
+            })
+            .into())
+        }
 
         let parent_header = provider
             .header(&block.parent_hash)?

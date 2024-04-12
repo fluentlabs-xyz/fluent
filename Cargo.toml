@@ -250,26 +250,30 @@ reth-trie = { path = "crates/trie" }
 reth-trie-parallel = { path = "crates/trie-parallel" }
 
 # revm
-#revm = { version = "7.1.0", features = ["std", "secp256k1"], default-features = false }
-#revm = { package = "fluentbase-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/revm2", features = ["std", "secp256k1"], default-features = false }
-revm = { package = "fluentbase-revm", path = "../fluentbase/crates/revm", features = ["std", "secp256k1"], default-features = false }
+revm = { package = "fluentbase-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", features = ["std", "secp256k1"], default-features = false }
+fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-core = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-runtime = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-sdk = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-types = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
 revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
-#revm-inspectors = { git = "https://github.com/paradigmxyz/evm-inspectors", rev = "0ad0338" }
-revm-inspectors = { path = "../../fluent/revm-inspectors" }
+revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors", branch = "devel" }
 
 # eth
 alloy-chains = { version = "0.1", feature = ["serde", "rlp", "arbitrary"] }
-alloy-primitives = "0.6.4"
-alloy-dyn-abi = "0.6.4"
-alloy-sol-types = "0.6.4"
+alloy-primitives = "=0.6.4"
+alloy-dyn-abi = "=0.6.4"
+alloy-sol-types = "=0.6.4"
 alloy-rlp = "0.3.4"
-alloy-trie = "0.3"
+alloy-trie = "=0.3.0"
 alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "7e39c85" }
 alloy-rpc-trace-types = { git = "https://github.com/alloy-rs/alloy", rev = "7e39c85" }
 alloy-rpc-engine-types = { git = "https://github.com/alloy-rs/alloy", rev = "7e39c85" }
 alloy-genesis = { git = "https://github.com/alloy-rs/alloy", rev = "7e39c85" }
 alloy-node-bindings = { git = "https://github.com/alloy-rs/alloy", rev = "7e39c85" }
 alloy-eips = { git = "https://github.com/alloy-rs/alloy", rev = "7e39c85" }
+alloy-consensus = { git = "https://github.com/alloy-rs/alloy", rev = "7e39c85" }
 
 # TODO: Remove
 ethers-core = { version = "2.0.14", default-features = false }

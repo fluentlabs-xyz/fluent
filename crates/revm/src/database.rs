@@ -7,6 +7,7 @@ use revm::{
     Database, StateDBBox,
 };
 use std::ops::{Deref, DerefMut};
+use fluentbase_types::POSEIDON_EMPTY;
 
 /// SubState of database. Uses revm internal cache with binding to reth StateProvider trait.
 pub type SubState<DB> = CacheDB<StateProviderDatabase<DB>>;
@@ -90,7 +91,9 @@ impl<DB: StateProvider> DatabaseRef for StateProviderDatabase<DB> {
             balance: account.balance,
             nonce: account.nonce,
             code_hash: account.bytecode_hash.unwrap_or(KECCAK_EMPTY),
+            rwasm_code_hash: account.rwasm_hash.unwrap_or(POSEIDON_EMPTY),
             code: None,
+            rwasm_code: None,
         }))
     }
 
