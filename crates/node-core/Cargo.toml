@@ -43,6 +43,7 @@ reth-static-file.workspace = true
 
 # fluent
 fluentbase-poseidon.workspace = true
+fluentbase-genesis.workspace = true
 
 # ethereum
 discv5.workspace = true

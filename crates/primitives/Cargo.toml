@@ -21,6 +21,7 @@ revm-primitives = { workspace = true, features = ["serde"] }
 
 # fluentbase
 fluentbase-poseidon.workspace = true
+fluentbase-genesis.workspace = true
 
 # ethereum
 alloy-chains = { workspace = true, features = ["serde", "rlp"] }

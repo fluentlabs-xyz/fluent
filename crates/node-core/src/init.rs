@@ -20,6 +20,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
+use fluentbase_genesis::devnet::POSEIDON_HASH_KEY;
 use fluentbase_poseidon::poseidon_hash;
 use tracing::debug;
 
@@ -110,7 +111,13 @@ pub fn insert_genesis_state<DB: Database>(
         let bytecode_hash = if let Some(code) = &account.code {
             let bytecode = Bytecode::new_raw(code.clone());
             let hash = bytecode.hash_slow();
-            let rwasm_hash: B256 = poseidon_hash(bytecode.original_bytes().as_ref()).into();
+            let rwasm_hash = account.storage
+                .as_ref()
+                .and_then(|s| s.get(&POSEIDON_HASH_KEY))
+                .cloned()
+                .unwrap_or_else(|| {
+                    poseidon_hash(bytecode.original_bytes().as_ref()).into()
+                });
             contracts.insert(hash, bytecode.clone());
             contracts.insert(rwasm_hash, bytecode);
             Some((hash, rwasm_hash))

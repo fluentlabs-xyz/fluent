@@ -18,6 +18,7 @@ use std::{
     fmt::{Display, Formatter},
     sync::Arc,
 };
+use fluentbase_genesis::devnet::devnet_genesis_from_file;
 
 /// The Ethereum mainnet spec
 pub static MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
@@ -210,11 +211,10 @@ pub static HOLESKY: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
 pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
     ChainSpec {
         chain: Chain::dev(),
-        genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json"))
-            .expect("Can't deserialize Dev testnet genesis json"),
-        genesis_hash: Some(b256!(
-            "2f980576711e3617a5e4d83dd539548ec0f7792007d505a3d2e9674833af2d7c"
-        )),
+        genesis: devnet_genesis_from_file(),
+        // genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json")).expect("Can't deserialize Dev testnet genesis json"),
+        // genesis_hash: Some(b256!("2f980576711e3617a5e4d83dd539548ec0f7792007d505a3d2e9674833af2d7c")),
+        genesis_hash: None,
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         fork_timestamps: ForkTimestamps::default().shanghai(0).cancun(0),
         hardforks: BTreeMap::from([

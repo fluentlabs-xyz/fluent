@@ -8,6 +8,7 @@ use bytes::Buf;
 use reth_codecs::{main_codec, Compact};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
+use fluentbase_genesis::devnet::POSEIDON_HASH_KEY;
 use fluentbase_poseidon::poseidon_hash;
 
 /// An Ethereum account.
@@ -40,7 +41,13 @@ impl Account {
 
     /// Converts [GenesisAccount] to [Account] type
     pub fn from_genesis_account(value: GenesisAccount) -> Self {
-        let rwasm_hash = value.code.as_ref().map(|bytes| B256::from(poseidon_hash(bytes.as_ref())));
+        let rwasm_hash = value.storage
+            .as_ref()
+            .and_then(|s| s.get(&POSEIDON_HASH_KEY))
+            .cloned()
+            .or_else(|| {
+                value.code.as_ref().map(|bytes| B256::from(poseidon_hash(bytes.as_ref())))
+            });
         Account {
             // nonce must exist, so we default to zero when converting a genesis account
             nonce: value.nonce.unwrap_or_default(),
