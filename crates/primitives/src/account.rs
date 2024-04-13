@@ -8,8 +8,9 @@ use bytes::Buf;
 use reth_codecs::{main_codec, Compact};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
-use fluentbase_genesis::devnet::POSEIDON_HASH_KEY;
+use fluentbase_genesis::devnet::{KECCAK_HASH_KEY, POSEIDON_HASH_KEY};
 use fluentbase_poseidon::poseidon_hash;
+use revm_primitives::POSEIDON_EMPTY;
 
 /// An Ethereum account.
 #[main_codec]
@@ -28,7 +29,7 @@ pub struct Account {
 impl Account {
     /// Whether the account has bytecode.
     pub fn has_bytecode(&self) -> bool {
-        self.bytecode_hash.is_some()
+        self.bytecode_hash.is_some() && self.rwasm_hash.is_some()
     }
 
     /// After SpuriousDragon empty account is defined as account with nonce == 0 && balance == 0 &&
@@ -36,11 +37,19 @@ impl Account {
     pub fn is_empty(&self) -> bool {
         self.nonce == 0 &&
             self.balance.is_zero() &&
-            self.bytecode_hash.map_or(true, |hash| hash == KECCAK_EMPTY)
+            self.bytecode_hash.map_or(true, |hash| hash == KECCAK_EMPTY) &&
+            self.rwasm_hash.map_or(true, |hash| hash == POSEIDON_EMPTY)
     }
 
     /// Converts [GenesisAccount] to [Account] type
     pub fn from_genesis_account(value: GenesisAccount) -> Self {
+        let bytecode_hash = value.storage
+            .as_ref()
+            .and_then(|s| s.get(&KECCAK_HASH_KEY))
+            .cloned()
+            .or_else(|| {
+                value.code.as_ref().map(|bytes| keccak256(bytes.as_ref()))
+            });
         let rwasm_hash = value.storage
             .as_ref()
             .and_then(|s| s.get(&POSEIDON_HASH_KEY))
@@ -52,7 +61,7 @@ impl Account {
             // nonce must exist, so we default to zero when converting a genesis account
             nonce: value.nonce.unwrap_or_default(),
             balance: value.balance,
-            bytecode_hash: value.code.map(keccak256),
+            bytecode_hash,
             rwasm_hash,
         }
     }
