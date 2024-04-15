@@ -270,7 +270,7 @@ checksum = "1a047897373be4bbb0224c1afdabca92648dc57a9c9ef6e7b0be3aff7a859c83"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -344,7 +344,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "syn-solidity",
  "tiny-keccak",
 ]
@@ -476,7 +476,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -705,7 +705,7 @@ checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -716,7 +716,7 @@ checksum = "c6fa2087f2753a7da8cc1c0dbfcf89579dd57458e36769de5ac750b4671737ca"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -759,7 +759,7 @@ checksum = "3c87f3f15e7794432337fc718554eaa4dc8f04c9677a950ffe366f20a162ae42"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -873,7 +873,7 @@ dependencies = [
  "regex",
  "rustc-hash",
  "shlex",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1089,7 +1089,7 @@ checksum = "6be9c93793b60dac381af475b98634d4b451e28336e72218cad9a20176218dbc"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "synstructure",
 ]
 
@@ -1197,7 +1197,7 @@ checksum = "4da9a32f3fed317401fa3c862968128267c3106685286e15d5aaa3d7389c2f60"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1309,9 +1309,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.37"
+version = "0.4.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a0d04d43504c61aa6c7531f1871dd0d418d91130162063b789da00fd7057a5e"
+checksum = "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
@@ -1410,7 +1410,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1822,7 +1822,7 @@ checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1981,7 +1981,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.10.0",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -2014,7 +2014,7 @@ checksum = "a668eda54683121533a393014d8692171709ff57a7d61f187b6e782719f8933f"
 dependencies = [
  "darling_core 0.20.8",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -2120,7 +2120,7 @@ checksum = "67e77553c4162a157adbf834ebae5b415acbecbeafc7a74b0e886657506a7611"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -2271,7 +2271,7 @@ checksum = "487585f4d0c6655fe74905e2504d8ad6908e4db67f744eb140876906c2f3175d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -2474,7 +2474,7 @@ dependencies = [
  "heck 0.4.1",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -2487,7 +2487,7 @@ dependencies = [
  "num-traits",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -2498,7 +2498,7 @@ checksum = "6fd000fd6988e73bbe993ea3db9b1aa64906ab88766d654973924340c8cddb42"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -2803,7 +2803,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -2816,7 +2816,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-core"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "alloy-rlp",
  "byteorder",
@@ -2834,7 +2834,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-core-api"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "alloy-rlp",
  "byteorder",
@@ -2850,17 +2850,17 @@ dependencies = [
 [[package]]
 name = "fluentbase-core-macros"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "crypto-hashes",
  "fluentbase-codec",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
 name = "fluentbase-genesis"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "alloy-genesis",
  "byteorder",
@@ -2879,7 +2879,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-poseidon"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "bitvec",
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
@@ -2891,7 +2891,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-revm"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "auto_impl",
  "cfg-if",
@@ -2904,13 +2904,14 @@ dependencies = [
  "fluentbase-types",
  "revm-precompile",
  "revm-primitives",
- "rwasm",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
 name = "fluentbase-runtime"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "byteorder",
  "eth_trie",
@@ -2928,7 +2929,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "byteorder",
  "fluentbase-codec",
@@ -2941,7 +2942,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-types"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "alloy-primitives",
  "auto_impl",
@@ -2954,7 +2955,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-zktrie"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#b0d75006b778f3f334316c9e5e8136653460134a"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#c058181fd56929c68fc0bc945c52dac8bf0cabc1"
 dependencies = [
  "byteorder",
  "fluentbase-poseidon",
@@ -3063,7 +3064,7 @@ checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -3757,7 +3758,7 @@ checksum = "d2abdd3a62551e8337af119c5899e600ca0c88ec8f23a46c60ba216c803dcf1a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -3985,9 +3986,9 @@ checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
 
 [[package]]
 name = "iri-string"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81669f3b77acd397a241a988f05190b1785cb83f0287d8fb3a05f0648405d65f"
+checksum = "7f5f6c2df22c009ac44f6f1499308e7a3ac7ba42cd2378475cc691510e1eef1b"
 dependencies = [
  "memchr",
  "serde",
@@ -4725,7 +4726,7 @@ checksum = "38b4faf00617defe497754acde3024865bc143d44a86799b24e191ecff91354f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -4849,7 +4850,7 @@ dependencies = [
  "cfg-if",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -5110,7 +5111,7 @@ dependencies = [
  "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -5429,7 +5430,7 @@ dependencies = [
  "phf_shared",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -5458,7 +5459,7 @@ checksum = "2f38a4412a78282e09a2cf38d195ea5420d15ba0602cb375210efbc877243965"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -5642,12 +5643,12 @@ dependencies = [
 
 [[package]]
 name = "prettyplease"
-version = "0.2.17"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d3928fb5db768cb86f891ff014f0144589297e3c6a1aba6ed7cecfdace270c7"
+checksum = "5ac2cf0f2e4f42b49f5ffd07dae8d746508ef7526c13940e5f524012ae6c6550"
 dependencies = [
  "proc-macro2",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -5718,9 +5719,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.79"
+version = "1.0.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e835ff2298f5721608eb1a980ecaee1aef2c132bf95ecc026a11b7bf3c01c02e"
+checksum = "a56dea16b0a29e94408b9aa5e2940a4eedbd128a1ba20e8f7ae60fd3d465af0e"
 dependencies = [
  "unicode-ident",
 ]
@@ -6337,7 +6338,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "similar-asserts",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -6732,7 +6733,7 @@ dependencies = [
  "quote",
  "regex",
  "serial_test",
- "syn 2.0.58",
+ "syn 2.0.59",
  "trybuild",
 ]
 
@@ -7591,7 +7592,7 @@ dependencies = [
 [[package]]
 name = "revm-interpreter"
 version = "3.4.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#eda5ae2b4065bd8b984d85aadc6836cc5e34a60b"
+source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#0386a1d9113465248d35e0f27e52d096d35a15f8"
 dependencies = [
  "revm-primitives",
 ]
@@ -7599,7 +7600,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "5.1.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#eda5ae2b4065bd8b984d85aadc6836cc5e34a60b"
+source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#0386a1d9113465248d35e0f27e52d096d35a15f8"
 dependencies = [
  "aurora-engine-modexp",
  "c-kzg",
@@ -7615,7 +7616,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "3.1.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#eda5ae2b4065bd8b984d85aadc6836cc5e34a60b"
+source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#0386a1d9113465248d35e0f27e52d096d35a15f8"
 dependencies = [
  "alloy-primitives",
  "auto_impl",
@@ -7915,7 +7916,7 @@ dependencies = [
 [[package]]
 name = "rwasm"
 version = "0.30.0"
-source = "git+https://github.com/fluentlabs-xyz/rwasm?branch=devel#0140d2b23e062165229152b7b9b2859cfe3331db"
+source = "git+https://github.com/fluentlabs-xyz/rwasm?branch=devel#d43b9e1f447bf3f0534c81d06f32b118f56a7c50"
 dependencies = [
  "byteorder",
  "downcast-rs",
@@ -7925,8 +7926,6 @@ dependencies = [
  "paste",
  "smallvec",
  "spin 0.9.8",
- "strum 0.25.0",
- "strum_macros 0.25.3",
  "wasmparser-nostd",
 ]
 
@@ -8152,7 +8151,7 @@ checksum = "7eb0b34b42edc17f6b7cac84a52a1c5f0e1bb2227e997ca9011ea3dd34e8610b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -8161,6 +8160,7 @@ version = "1.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12dc5c46daa8e9fdf4f5e71b6cf9a53f2487da0e86e55808e2d35539666497dd"
 dependencies = [
+ "indexmap 2.2.6",
  "itoa",
  "ryu",
  "serde",
@@ -8225,7 +8225,7 @@ dependencies = [
  "darling 0.20.8",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -8250,7 +8250,7 @@ checksum = "b93fb4adc70021ac1b47f7d45e8cc4169baaa7ea58483bc5b721d19a26202212"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -8615,7 +8615,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -8628,7 +8628,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -8696,9 +8696,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.58"
+version = "2.0.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44cfb93f38070beee36b3fef7d4f5a16f27751d94b187b666a5cc5e9b0d30687"
+checksum = "4a6531ffc7b071655e4ce2e04bd464c4830bb585a61cabb96cf808f05172615a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8714,7 +8714,7 @@ dependencies = [
  "paste",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -8731,7 +8731,7 @@ checksum = "c8af7666ab7b6390ab78131fb5b0fce11d6b7a6951602017c35fa82800708971"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -8823,7 +8823,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -8862,7 +8862,7 @@ checksum = "c61f3ba182994efc43764a46c018c347bc492c79f024e705f46567b418f6d4f7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -9020,7 +9020,7 @@ checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -9245,7 +9245,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -9733,7 +9733,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "wasm-bindgen-shared",
 ]
 
@@ -9767,7 +9767,7 @@ checksum = "e94f17b526d0a461a191c78ea52bbce64071ed5c04c9ffe424dcb38f74171bb7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -10132,7 +10132,7 @@ checksum = "9e6936f0cce458098a201c245a11bef556c6a0181129c7034d10d76d1ec3a2b8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "synstructure",
 ]
 
@@ -10153,7 +10153,7 @@ checksum = "9ce1b18ccd8e73a9321186f97e46f9f04b778851177567b1975109d26a08d2a6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -10173,7 +10173,7 @@ checksum = "e6a647510471d372f2e6c2e6b7219e44d8c574d24fdc11c610a61455782f18c3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "synstructure",
 ]
 
@@ -10194,7 +10194,7 @@ checksum = "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -10216,7 +10216,7 @@ checksum = "7b4e5997cbf58990550ef1f0e5124a05e47e1ebd33a84af25739be6031a62c20"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
