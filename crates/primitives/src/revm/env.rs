@@ -1,55 +1,13 @@
 use crate::{
     constants::{BEACON_ROOTS_ADDRESS, SYSTEM_ADDRESS},
-    recover_signer,
-    revm::config::revm_spec,
-    revm_primitives::{AnalysisKind, BlockEnv, CfgEnv, Env, SpecId, TransactTo, TxEnv},
-    Address, Bytes, Chain, ChainSpec, Head, Header, Transaction, TransactionKind,
+    recover_signer_unchecked,
+    revm_primitives::{BlockEnv, Env, TransactTo, TxEnv},
+    Address, Bytes, Chain, ChainSpec, Header, Transaction, TransactionKind,
     TransactionSignedEcRecovered, B256, U256,
 };
 
 #[cfg(feature = "optimism")]
 use revm_primitives::OptimismFields;
-
-/// Convenience function to call both [fill_cfg_env] and [fill_block_env]
-pub fn fill_cfg_and_block_env(
-    cfg: &mut CfgEnv,
-    block_env: &mut BlockEnv,
-    chain_spec: &ChainSpec,
-    header: &Header,
-    total_difficulty: U256,
-) {
-    fill_cfg_env(cfg, chain_spec, header, total_difficulty);
-    let after_merge = cfg.spec_id >= SpecId::MERGE;
-    fill_block_env(block_env, chain_spec, header, after_merge);
-}
-
-/// Fill [CfgEnv] fields according to the chain spec and given header
-pub fn fill_cfg_env(
-    cfg_env: &mut CfgEnv,
-    chain_spec: &ChainSpec,
-    header: &Header,
-    total_difficulty: U256,
-) {
-    let spec_id = revm_spec(
-        chain_spec,
-        Head {
-            number: header.number,
-            timestamp: header.timestamp,
-            difficulty: header.difficulty,
-            total_difficulty,
-            hash: Default::default(),
-        },
-    );
-
-    cfg_env.chain_id = chain_spec.chain().id();
-    cfg_env.spec_id = spec_id;
-    cfg_env.perf_analyse_created_bytecodes = AnalysisKind::Analyse;
-
-    #[cfg(feature = "optimism")]
-    {
-        cfg_env.optimism = chain_spec.is_optimism();
-    }
-}
 
 /// Fill block environment from Block.
 pub fn fill_block_env(
@@ -91,27 +49,59 @@ pub fn fill_block_env_with_coinbase(
 
 /// Return the coinbase address for the given header and chain spec.
 pub fn block_coinbase(chain_spec: &ChainSpec, header: &Header, after_merge: bool) -> Address {
-    if chain_spec.chain == Chain::goerli() && !after_merge {
-        recover_header_signer(header).expect("failed to recover signer")
+    // Clique consensus fills the EXTRA_SEAL (last 65 bytes) of the extra data with the
+    // signer's signature.
+    //
+    // On the genesis block, the extra data is filled with zeros, so we should not attempt to
+    // recover the signer on the genesis block.
+    //
+    // From EIP-225:
+    //
+    // * `EXTRA_SEAL`: Fixed number of extra-data suffix bytes reserved for signer seal.
+    //   * 65 bytes fixed as signatures are based on the standard `secp256k1` curve.
+    //   * Filled with zeros on genesis block.
+    if chain_spec.chain == Chain::goerli() && !after_merge && header.number > 0 {
+        recover_header_signer(header).unwrap_or_else(|err| {
+            panic!(
+                "Failed to recover goerli Clique Consensus signer from header ({}, {}) using extradata {}: {:?}",
+                header.number, header.hash_slow(), header.extra_data, err
+            )
+        })
     } else {
         header.beneficiary
     }
 }
 
+/// Error type for recovering Clique signer from a header.
+#[derive(Debug, thiserror::Error)]
+pub enum CliqueSignerRecoveryError {
+    /// Header extradata is too short.
+    #[error("Invalid extra data length")]
+    InvalidExtraData,
+    /// Recovery failed.
+    #[error("Invalid signature: {0}")]
+    InvalidSignature(#[from] secp256k1::Error),
+}
+
 /// Recover the account from signed header per clique consensus rules.
-pub fn recover_header_signer(header: &Header) -> Option<Address> {
+pub fn recover_header_signer(header: &Header) -> Result<Address, CliqueSignerRecoveryError> {
     let extra_data_len = header.extra_data.len();
     // Fixed number of extra-data suffix bytes reserved for signer signature.
     // 65 bytes fixed as signatures are based on the standard secp256k1 curve.
     // Filled with zeros on genesis block.
     let signature_start_byte = extra_data_len - 65;
-    let signature: [u8; 65] = header.extra_data[signature_start_byte..].try_into().ok()?;
+    let signature: [u8; 65] = header.extra_data[signature_start_byte..]
+        .try_into()
+        .map_err(|_| CliqueSignerRecoveryError::InvalidExtraData)?;
     let seal_hash = {
         let mut header_to_seal = header.clone();
         header_to_seal.extra_data = Bytes::from(header.extra_data[..signature_start_byte].to_vec());
         header_to_seal.hash_slow()
     };
-    recover_signer(&signature, &seal_hash.0).ok()
+
+    // TODO: this is currently unchecked recovery, does this need to be checked w.r.t EIP-2?
+    recover_signer_unchecked(&signature, &seal_hash.0)
+        .map_err(CliqueSignerRecoveryError::InvalidSignature)
 }
 
 /// Returns a new [TxEnv] filled with the transaction's data.
@@ -125,7 +115,12 @@ pub fn tx_env_with_recovered(transaction: &TransactionSignedEcRecovered) -> TxEn
     {
         let mut envelope_buf = Vec::with_capacity(transaction.length_without_header());
         transaction.encode_enveloped(&mut envelope_buf);
-        fill_tx_env(&mut tx_env, transaction.as_ref(), transaction.signer(), envelope_buf.into());
+        fill_op_tx_env(
+            &mut tx_env,
+            transaction.as_ref(),
+            transaction.signer(),
+            envelope_buf.into(),
+        );
     }
 
     tx_env
@@ -154,7 +149,7 @@ pub fn fill_tx_env_with_beacon_root_contract_call(env: &mut Env, parent_beacon_b
         nonce: None,
         gas_limit: 30_000_000,
         value: U256::ZERO,
-        data: parent_beacon_block_root.0.to_vec().into(),
+        data: parent_beacon_block_root.0.into(),
         // Setting the gas price to zero enforces that no value is transferred as part of the call,
         // and that the call will not count against the block's gas limit
         gas_price: U256::ZERO,
@@ -172,7 +167,9 @@ pub fn fill_tx_env_with_beacon_root_contract_call(env: &mut Env, parent_beacon_b
             source_hash: None,
             mint: None,
             is_system_transaction: Some(false),
-            enveloped_tx: None,
+            // The L1 fee is not charged for the EIP-4788 transaction, submit zero bytes for the
+            // enveloped tx size.
+            enveloped_tx: Some(Bytes::default()),
         },
     };
 
@@ -196,16 +193,12 @@ pub fn fill_tx_env_with_recovered(
     transaction: &TransactionSignedEcRecovered,
     envelope: Bytes,
 ) {
-    fill_tx_env(tx_env, transaction.as_ref(), transaction.signer(), envelope);
+    fill_op_tx_env(tx_env, transaction.as_ref(), transaction.signer(), envelope);
 }
 
 /// Fill transaction environment from a [Transaction] and the given sender address.
-pub fn fill_tx_env<T>(
-    tx_env: &mut TxEnv,
-    transaction: T,
-    sender: Address,
-    #[cfg(feature = "optimism")] envelope: Bytes,
-) where
+pub fn fill_tx_env<T>(tx_env: &mut TxEnv, transaction: T, sender: Address)
+where
     T: AsRef<Transaction>,
 {
     tx_env.caller = sender;
@@ -218,16 +211,13 @@ pub fn fill_tx_env<T>(
                 TransactionKind::Call(to) => TransactTo::Call(to),
                 TransactionKind::Create => TransactTo::create(),
             };
-            tx_env.value = tx.value.into();
+            tx_env.value = tx.value;
             tx_env.data = tx.input.clone();
             tx_env.chain_id = tx.chain_id;
             tx_env.nonce = Some(tx.nonce);
             tx_env.access_list.clear();
             tx_env.blob_hashes.clear();
             tx_env.max_fee_per_blob_gas.take();
-
-            #[cfg(feature = "optimism")]
-            fill_op_tx_env(tx_env, transaction, envelope);
         }
         Transaction::Eip2930(tx) => {
             tx_env.gas_limit = tx.gas_limit;
@@ -237,7 +227,7 @@ pub fn fill_tx_env<T>(
                 TransactionKind::Call(to) => TransactTo::Call(to),
                 TransactionKind::Create => TransactTo::create(),
             };
-            tx_env.value = tx.value.into();
+            tx_env.value = tx.value;
             tx_env.data = tx.input.clone();
             tx_env.chain_id = Some(tx.chain_id);
             tx_env.nonce = Some(tx.nonce);
@@ -251,9 +241,6 @@ pub fn fill_tx_env<T>(
                 .collect();
             tx_env.blob_hashes.clear();
             tx_env.max_fee_per_blob_gas.take();
-
-            #[cfg(feature = "optimism")]
-            fill_op_tx_env(tx_env, transaction, envelope);
         }
         Transaction::Eip1559(tx) => {
             tx_env.gas_limit = tx.gas_limit;
@@ -263,7 +250,7 @@ pub fn fill_tx_env<T>(
                 TransactionKind::Call(to) => TransactTo::Call(to),
                 TransactionKind::Create => TransactTo::create(),
             };
-            tx_env.value = tx.value.into();
+            tx_env.value = tx.value;
             tx_env.data = tx.input.clone();
             tx_env.chain_id = Some(tx.chain_id);
             tx_env.nonce = Some(tx.nonce);
@@ -277,9 +264,6 @@ pub fn fill_tx_env<T>(
                 .collect();
             tx_env.blob_hashes.clear();
             tx_env.max_fee_per_blob_gas.take();
-
-            #[cfg(feature = "optimism")]
-            fill_op_tx_env(tx_env, transaction, envelope);
         }
         Transaction::Eip4844(tx) => {
             tx_env.gas_limit = tx.gas_limit;
@@ -289,7 +273,7 @@ pub fn fill_tx_env<T>(
                 TransactionKind::Call(to) => TransactTo::Call(to),
                 TransactionKind::Create => TransactTo::create(),
             };
-            tx_env.value = tx.value.into();
+            tx_env.value = tx.value;
             tx_env.data = tx.input.clone();
             tx_env.chain_id = Some(tx.chain_id);
             tx_env.nonce = Some(tx.nonce);
@@ -301,14 +285,12 @@ pub fn fill_tx_env<T>(
                     (l.address, l.storage_keys.iter().map(|k| U256::from_be_bytes(k.0)).collect())
                 })
                 .collect();
-            tx_env.blob_hashes = tx.blob_versioned_hashes.clone();
+            tx_env.blob_hashes.clone_from(&tx.blob_versioned_hashes);
             tx_env.max_fee_per_blob_gas = Some(U256::from(tx.max_fee_per_blob_gas));
-
-            #[cfg(feature = "optimism")]
-            fill_op_tx_env(tx_env, transaction, envelope);
         }
         #[cfg(feature = "optimism")]
         Transaction::Deposit(tx) => {
+            tx_env.access_list.clear();
             tx_env.gas_limit = tx.gas_limit;
             tx_env.gas_price = U256::ZERO;
             tx_env.gas_priority_fee = None;
@@ -316,19 +298,24 @@ pub fn fill_tx_env<T>(
                 TransactionKind::Call(to) => tx_env.transact_to = TransactTo::Call(to),
                 TransactionKind::Create => tx_env.transact_to = TransactTo::create(),
             }
-            tx_env.value = tx.value.into();
+            tx_env.value = tx.value;
             tx_env.data = tx.input.clone();
             tx_env.chain_id = None;
             tx_env.nonce = None;
-
-            fill_op_tx_env(tx_env, transaction, envelope);
         }
     }
 }
 
+/// Fill transaction environment from a [Transaction], envelope, and the given sender address.
 #[cfg(feature = "optimism")]
 #[inline(always)]
-fn fill_op_tx_env<T: AsRef<Transaction>>(tx_env: &mut TxEnv, transaction: T, envelope: Bytes) {
+pub fn fill_op_tx_env<T: AsRef<Transaction>>(
+    tx_env: &mut TxEnv,
+    transaction: T,
+    sender: Address,
+    envelope: Bytes,
+) {
+    fill_tx_env(tx_env, &transaction, sender);
     match transaction.as_ref() {
         Transaction::Deposit(tx) => {
             tx_env.optimism = OptimismFields {
@@ -348,27 +335,18 @@ fn fill_op_tx_env<T: AsRef<Transaction>>(tx_env: &mut TxEnv, transaction: T, env
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::GOERLI;
 
     #[test]
-    #[ignore]
-    fn test_fill_cfg_and_block_env() {
-        let mut cfg_env = CfgEnv::default();
-        let mut block_env = BlockEnv::default();
-        let header = Header::default();
-        let chain_spec = ChainSpec::default();
-        let total_difficulty = U256::ZERO;
-
-        fill_cfg_and_block_env(
-            &mut cfg_env,
-            &mut block_env,
-            &chain_spec,
-            &header,
-            total_difficulty,
-        );
-
-        assert_eq!(cfg_env.chain_id, chain_spec.chain().id());
+    fn test_recover_genesis_goerli_signer() {
+        // just ensures that `block_coinbase` does not panic on the genesis block
+        let chain_spec = GOERLI.clone();
+        let header = chain_spec.genesis_header();
+        let block_coinbase = block_coinbase(&chain_spec, &header, false);
+        assert_eq!(block_coinbase, header.beneficiary);
     }
 }

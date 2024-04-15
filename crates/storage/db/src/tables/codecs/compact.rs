@@ -1,4 +1,5 @@
 use crate::{
+    models::client_version::ClientVersion,
     table::{Compress, Decompress},
     tables::models::*,
 };
@@ -9,17 +10,15 @@ use reth_primitives::{stage::StageCheckpoint, trie::*, *};
 macro_rules! impl_compression_for_compact {
     ($($name:tt),+) => {
         $(
-            impl Compress for $name
-            {
+            impl Compress for $name {
                 type Compressed = Vec<u8>;
 
                 fn compress_to_buf<B: bytes::BufMut + AsMut<[u8]>>(self, buf: &mut B) {
-                    let _  = Compact::to_compact(self, buf);
+                    let _ = Compact::to_compact(self, buf);
                 }
             }
 
-            impl Decompress for $name
-            {
+            impl Decompress for $name {
                 fn decompress<B: AsRef<[u8]>>(value: B) -> Result<$name, $crate::DatabaseError> {
                     let value = value.as_ref();
                     let (obj, _) = Compact::from_compact(&value, value.len());
@@ -31,14 +30,15 @@ macro_rules! impl_compression_for_compact {
 }
 
 impl_compression_for_compact!(
+    SealedHeader,
     Header,
     Account,
     Log,
     Receipt,
     TxType,
     StorageEntry,
+    StoredBranchNode,
     StoredNibbles,
-    BranchNodeCompact,
     StoredNibblesSubKey,
     StorageTrieEntry,
     StoredBlockBodyIndices,
@@ -49,7 +49,8 @@ impl_compression_for_compact!(
     TransactionSignedNoHash,
     CompactU256,
     StageCheckpoint,
-    PruneCheckpoint
+    PruneCheckpoint,
+    ClientVersion
 );
 
 macro_rules! impl_compression_fixed_compact {
@@ -119,3 +120,4 @@ macro_rules! add_wrapper_struct {
 
 add_wrapper_struct!((U256, CompactU256));
 add_wrapper_struct!((u64, CompactU64));
+add_wrapper_struct!((ClientVersion, CompactClientVersion));

@@ -8,15 +8,24 @@ homepage.workspace = true
 repository.workspace = true
 description = "Reth storage provider."
 
+[lints]
+workspace = true
+
 [dependencies]
 # reth
 reth-primitives.workspace = true
 reth-interfaces.workspace = true
 reth-db.workspace = true
-reth-trie = { path = "../../trie" }
-reth-nippy-jar = { path = "../nippy-jar" }
+reth-trie = { workspace = true, features = ["metrics"] }
+reth-nippy-jar.workspace = true
+reth-codecs.workspace = true
+reth-evm.workspace = true
 
 revm.workspace = true
+
+# fluentbase
+fluentbase-types.workspace = true
+fluentbase-runtime.workspace = true
 
 # async
 tokio = { workspace = true, features = ["sync", "macros", "rt-multi-thread"] }
@@ -35,6 +44,7 @@ itertools.workspace = true
 pin-project.workspace = true
 parking_lot.workspace = true
 dashmap = { version = "5.5", features = ["inline"] }
+strum.workspace = true
 
 # test-utils
 alloy-rlp = { workspace = true, optional = true }
@@ -45,7 +55,7 @@ rayon.workspace = true
 [dev-dependencies]
 reth-db = { workspace = true, features = ["test-utils"] }
 reth-primitives = { workspace = true, features = ["arbitrary", "test-utils"] }
-reth-trie = { path = "../../trie", features = ["test-utils"] }
+reth-trie = { workspace = true, features = ["test-utils"] }
 reth-interfaces = { workspace = true, features = ["test-utils"] }
 
 alloy-rlp.workspace = true
@@ -55,8 +65,5 @@ assert_matches.workspace = true
 rand.workspace = true
 
 [features]
-test-utils = ["alloy-rlp"]
-optimism = [
-  "reth-primitives/optimism",
-  "reth-interfaces/optimism"
-]
+test-utils = ["alloy-rlp", "reth-db/test-utils", "reth-nippy-jar/test-utils"]
+optimism = ["reth-primitives/optimism", "reth-interfaces/optimism"]

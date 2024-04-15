@@ -11,21 +11,24 @@
 //! ```sh
 //! cast rpc myrpcExt_customMethod
 //! ```
+
 use reth::{
     primitives::ChainSpecBuilder,
     providers::{providers::BlockchainProvider, ProviderFactory},
     utils::db::open_db_read_only,
 };
+use reth_db::{mdbx::DatabaseArguments, models::client_version::ClientVersion};
 // Bringing up the RPC
 use reth::rpc::builder::{
     RethRpcModule, RpcModuleBuilder, RpcServerConfig, TransportRpcModuleConfig,
 };
-// Configuring the network parts, ideally also wouldn't ned to think about this.
+// Configuring the network parts, ideally also wouldn't need to think about this.
 use myrpc_ext::{MyRpcExt, MyRpcExtApiServer};
 use reth::{
     blockchain_tree::noop::NoopBlockchainTree, providers::test_utils::TestCanonStateSubscriptions,
     tasks::TokioTaskExecutor,
 };
+use reth_node_ethereum::EthEvmConfig;
 use std::{path::Path, sync::Arc};
 
 // Custom rpc extension
@@ -34,9 +37,14 @@ pub mod myrpc_ext;
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     // 1. Setup the DB
-    let db = Arc::new(open_db_read_only(Path::new(&std::env::var("RETH_DB_PATH")?), None)?);
+    let db_path = std::env::var("RETH_DB_PATH")?;
+    let db_path = Path::new(&db_path);
+    let db = Arc::new(open_db_read_only(
+        db_path.join("db").as_path(),
+        DatabaseArguments::new(ClientVersion::default()),
+    )?);
     let spec = Arc::new(ChainSpecBuilder::mainnet().build());
-    let factory = ProviderFactory::new(db.clone(), spec.clone());
+    let factory = ProviderFactory::new(db.clone(), spec.clone(), db_path.join("static_files"))?;
 
     // 2. Setup the blockchain provider using only the database provider and a noop for the tree to
     //    satisfy trait bounds. Tree is not used in this example since we are only operating on the
@@ -49,6 +57,7 @@ async fn main() -> eyre::Result<()> {
         .with_noop_pool()
         .with_noop_network()
         .with_executor(TokioTaskExecutor::default())
+        .with_evm_config(EthEvmConfig::default())
         .with_events(TestCanonStateSubscriptions::default());
 
     // Pick which namespaces to expose.

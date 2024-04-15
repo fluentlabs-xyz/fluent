@@ -1,13 +1,15 @@
 *                           @gakonst
 bin/                        @onbjerg
-crates/net/                 @mattsse @Rjected
+crates/net/                 @emhane @mattsse @Rjected
 crates/net/downloaders/     @onbjerg @rkrasiuk
 crates/revm/src/            @rakita
 crates/revm/                @mattsse
 crates/stages/              @onbjerg @rkrasiuk @shekhirin
-crates/storage/             @rakita @joshieDo
+crates/storage/             @rakita @joshieDo @shekhirin
 crates/transaction-pool/    @mattsse
 crates/rpc/                 @mattsse @Rjected
+crates/rpc/rpc-types        @mattsse @Rjected @Evalir
+crates/rpc/rpc-types-compat @mattsse @Rjected @Evalir
 crates/payload/             @mattsse @Rjected
 crates/consensus/auto-seal  @mattsse
 crates/consensus/beacon     @rkrasiuk @mattsse @Rjected
@@ -17,4 +19,5 @@ crates/metrics              @onbjerg
 crates/tracing              @onbjerg
 crates/tasks                @mattsse
 crates/prune                @shekhirin @joshieDo
+crates/static-file          @joshieDo @shekhirin
 .github/                    @onbjerg @gakonst @DaniPopes

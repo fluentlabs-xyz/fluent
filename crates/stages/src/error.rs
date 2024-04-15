@@ -3,7 +3,7 @@ use reth_interfaces::{
     consensus, db::DatabaseError as DbError, executor, p2p::error::DownloadError,
     provider::ProviderError, RethError,
 };
-use reth_primitives::SealedHeader;
+use reth_primitives::{BlockNumber, SealedHeader, StaticFileSegment, TxNumber};
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 
@@ -37,9 +37,9 @@ pub enum StageError {
          downloaded header #{header_number} ({header_hash}) is detached from \
          local head #{head_number} ({head_hash}): {error}",
         header_number = header.number,
-        header_hash = header.hash,
+        header_hash = header.hash(),
         head_number = local_head.number,
-        head_hash = local_head.hash,
+        head_hash = local_head.hash(),
     )]
     DetachedHead {
         /// The local head we attempted to attach to.
@@ -50,6 +50,9 @@ pub enum StageError {
         #[source]
         error: Box<consensus::ConsensusError>,
     },
+    /// The headers stage is missing sync gap.
+    #[error("missing sync gap")]
+    MissingSyncGap,
     /// The stage encountered a database error.
     #[error("internal database error occurred: {0}")]
     Database(#[from] DbError),
@@ -59,6 +62,10 @@ pub enum StageError {
     /// Invalid checkpoint passed to the stage
     #[error("invalid stage checkpoint: {0}")]
     StageCheckpoint(u64),
+    /// Missing download buffer on stage execution.
+    /// Returned if stage execution was called without polling for readiness.
+    #[error("missing download buffer")]
+    MissingDownloadBuffer,
     /// Download channel closed
     #[error("download channel closed")]
     ChannelClosed,
@@ -69,6 +76,36 @@ pub enum StageError {
     /// rely on external downloaders
     #[error("invalid download response: {0}")]
     Download(#[from] DownloadError),
+    /// Database is ahead of static file data.
+    #[error("missing static file data for block number: {number}", number = block.number)]
+    MissingStaticFileData {
+        /// Starting block with  missing data.
+        block: Box<SealedHeader>,
+        /// Static File segment
+        segment: StaticFileSegment,
+    },
+    /// Unrecoverable inconsistency error related to a transaction number in a static file segment.
+    #[error(
+        "inconsistent transaction number for {segment}. db: {database}, static_file: {static_file}"
+    )]
+    InconsistentTxNumber {
+        /// Static File segment where this error was encountered.
+        segment: StaticFileSegment,
+        /// Expected database transaction number.
+        database: TxNumber,
+        /// Expected static file transaction number.
+        static_file: TxNumber,
+    },
+    /// Unrecoverable inconsistency error related to a block number in a static file segment.
+    #[error("inconsistent block number for {segment}. db: {database}, static_file: {static_file}")]
+    InconsistentBlockNumber {
+        /// Static File segment where this error was encountered.
+        segment: StaticFileSegment,
+        /// Expected database block number.
+        database: BlockNumber,
+        /// Expected static file block number.
+        static_file: BlockNumber,
+    },
     /// Internal error
     #[error(transparent)]
     Internal(#[from] RethError),
@@ -94,9 +131,20 @@ impl StageError {
                 StageError::Download(_) |
                 StageError::DatabaseIntegrity(_) |
                 StageError::StageCheckpoint(_) |
+                StageError::MissingDownloadBuffer |
+                StageError::MissingSyncGap |
                 StageError::ChannelClosed |
+                StageError::InconsistentBlockNumber { .. } |
+                StageError::InconsistentTxNumber { .. } |
+                StageError::Internal(_) |
                 StageError::Fatal(_)
         )
+    }
+}
+
+impl From<std::io::Error> for StageError {
+    fn from(source: std::io::Error) -> Self {
+        StageError::Fatal(Box::new(source))
     }
 }
 
@@ -109,13 +157,13 @@ pub enum PipelineError {
     /// The pipeline encountered a database error.
     #[error(transparent)]
     Database(#[from] DbError),
-    /// The pipeline encountered an irrecoverable error in one of the stages.
+    /// Provider error.
     #[error(transparent)]
-    Interface(#[from] RethError),
+    Provider(#[from] ProviderError),
     /// The pipeline encountered an error while trying to send an event.
     #[error("pipeline encountered an error while trying to send an event")]
-    Channel(#[from] SendError<PipelineEvent>),
-    /// The stage encountered an internal error.
+    Channel(#[from] Box<SendError<PipelineEvent>>),
+    /// Internal error
     #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync>),
+    Internal(#[from] RethError),
 }

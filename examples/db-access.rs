@@ -1,12 +1,10 @@
 use reth_db::open_db_read_only;
-use reth_primitives::{Address, ChainSpecBuilder, B256, U256};
+use reth_primitives::{Address, ChainSpecBuilder, B256};
 use reth_provider::{
     AccountReader, BlockReader, BlockSource, HeaderProvider, ProviderFactory, ReceiptProvider,
     StateProvider, TransactionsProvider,
 };
 use reth_rpc_types::{Filter, FilteredParams};
-use reth_rpc_types_compat::log::from_primitive_log;
-
 use std::path::Path;
 
 // Providers are zero cost abstractions on top of an opened MDBX Transaction
@@ -18,19 +16,21 @@ use std::path::Path;
 fn main() -> eyre::Result<()> {
     // Opens a RO handle to the database file.
     // TODO: Should be able to do `ProviderFactory::new_with_db_path_ro(...)` instead of
-    // doing in 2 steps.
-    let db = open_db_read_only(Path::new(&std::env::var("RETH_DB_PATH")?), None)?;
+    //  doing in 2 steps.
+    let db_path = std::env::var("RETH_DB_PATH")?;
+    let db_path = Path::new(&db_path);
+    let db = open_db_read_only(db_path.join("db").as_path(), Default::default())?;
 
     // Instantiate a provider factory for Ethereum mainnet using the provided DB.
     // TODO: Should the DB version include the spec so that you do not need to specify it here?
     let spec = ChainSpecBuilder::mainnet().build();
-    let factory = ProviderFactory::new(db, spec.into());
+    let factory = ProviderFactory::new(db, spec.into(), db_path.join("static_files"))?;
 
     // This call opens a RO transaction on the database. To write to the DB you'd need to call
     // the `provider_rw` function and look for the `Writer` variants of the traits.
     let provider = factory.provider()?;
 
-    // Run basic queryies against the DB
+    // Run basic queries against the DB
     let block_num = 100;
     header_provider_example(&provider, block_num)?;
     block_provider_example(&provider, block_num)?;
@@ -61,13 +61,13 @@ fn header_provider_example<T: HeaderProvider>(provider: T, number: u64) -> eyre:
 
     // Can also query the header by hash!
     let header_by_hash =
-        provider.header(&sealed_header.hash)?.ok_or(eyre::eyre!("header by hash not found"))?;
-    assert_eq!(sealed_header.header, header_by_hash);
+        provider.header(&sealed_header.hash())?.ok_or(eyre::eyre!("header by hash not found"))?;
+    assert_eq!(sealed_header.header(), &header_by_hash);
 
     // The header's total difficulty is stored in a separate table, so we have a separate call for
     // it. This is not needed for post PoS transition chains.
     let td = provider.header_td_by_number(number)?.ok_or(eyre::eyre!("header td not found"))?;
-    assert_ne!(td, U256::ZERO);
+    assert!(!td.is_zero());
 
     // Can query headers by range as well, already sealed!
     let headers = provider.sealed_headers_range(100..200)?;
@@ -124,19 +124,21 @@ fn block_provider_example<T: BlockReader>(provider: T, number: u64) -> eyre::Res
     let sealed_block = block.clone().seal_slow();
 
     // Can also query the block by hash directly
-    let block_by_hash =
-        provider.block_by_hash(sealed_block.hash)?.ok_or(eyre::eyre!("block by hash not found"))?;
+    let block_by_hash = provider
+        .block_by_hash(sealed_block.hash())?
+        .ok_or(eyre::eyre!("block by hash not found"))?;
     assert_eq!(block, block_by_hash);
 
     // Or by relying in the internal conversion
-    let block_by_hash2 =
-        provider.block(sealed_block.hash.into())?.ok_or(eyre::eyre!("block by hash not found"))?;
+    let block_by_hash2 = provider
+        .block(sealed_block.hash().into())?
+        .ok_or(eyre::eyre!("block by hash not found"))?;
     assert_eq!(block, block_by_hash2);
 
     // Or you can also specify the datasource. For this provider this always return `None`, but
     // the blockchain tree is also able to access pending state not available in the db yet.
     let block_by_hash3 = provider
-        .find_block_by_hash(sealed_block.hash, BlockSource::Any)?
+        .find_block_by_hash(sealed_block.hash(), BlockSource::Any)?
         .ok_or(eyre::eyre!("block hash not found"))?;
     assert_eq!(block, block_by_hash3);
 
@@ -145,7 +147,7 @@ fn block_provider_example<T: BlockReader>(provider: T, number: u64) -> eyre::Res
 
     // Can query the block's withdrawals (via the `WithdrawalsProvider`)
     let _withdrawals =
-        provider.withdrawals_by_block(sealed_block.hash.into(), sealed_block.timestamp)?;
+        provider.withdrawals_by_block(sealed_block.hash().into(), sealed_block.timestamp)?;
 
     Ok(())
 }
@@ -198,8 +200,9 @@ fn receipts_provider_example<T: ReceiptProvider + TransactionsProvider + HeaderP
     {
         let receipts = provider.receipt(header_num)?.ok_or(eyre::eyre!("receipt not found"))?;
         for log in &receipts.logs {
-            let log = from_primitive_log(log.clone());
-            if filter_params.filter_address(&log) && filter_params.filter_topics(&log) {
+            if filter_params.filter_address(&log.address) &&
+                filter_params.filter_topics(&log.topics)
+            {
                 // Do something with the log e.g. decode it.
                 println!("Matching log found! {log:?}")
             }

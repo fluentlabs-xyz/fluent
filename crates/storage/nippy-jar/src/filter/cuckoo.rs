@@ -1,6 +1,6 @@
 use super::InclusionFilter;
 use crate::NippyJarError;
-use cuckoofilter::{self, CuckooFilter, ExportedCuckooFilter};
+use cuckoofilter::{CuckooFilter, ExportedCuckooFilter};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::hash_map::DefaultHasher;
 
@@ -38,6 +38,10 @@ impl InclusionFilter for Cuckoo {
 
     fn contains(&self, element: &[u8]) -> Result<bool, NippyJarError> {
         Ok(self.filter.contains(element))
+    }
+
+    fn size(&self) -> usize {
+        self.filter.memory_usage()
     }
 }
 

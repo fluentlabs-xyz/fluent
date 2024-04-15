@@ -1,9 +1,9 @@
 //! Session handles.
 
-use super::active::PeerConnection;
 use crate::{
     message::PeerMessage,
-    session::{Direction, SessionId},
+    session::{conn::EthRlpxConnection, Direction, SessionId},
+    PendingSessionHandshakeError,
 };
 use reth_ecies::ECIESError;
 use reth_eth_wire::{
@@ -146,6 +146,7 @@ impl ActiveSessionHandle {
             client_version: self.client_version.clone(),
             eth_version: self.version,
             status: self.status.clone(),
+            session_established: self.established,
         }
     }
 }
@@ -173,7 +174,7 @@ pub enum PendingSessionEvent {
         status: Arc<Status>,
         /// The actual connection stream which can be used to send and receive `eth` protocol
         /// messages
-        conn: PeerConnection,
+        conn: EthRlpxConnection,
         /// The direction of the session, either `Inbound` or `Outgoing`
         direction: Direction,
         /// The remote node's user agent, usually containing the client name and version
@@ -188,7 +189,7 @@ pub enum PendingSessionEvent {
         /// The direction of the session, either `Inbound` or `Outgoing`
         direction: Direction,
         /// The error that caused the disconnect
-        error: Option<EthStreamError>,
+        error: Option<PendingSessionHandshakeError>,
     },
     /// Thrown when unable to establish a [`TcpStream`](tokio::net::TcpStream).
     OutgoingConnectionError {
@@ -254,7 +255,6 @@ pub enum ActiveSessionMessage {
         message: PeerMessage,
     },
     /// Received a message that does not match the announced capabilities of the peer.
-    #[allow(unused)]
     InvalidMessage {
         /// Identifier of the remote peer.
         peer_id: PeerId,

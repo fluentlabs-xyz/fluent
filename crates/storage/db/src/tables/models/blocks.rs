@@ -1,7 +1,7 @@
 //! Block related models and types.
 
 use reth_codecs::{main_codec, Compact};
-use reth_primitives::{Header, TxNumber, Withdrawal, B256};
+use reth_primitives::{Header, TxNumber, Withdrawals, B256};
 use std::ops::Range;
 
 /// Total number of transactions.
@@ -80,14 +80,14 @@ pub struct StoredBlockOmmers {
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
 pub struct StoredBlockWithdrawals {
     /// The block withdrawals.
-    pub withdrawals: Vec<Withdrawal>,
+    pub withdrawals: Withdrawals,
 }
 
 /// Hash of the block header. Value for [`CanonicalHeaders`][crate::tables::CanonicalHeaders]
 pub type HeaderHash = B256;
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::table::{Compress, Decompress};
 
@@ -96,8 +96,9 @@ mod test {
         let mut ommer = StoredBlockOmmers::default();
         ommer.ommers.push(Header::default());
         ommer.ommers.push(Header::default());
-        assert!(
-            ommer.clone() == StoredBlockOmmers::decompress::<Vec<_>>(ommer.compress()).unwrap()
+        assert_eq!(
+            ommer.clone(),
+            StoredBlockOmmers::decompress::<Vec<_>>(ommer.compress()).unwrap()
         );
     }
 

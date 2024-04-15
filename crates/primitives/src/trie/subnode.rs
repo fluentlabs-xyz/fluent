@@ -1,10 +1,10 @@
-use super::BranchNodeCompact;
+use super::{BranchNodeCompact, StoredBranchNode};
 use bytes::Buf;
 use reth_codecs::Compact;
 
 /// Walker sub node for storing intermediate state root calculation state in the database.
 /// See [crate::stage::MerkleCheckpoint].
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct StoredSubNode {
     /// The key of the current node.
     pub key: Vec<u8>,
@@ -37,7 +37,7 @@ impl Compact for StoredSubNode {
         if let Some(node) = self.node {
             buf.put_u8(1);
             len += 1;
-            len += node.to_compact(buf);
+            len += StoredBranchNode(node).to_compact(buf);
         } else {
             len += 1;
             buf.put_u8(0);
@@ -46,10 +46,7 @@ impl Compact for StoredSubNode {
         len
     }
 
-    fn from_compact(mut buf: &[u8], _len: usize) -> (Self, &[u8])
-    where
-        Self: Sized,
-    {
+    fn from_compact(mut buf: &[u8], _len: usize) -> (Self, &[u8]) {
         let key_len = buf.get_u16() as usize;
         let key = Vec::from(&buf[..key_len]);
         buf.advance(key_len);
@@ -57,11 +54,11 @@ impl Compact for StoredSubNode {
         let nibbles_exists = buf.get_u8() != 0;
         let nibble = if nibbles_exists { Some(buf.get_u8()) } else { None };
 
-        let node_exsists = buf.get_u8() != 0;
-        let node = if node_exsists {
-            let (node, rest) = BranchNodeCompact::from_compact(buf, 0);
+        let node_exists = buf.get_u8() != 0;
+        let node = if node_exists {
+            let (node, rest) = StoredBranchNode::from_compact(buf, 0);
             buf = rest;
-            Some(node)
+            Some(node.0)
         } else {
             None
         };

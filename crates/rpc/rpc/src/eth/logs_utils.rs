@@ -1,47 +1,35 @@
-use reth_primitives::{BlockNumHash, ChainInfo, Receipt, TxHash, U256};
+use super::filter::FilterError;
+use alloy_primitives::TxHash;
+use reth_primitives::{BlockNumHash, ChainInfo, Receipt, U256};
+use reth_provider::{BlockReader, ProviderError};
 use reth_rpc_types::{FilteredParams, Log};
-use reth_rpc_types_compat::log::from_primitive_log;
 
-/// Returns all matching logs of a block's receipts grouped with the hash of their transaction.
-pub(crate) fn matching_block_logs<I>(
+/// Returns all matching of a block's receipts when the transaction hashes are known.
+pub(crate) fn matching_block_logs_with_tx_hashes<'a, I>(
     filter: &FilteredParams,
-    block: BlockNumHash,
-    tx_and_receipts: I,
+    block_num_hash: BlockNumHash,
+    tx_hashes_and_receipts: I,
     removed: bool,
 ) -> Vec<Log>
 where
-    I: IntoIterator<Item = (TxHash, Receipt)>,
+    I: IntoIterator<Item = (TxHash, &'a Receipt)>,
 {
     let mut all_logs = Vec::new();
-    append_matching_block_logs(&mut all_logs, filter, block, tx_and_receipts, removed);
-    all_logs
-}
-
-/// Appends all matching logs of a block's receipts grouped with the hash of their transaction
-pub(crate) fn append_matching_block_logs<I>(
-    all_logs: &mut Vec<Log>,
-    filter: &FilteredParams,
-    block: BlockNumHash,
-    tx_and_receipts: I,
-    removed: bool,
-) where
-    I: IntoIterator<Item = (TxHash, Receipt)>,
-{
-    let block_number_u256 = U256::from(block.number);
-    // tracks the index of a log in the entire block
+    // Tracks the index of a log in the entire block.
     let mut log_index: u32 = 0;
-    for (transaction_idx, (transaction_hash, receipt)) in tx_and_receipts.into_iter().enumerate() {
-        let logs = receipt.logs;
-        for log in logs.into_iter() {
-            if log_matches_filter(block, &log, filter) {
+    // Iterate over transaction hashes and receipts and append matching logs.
+    for (receipt_idx, (tx_hash, receipt)) in tx_hashes_and_receipts.into_iter().enumerate() {
+        for log in receipt.logs.iter() {
+            if log_matches_filter(block_num_hash, log, filter) {
                 let log = Log {
                     address: log.address,
-                    topics: log.topics,
-                    data: log.data,
-                    block_hash: Some(block.hash),
-                    block_number: Some(block_number_u256),
-                    transaction_hash: Some(transaction_hash),
-                    transaction_index: Some(U256::from(transaction_idx)),
+                    topics: log.topics.clone(),
+                    data: log.data.clone(),
+                    block_hash: Some(block_num_hash.hash),
+                    block_number: Some(U256::from(block_num_hash.number)),
+                    transaction_hash: Some(tx_hash),
+                    // The transaction and receipt index is always the same.
+                    transaction_index: Some(U256::from(receipt_idx)),
                     log_index: Some(U256::from(log_index)),
                     removed,
                 };
@@ -50,6 +38,75 @@ pub(crate) fn append_matching_block_logs<I>(
             log_index += 1;
         }
     }
+    all_logs
+}
+
+/// Appends all matching logs of a block's receipts.
+/// If the log matches, look up the corresponding transaction hash.
+pub(crate) fn append_matching_block_logs(
+    all_logs: &mut Vec<Log>,
+    provider: impl BlockReader,
+    filter: &FilteredParams,
+    block_num_hash: BlockNumHash,
+    receipts: &[Receipt],
+    removed: bool,
+) -> Result<(), FilterError> {
+    // Tracks the index of a log in the entire block.
+    let mut log_index: u32 = 0;
+
+    // Lazy loaded number of the first transaction in the block.
+    // This is useful for blocks with multiple matching logs because it prevents
+    // re-querying the block body indices.
+    let mut loaded_first_tx_num = None;
+
+    // Iterate over receipts and append matching logs.
+    for (receipt_idx, receipt) in receipts.iter().enumerate() {
+        // The transaction hash of the current receipt.
+        let mut transaction_hash = None;
+
+        for log in receipt.logs.iter() {
+            if log_matches_filter(block_num_hash, log, filter) {
+                let first_tx_num = match loaded_first_tx_num {
+                    Some(num) => num,
+                    None => {
+                        let block_body_indices =
+                            provider.block_body_indices(block_num_hash.number)?.ok_or(
+                                ProviderError::BlockBodyIndicesNotFound(block_num_hash.number),
+                            )?;
+                        loaded_first_tx_num = Some(block_body_indices.first_tx_num);
+                        block_body_indices.first_tx_num
+                    }
+                };
+
+                // if this is the first match in the receipt's logs, look up the transaction hash
+                if transaction_hash.is_none() {
+                    // This is safe because Transactions and Receipts have the same keys.
+                    let transaction_id = first_tx_num + receipt_idx as u64;
+                    let transaction = provider
+                        .transaction_by_id(transaction_id)?
+                        .ok_or(ProviderError::TransactionNotFound(transaction_id.into()))?;
+
+                    transaction_hash = Some(transaction.hash());
+                }
+
+                let log = Log {
+                    address: log.address,
+                    topics: log.topics.clone(),
+                    data: log.data.clone(),
+                    block_hash: Some(block_num_hash.hash),
+                    block_number: Some(U256::from(block_num_hash.number)),
+                    transaction_hash,
+                    // The transaction and receipt index is always the same.
+                    transaction_index: Some(U256::from(receipt_idx)),
+                    log_index: Some(U256::from(log_index)),
+                    removed,
+                };
+                all_logs.push(log);
+            }
+            log_index += 1;
+        }
+    }
+    Ok(())
 }
 
 /// Returns true if the log matches the filter and should be included
@@ -61,8 +118,8 @@ pub(crate) fn log_matches_filter(
     if params.filter.is_some() &&
         (!params.filter_block_range(block.number) ||
             !params.filter_block_hash(block.hash) ||
-            !params.filter_address(&from_primitive_log(log.clone())) ||
-            !params.filter_topics(&from_primitive_log(log.clone())))
+            !params.filter_address(&log.address) ||
+            !params.filter_topics(&log.topics))
     {
         return false
     }
@@ -115,7 +172,7 @@ mod tests {
         let from = 15000001u64;
         let to = 15000002u64;
         let info = ChainInfo { best_number: 15000000, ..Default::default() };
-        let range = get_filter_block_range(Some(from), Some(to), info.best_number, info.clone());
+        let range = get_filter_block_range(Some(from), Some(to), info.best_number, info);
         assert_eq!(range, (info.best_number, info.best_number));
     }
 
@@ -123,7 +180,7 @@ mod tests {
     fn test_log_range_from() {
         let from = 14000000u64;
         let info = ChainInfo { best_number: 15000000, ..Default::default() };
-        let range = get_filter_block_range(Some(from), None, info.best_number, info.clone());
+        let range = get_filter_block_range(Some(from), None, info.best_number, info);
         assert_eq!(range, (from, info.best_number));
     }
 
@@ -131,14 +188,14 @@ mod tests {
     fn test_log_range_to() {
         let to = 14000000u64;
         let info = ChainInfo { best_number: 15000000, ..Default::default() };
-        let range = get_filter_block_range(None, Some(to), info.best_number, info.clone());
+        let range = get_filter_block_range(None, Some(to), info.best_number, info);
         assert_eq!(range, (info.best_number, to));
     }
 
     #[test]
     fn test_log_range_empty() {
         let info = ChainInfo { best_number: 15000000, ..Default::default() };
-        let range = get_filter_block_range(None, None, info.best_number, info.clone());
+        let range = get_filter_block_range(None, None, info.best_number, info);
 
         // no range given -> head
         assert_eq!(range, (info.best_number, info.best_number));

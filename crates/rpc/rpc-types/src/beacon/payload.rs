@@ -1,4 +1,3 @@
-#![allow(missing_docs)]
 //! Payload support for the beacon API.
 //!
 //! Internal helper module to deserialize/serialize the payload attributes for the beacon API, which
@@ -9,14 +8,66 @@
 //!
 //! See also <https://github.com/ethereum/consensus-specs/blob/master/specs/deneb/beacon-chain.md#executionpayload>
 
+#![allow(missing_docs)]
+
 use crate::{
-    beacon::withdrawals::BeaconWithdrawal, engine::ExecutionPayloadV3, ExecutionPayload,
-    ExecutionPayloadV1, ExecutionPayloadV2, Withdrawal,
+    beacon::{withdrawals::BeaconWithdrawal, BlsPublicKey},
+    engine::{ExecutionPayload, ExecutionPayloadV1, ExecutionPayloadV2, ExecutionPayloadV3},
+    Withdrawal,
 };
 use alloy_primitives::{Address, Bloom, Bytes, B256, U256};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, SerializeAs};
 use std::borrow::Cow;
+
+/// Response object of GET `/eth/v1/builder/header/{slot}/{parent_hash}/{pubkey}`
+///
+/// See also <https://ethereum.github.io/builder-specs/#/Builder/getHeader>
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GetExecutionPayloadHeaderResponse {
+    pub version: String,
+    pub data: ExecutionPayloadHeaderData,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionPayloadHeaderData {
+    pub message: ExecutionPayloadHeaderMessage,
+    pub signature: String,
+}
+
+#[serde_as]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionPayloadHeaderMessage {
+    pub header: ExecutionPayloadHeader,
+    #[serde_as(as = "DisplayFromStr")]
+    pub value: U256,
+    pub pubkey: BlsPublicKey,
+}
+
+/// The header of the execution payload.
+#[serde_as]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionPayloadHeader {
+    pub parent_hash: B256,
+    pub fee_recipient: Address,
+    pub state_root: B256,
+    pub receipts_root: B256,
+    pub logs_bloom: Bloom,
+    pub prev_randao: B256,
+    #[serde_as(as = "DisplayFromStr")]
+    pub block_number: String,
+    #[serde_as(as = "DisplayFromStr")]
+    pub gas_limit: u64,
+    #[serde_as(as = "DisplayFromStr")]
+    pub gas_used: u64,
+    #[serde_as(as = "DisplayFromStr")]
+    pub timestamp: u64,
+    pub extra_data: Bytes,
+    #[serde_as(as = "DisplayFromStr")]
+    pub base_fee_per_gas: U256,
+    pub block_hash: B256,
+    pub transactions_root: B256,
+}
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
@@ -30,16 +81,14 @@ struct BeaconPayloadAttributes {
     withdrawals: Option<Vec<Withdrawal>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     parent_beacon_block_root: Option<B256>,
-    #[cfg(feature = "optimism")]
-    #[serde(flatten)]
-    optimism_payload_attributes: BeaconOptimismPayloadAttributes,
 }
 
 /// Optimism Payload Attributes
-#[cfg(feature = "optimism")]
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 struct BeaconOptimismPayloadAttributes {
+    #[serde(flatten)]
+    payload_attributes: BeaconPayloadAttributes,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     transactions: Option<Vec<Bytes>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -47,6 +96,68 @@ struct BeaconOptimismPayloadAttributes {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<DisplayFromStr>")]
     gas_limit: Option<u64>,
+}
+
+/// A helper module for serializing and deserializing optimism payload attributes for the beacon
+/// API.
+///
+/// See docs for [beacon_api_payload_attributes].
+pub mod beacon_api_payload_attributes_optimism {
+    use super::*;
+    use crate::engine::{OptimismPayloadAttributes, PayloadAttributes};
+
+    /// Serialize the payload attributes for the beacon API.
+    pub fn serialize<S>(
+        payload_attributes: &OptimismPayloadAttributes,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let beacon_api_payload_attributes = BeaconPayloadAttributes {
+            timestamp: payload_attributes.payload_attributes.timestamp,
+            prev_randao: payload_attributes.payload_attributes.prev_randao,
+            suggested_fee_recipient: payload_attributes.payload_attributes.suggested_fee_recipient,
+            withdrawals: payload_attributes.payload_attributes.withdrawals.clone(),
+            parent_beacon_block_root: payload_attributes
+                .payload_attributes
+                .parent_beacon_block_root,
+        };
+
+        let op_beacon_api_payload_attributes = BeaconOptimismPayloadAttributes {
+            payload_attributes: beacon_api_payload_attributes,
+            transactions: payload_attributes.transactions.clone(),
+            no_tx_pool: payload_attributes.no_tx_pool,
+            gas_limit: payload_attributes.gas_limit,
+        };
+
+        op_beacon_api_payload_attributes.serialize(serializer)
+    }
+
+    /// Deserialize the payload attributes for the beacon API.
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<OptimismPayloadAttributes, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let beacon_api_payload_attributes =
+            BeaconOptimismPayloadAttributes::deserialize(deserializer)?;
+        Ok(OptimismPayloadAttributes {
+            payload_attributes: PayloadAttributes {
+                timestamp: beacon_api_payload_attributes.payload_attributes.timestamp,
+                prev_randao: beacon_api_payload_attributes.payload_attributes.prev_randao,
+                suggested_fee_recipient: beacon_api_payload_attributes
+                    .payload_attributes
+                    .suggested_fee_recipient,
+                withdrawals: beacon_api_payload_attributes.payload_attributes.withdrawals,
+                parent_beacon_block_root: beacon_api_payload_attributes
+                    .payload_attributes
+                    .parent_beacon_block_root,
+            },
+            transactions: beacon_api_payload_attributes.transactions,
+            no_tx_pool: beacon_api_payload_attributes.no_tx_pool,
+            gas_limit: beacon_api_payload_attributes.gas_limit,
+        })
+    }
 }
 
 /// A helper module for serializing and deserializing the payload attributes for the beacon API.
@@ -58,7 +169,6 @@ struct BeaconOptimismPayloadAttributes {
 pub mod beacon_api_payload_attributes {
     use super::*;
     use crate::engine::PayloadAttributes;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     /// Serialize the payload attributes for the beacon API.
     pub fn serialize<S>(
@@ -74,12 +184,6 @@ pub mod beacon_api_payload_attributes {
             suggested_fee_recipient: payload_attributes.suggested_fee_recipient,
             withdrawals: payload_attributes.withdrawals.clone(),
             parent_beacon_block_root: payload_attributes.parent_beacon_block_root,
-            #[cfg(feature = "optimism")]
-            optimism_payload_attributes: BeaconOptimismPayloadAttributes {
-                transactions: payload_attributes.optimism_payload_attributes.transactions.clone(),
-                no_tx_pool: payload_attributes.optimism_payload_attributes.no_tx_pool,
-                gas_limit: payload_attributes.optimism_payload_attributes.gas_limit,
-            },
         };
         beacon_api_payload_attributes.serialize(serializer)
     }
@@ -96,14 +200,6 @@ pub mod beacon_api_payload_attributes {
             suggested_fee_recipient: beacon_api_payload_attributes.suggested_fee_recipient,
             withdrawals: beacon_api_payload_attributes.withdrawals,
             parent_beacon_block_root: beacon_api_payload_attributes.parent_beacon_block_root,
-            #[cfg(feature = "optimism")]
-            optimism_payload_attributes: crate::eth::engine::OptimismPayloadAttributes {
-                transactions: beacon_api_payload_attributes
-                    .optimism_payload_attributes
-                    .transactions,
-                no_tx_pool: beacon_api_payload_attributes.optimism_payload_attributes.no_tx_pool,
-                gas_limit: beacon_api_payload_attributes.optimism_payload_attributes.gas_limit,
-            },
         })
     }
 }
@@ -211,7 +307,6 @@ impl<'a> From<&'a ExecutionPayloadV1> for BeaconExecutionPayloadV1<'a> {
 /// big-endian hex.
 pub mod beacon_payload_v1 {
     use super::*;
-    use serde::{Deserializer, Serializer};
 
     /// Serialize the payload attributes for the beacon API.
     pub fn serialize<S>(
@@ -266,7 +361,6 @@ impl<'a> From<&'a ExecutionPayloadV2> for BeaconExecutionPayloadV2<'a> {
 /// big-endian hex.
 pub mod beacon_payload_v2 {
     use super::*;
-    use serde::{Deserializer, Serializer};
 
     /// Serialize the payload attributes for the beacon API.
     pub fn serialize<S>(
@@ -322,7 +416,6 @@ impl<'a> From<&'a ExecutionPayloadV3> for BeaconExecutionPayloadV3<'a> {
 /// big-endian hex.
 pub mod beacon_payload_v3 {
     use super::*;
-    use serde::{Deserializer, Serializer};
 
     /// Serialize the payload attributes for the beacon API.
     pub fn serialize<S>(
@@ -429,7 +522,6 @@ impl<'de> DeserializeAs<'de, ExecutionPayload> for BeaconExecutionPayload<'de> {
 
 pub mod beacon_payload {
     use super::*;
-    use serde::{Deserializer, Serializer};
 
     /// Serialize the payload attributes for the beacon API.
     pub fn serialize<S>(
@@ -448,5 +540,26 @@ pub mod beacon_payload {
         D: Deserializer<'de>,
     {
         BeaconExecutionPayload::deserialize(deserializer).map(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serde_get_payload_header_response() {
+        let s = r#"{"version":"bellatrix","data":{"message":{"header":{"parent_hash":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","fee_recipient":"0xabcf8e0d4e9587369b2301d0790347320302cc09","state_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","receipts_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","logs_bloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","prev_randao":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","block_number":"1","gas_limit":"1","gas_used":"1","timestamp":"1","extra_data":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","base_fee_per_gas":"1","block_hash":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","transactions_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"},"value":"1","pubkey":"0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"},"signature":"0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"}}"#;
+        let resp: GetExecutionPayloadHeaderResponse = serde_json::from_str(s).unwrap();
+        let json: serde_json::Value = serde_json::from_str(s).unwrap();
+        assert_eq!(json, serde_json::to_value(resp).unwrap());
+    }
+
+    #[test]
+    fn serde_payload_header() {
+        let s = r#"{"parent_hash":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","fee_recipient":"0xabcf8e0d4e9587369b2301d0790347320302cc09","state_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","receipts_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","logs_bloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","prev_randao":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","block_number":"1","gas_limit":"1","gas_used":"1","timestamp":"1","extra_data":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","base_fee_per_gas":"1","block_hash":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2","transactions_root":"0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"}"#;
+        let header: ExecutionPayloadHeader = serde_json::from_str(s).unwrap();
+        let json: serde_json::Value = serde_json::from_str(s).unwrap();
+        assert_eq!(json, serde_json::to_value(header).unwrap());
     }
 }

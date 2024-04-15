@@ -4,15 +4,15 @@ use rand::{
 };
 use reth_primitives::{
     proofs, sign_message, Account, Address, BlockNumber, Bytes, Header, Log, Receipt, SealedBlock,
-    SealedHeader, Signature, StorageEntry, Transaction, TransactionKind, TransactionSigned,
-    TxLegacy, B256, U256,
+    SealedHeader, StorageEntry, Transaction, TransactionKind, TransactionSigned, TxLegacy, B256,
+    U256,
 };
-use secp256k1::{KeyPair, Message as SecpMessage, Secp256k1, SecretKey, SECP256K1};
+use secp256k1::{KeyPair, Secp256k1};
 use std::{
     cmp::{max, min},
     collections::{hash_map::DefaultHasher, BTreeMap},
     hash::Hasher,
-    ops::{Range, RangeInclusive, Sub},
+    ops::{Range, RangeInclusive},
 };
 
 // TODO(onbjerg): Maybe we should split this off to its own crate, or move the helpers to the
@@ -80,7 +80,7 @@ pub fn random_tx<R: Rng>(rng: &mut R) -> Transaction {
         gas_price: rng.gen::<u16>().into(),
         gas_limit: rng.gen::<u16>().into(),
         to: TransactionKind::Call(rng.gen()),
-        value: U256::from(rng.gen::<u16>()).into(),
+        value: U256::from(rng.gen::<u16>()),
         input: Bytes::default(),
     })
 }
@@ -220,7 +220,7 @@ where
 
     let mut changesets = Vec::new();
 
-    blocks.into_iter().for_each(|block| {
+    for _block in blocks {
         let mut changeset = Vec::new();
         let (from, to, mut transfer, new_entries) = random_account_change(
             rng,
@@ -251,7 +251,7 @@ where
                     }
                     old
                 };
-                Some(StorageEntry { value: old.unwrap_or(U256::from(0)), ..entry })
+                Some(StorageEntry { value: old.unwrap_or(U256::ZERO), ..entry })
             })
             .collect();
         old_entries.sort_by_key(|entry| entry.key);
@@ -263,7 +263,7 @@ where
         prev_to.balance = prev_to.balance.wrapping_add(transfer);
 
         changesets.push(changeset);
-    });
+    }
 
     let final_state = state
         .into_iter()
@@ -324,12 +324,9 @@ pub fn random_eoa_account<R: Rng>(rng: &mut R) -> (Address, Account) {
 }
 
 /// Generate random Externally Owned Accounts
-pub fn random_eoa_account_range<R: Rng>(
-    rng: &mut R,
-    acc_range: Range<u64>,
-) -> Vec<(Address, Account)> {
-    let mut accounts = Vec::with_capacity(acc_range.end.saturating_sub(acc_range.start) as usize);
-    for _ in acc_range {
+pub fn random_eoa_accounts<R: Rng>(rng: &mut R, accounts_num: usize) -> Vec<(Address, Account)> {
+    let mut accounts = Vec::with_capacity(accounts_num);
+    for _ in 0..accounts_num {
         accounts.push(random_eoa_account(rng))
     }
     accounts
@@ -368,6 +365,8 @@ pub fn random_receipt<R: Rng>(
         },
         #[cfg(feature = "optimism")]
         deposit_nonce: None,
+        #[cfg(feature = "optimism")]
+        deposit_receipt_version: None,
     }
 }
 
@@ -383,12 +382,9 @@ pub fn random_log<R: Rng>(rng: &mut R, address: Option<Address>, topics_count: O
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    use reth_primitives::{
-        hex, keccak256, public_key_to_address, AccessList, Address, TransactionKind, TxEip1559,
-    };
-    use secp256k1::KeyPair;
+    use reth_primitives::{hex, public_key_to_address, AccessList, Signature, TxEip1559};
     use std::str::FromStr;
 
     #[test]
@@ -400,7 +396,7 @@ mod test {
             nonce: 0x42,
             gas_limit: 44386,
             to: TransactionKind::Call(hex!("6069a6c32cf691f5982febae4faf8a6f3ab2f0f6").into()),
-            value: 0_u64.into(),
+            value: U256::from(0_u64),
             input:  hex!("a22cb4650000000000000000000000005eee75727d804a2b13038928d36f8b188945a57a0000000000000000000000000000000000000000000000000000000000000000").into(),
             max_fee_per_gas: 0x4a817c800,
             max_priority_fee_per_gas: 0x3b9aca00,
@@ -432,16 +428,14 @@ mod test {
             gas_price: 20 * 10_u128.pow(9),
             gas_limit: 21000,
             to: TransactionKind::Call(hex!("3535353535353535353535353535353535353535").into()),
-            value: 10_u128.pow(18).into(),
+            value: U256::from(10_u128.pow(18)),
             input: Bytes::default(),
         });
 
         // TODO resolve dependency issue
-        // let mut encoded = BytesMut::new();
-        // transaction.encode(&mut encoded);
         // let expected =
         // hex!("ec098504a817c800825208943535353535353535353535353535353535353535880de0b6b3a764000080018080");
-        // assert_eq!(expected, encoded.as_ref());
+        // assert_eq!(expected, &alloy_rlp::encode(transaction));
 
         let hash = transaction.signature_hash();
         let expected =

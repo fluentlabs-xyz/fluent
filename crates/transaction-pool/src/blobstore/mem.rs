@@ -1,13 +1,12 @@
-use crate::blobstore::{BlobStore, BlobStoreError, BlobTransactionSidecar};
+use crate::blobstore::{
+    BlobStore, BlobStoreCleanupStat, BlobStoreError, BlobStoreSize, BlobTransactionSidecar,
+};
 use parking_lot::RwLock;
 use reth_primitives::B256;
-use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicUsize, Arc},
-};
+use std::{collections::HashMap, sync::Arc};
 
 /// An in-memory blob store.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct InMemoryBlobStore {
     inner: Arc<InMemoryBlobStoreInner>,
 }
@@ -16,31 +15,20 @@ pub struct InMemoryBlobStore {
 struct InMemoryBlobStoreInner {
     /// Storage for all blob data.
     store: RwLock<HashMap<B256, BlobTransactionSidecar>>,
-    data_size: AtomicUsize,
-    num_blobs: AtomicUsize,
+    size_tracker: BlobStoreSize,
 }
 
-impl InMemoryBlobStoreInner {
-    #[inline]
-    fn add_size(&self, add: usize) {
-        self.data_size.fetch_add(add, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    #[inline]
-    fn sub_size(&self, sub: usize) {
-        self.data_size.fetch_sub(sub, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    fn update_len(&self, len: usize) {
-        self.num_blobs.store(len, std::sync::atomic::Ordering::Relaxed);
+impl PartialEq for InMemoryBlobStoreInner {
+    fn eq(&self, other: &Self) -> bool {
+        self.store.read().eq(&other.store.read())
     }
 }
 
 impl BlobStore for InMemoryBlobStore {
     fn insert(&self, tx: B256, data: BlobTransactionSidecar) -> Result<(), BlobStoreError> {
         let mut store = self.inner.store.write();
-        self.inner.add_size(insert_size(&mut store, tx, data));
-        self.inner.update_len(store.len());
+        self.inner.size_tracker.add_size(insert_size(&mut store, tx, data));
+        self.inner.size_tracker.update_len(store.len());
         Ok(())
     }
 
@@ -54,16 +42,16 @@ impl BlobStore for InMemoryBlobStore {
             let add = insert_size(&mut store, tx, data);
             total_add += add;
         }
-        self.inner.add_size(total_add);
-        self.inner.update_len(store.len());
+        self.inner.size_tracker.add_size(total_add);
+        self.inner.size_tracker.update_len(store.len());
         Ok(())
     }
 
     fn delete(&self, tx: B256) -> Result<(), BlobStoreError> {
         let mut store = self.inner.store.write();
         let sub = remove_size(&mut store, &tx);
-        self.inner.sub_size(sub);
-        self.inner.update_len(store.len());
+        self.inner.size_tracker.sub_size(sub);
+        self.inner.size_tracker.update_len(store.len());
         Ok(())
     }
 
@@ -76,15 +64,24 @@ impl BlobStore for InMemoryBlobStore {
         for tx in txs {
             total_sub += remove_size(&mut store, &tx);
         }
-        self.inner.sub_size(total_sub);
-        self.inner.update_len(store.len());
+        self.inner.size_tracker.sub_size(total_sub);
+        self.inner.size_tracker.update_len(store.len());
         Ok(())
+    }
+
+    fn cleanup(&self) -> BlobStoreCleanupStat {
+        BlobStoreCleanupStat::default()
     }
 
     // Retrieves the decoded blob data for the given transaction hash.
     fn get(&self, tx: B256) -> Result<Option<BlobTransactionSidecar>, BlobStoreError> {
         let store = self.inner.store.read();
         Ok(store.get(&tx).cloned())
+    }
+
+    fn contains(&self, tx: B256) -> Result<bool, BlobStoreError> {
+        let store = self.inner.store.read();
+        Ok(store.contains_key(&tx))
     }
 
     fn get_all(
@@ -117,11 +114,11 @@ impl BlobStore for InMemoryBlobStore {
     }
 
     fn data_size_hint(&self) -> Option<usize> {
-        Some(self.inner.data_size.load(std::sync::atomic::Ordering::Relaxed))
+        Some(self.inner.size_tracker.data_size())
     }
 
     fn blobs_len(&self) -> usize {
-        self.inner.num_blobs.load(std::sync::atomic::Ordering::Relaxed)
+        self.inner.size_tracker.blobs_len()
     }
 }
 
@@ -131,7 +128,7 @@ fn remove_size(store: &mut HashMap<B256, BlobTransactionSidecar>, tx: &B256) -> 
     store.remove(tx).map(|rem| rem.size()).unwrap_or_default()
 }
 
-/// Inserts the given blob into the store and returns the size of the blob that was added
+/// Inserts the given blob into the store and returns the size of the blob that was added.
 ///
 /// We don't need to handle the size updates for replacements because transactions are unique.
 #[inline]
@@ -141,6 +138,6 @@ fn insert_size(
     blob: BlobTransactionSidecar,
 ) -> usize {
     let add = blob.size();
-    store.insert(tx, blob).map(|rem| rem.size());
+    store.insert(tx, blob);
     add
 }

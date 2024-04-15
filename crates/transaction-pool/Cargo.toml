@@ -6,28 +6,22 @@ rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = """
-Transaction pool implementation
-"""
+description = "Transaction pool implementation"
 
-[package.metadata.cargo-udeps.ignore]
-normal = [
-    # Used for diagrams in docs
-    "aquamarine",
-]
+[lints]
+workspace = true
 
 [dependencies]
 # reth
+reth-eth-wire.workspace = true
 reth-primitives.workspace = true
 reth-provider.workspace = true
-reth-interfaces.workspace = true
 reth-tasks.workspace = true
 revm.workspace = true
 alloy-rlp.workspace = true
-reth-revm = { path = "../revm", optional = true }
+reth-revm = { workspace = true, optional = true }
 
 # async/futures
-async-trait.workspace = true
 futures-util.workspace = true
 parking_lot.workspace = true
 tokio = { workspace = true, default-features = false, features = ["sync"] }
@@ -41,39 +35,49 @@ metrics.workspace = true
 aquamarine.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+schnellru.workspace = true
 serde = { workspace = true, features = ["derive", "rc"], optional = true }
 fnv = "1.0.7"
 bitflags.workspace = true
 auto_impl = "1.0"
+smallvec.workspace = true
+itertools.workspace = true
 
 # testing
 rand = { workspace = true, optional = true }
-paste = { version = "1.0", optional = true }
+paste = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 
 [dev-dependencies]
 reth-primitives = { workspace = true, features = ["arbitrary"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
-paste = "1.0"
-rand = "0.8"
+reth-tracing.workspace = true
+paste.workspace = true
+rand.workspace = true
 proptest.workspace = true
-criterion = "0.5"
+criterion.workspace = true
+pprof = { workspace = true, features = ["criterion", "flamegraph"] }
 assert_matches.workspace = true
+tempfile.workspace = true
+serde_json.workspace = true
 
 [features]
 default = ["serde"]
 serde = ["dep:serde"]
 test-utils = ["rand", "paste", "serde"]
 arbitrary = ["proptest", "reth-primitives/arbitrary"]
-optimism = [
-    "dep:reth-revm",
-    "reth-primitives/optimism",
-    "reth-provider/test-utils",
-    "reth-provider/optimism",
-    "revm/optimism"
-]
+
+[[bench]]
+name = "truncate"
+required-features = ["test-utils", "arbitrary"]
+harness = false
 
 [[bench]]
 name = "reorder"
 required-features = ["test-utils", "arbitrary"]
+harness = false
+
+[[bench]]
+name = "priority"
+required-features = ["arbitrary"]
 harness = false

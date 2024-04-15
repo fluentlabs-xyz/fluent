@@ -1,5 +1,4 @@
 use reth_primitives::{constants::ETH_TO_WEI, BlockNumber, Chain, ChainSpec, Hardfork, U256};
-
 /// Calculates the base block reward.
 ///
 /// The base block reward is defined as:
@@ -29,7 +28,7 @@ pub fn base_block_reward(
         chain_spec.fork(Hardfork::Paris).active_at_ttd(total_difficulty, block_difficulty)
     {
         None
-    } else if chain_spec.fork(Hardfork::Petersburg).active_at_block(block_number) {
+    } else if chain_spec.fork(Hardfork::Constantinople).active_at_block(block_number) {
         Some(ETH_TO_WEI * 2)
     } else if chain_spec.fork(Hardfork::Byzantium).active_at_block(block_number) {
         Some(ETH_TO_WEI * 3)
@@ -81,7 +80,7 @@ pub fn block_reward(base_block_reward: u128, ommers: usize) -> u128 {
 ///
 /// From the yellow paper (page 15):
 ///
-/// > If there are collissions of the beneficiary addresses between ommers and the block (i.e. two
+/// > If there are collisions of the beneficiary addresses between ommers and the block (i.e. two
 /// > ommers with the same beneficiary address or an ommer with the same beneficiary address as the
 /// > present block), additions are applied cumulatively.
 ///
@@ -103,7 +102,7 @@ pub fn ommer_reward(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reth_primitives::{MAINNET, U256};
+    use reth_primitives::MAINNET;
 
     #[test]
     fn calc_base_block_reward() {

@@ -1,9 +1,11 @@
-use crate::{blockchain_tree::error::InsertBlockError, RethResult};
+use crate::{blockchain_tree::error::InsertBlockError, provider::ProviderError, RethResult};
 use reth_primitives::{
     BlockHash, BlockNumHash, BlockNumber, Receipt, SealedBlock, SealedBlockWithSenders,
     SealedHeader,
 };
 use std::collections::{BTreeMap, HashSet};
+
+use self::error::CanonicalError;
 
 pub mod error;
 
@@ -94,7 +96,7 @@ pub trait BlockchainTreeEngine: BlockchainTreeViewer + Send + Sync {
     /// # Returns
     ///
     /// Returns `Ok` if the blocks were canonicalized, or if the blocks were already canonical.
-    fn make_canonical(&self, block_hash: &BlockHash) -> RethResult<CanonicalOutcome>;
+    fn make_canonical(&self, block_hash: &BlockHash) -> Result<CanonicalOutcome, CanonicalError>;
 
     /// Unwind tables and put it inside state
     fn unwind(&self, unwind_to: BlockNumber) -> RethResult<()>;
@@ -182,22 +184,46 @@ impl CanonicalOutcome {
 
 /// From Engine API spec, block inclusion can be valid, accepted or invalid.
 /// Invalid case is already covered by error, but we need to make distinction
-/// between if it is valid (extends canonical chain) or just accepted (is side chain).
-/// If we don't know the block parent we are returning Disconnected status
-/// as we can't make a claim if block is valid or not.
+/// between valid blocks that extend canonical chain and the ones that fork off
+/// into side chains (see [BlockAttachment]). If we don't know the block
+/// parent we are returning Disconnected status as we can't make a claim if
+/// block is valid or not.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BlockStatus {
-    /// If block validation is valid and block extends canonical chain.
-    /// In BlockchainTree sense it forks on canonical tip.
-    Valid,
-    /// If the block is valid, but it does not extend canonical chain.
-    /// (It is side chain) or hasn't been fully validated but ancestors of a payload are known.
-    Accepted,
+    /// If block is valid and block extends canonical chain.
+    /// In BlockchainTree terms, it forks off canonical tip.
+    Valid(BlockAttachment),
+    /// If block is valid and block forks off canonical chain.
     /// If blocks is not connected to canonical chain.
     Disconnected {
         /// The lowest ancestor block that is not connected to the canonical chain.
         missing_ancestor: BlockNumHash,
     },
+}
+
+/// Represents what kind of block is being executed and validated.
+///
+/// This is required to:
+/// - differentiate whether trie state updates should be cached.
+/// - inform other
+/// This is required because the state root check can only be performed if the targeted block can be
+/// traced back to the canonical __head__.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockAttachment {
+    /// The `block` is canonical or a descendant of the canonical head.
+    /// ([`head..(block.parent)*,block`])
+    Canonical,
+    /// The block can be traced back to an ancestor of the canonical head: a historical block, but
+    /// this chain does __not__ include the canonical head.
+    HistoricalFork,
+}
+
+impl BlockAttachment {
+    /// Returns `true` if the block is canonical or a descendant of the canonical head.
+    #[inline]
+    pub const fn is_canonical(&self) -> bool {
+        matches!(self, BlockAttachment::Canonical)
+    }
 }
 
 /// How a payload was inserted if it was valid.
@@ -237,6 +263,12 @@ pub trait BlockchainTreeViewer: Send + Sync {
     /// disconnected from the canonical chain.
     fn block_by_hash(&self, hash: BlockHash) -> Option<SealedBlock>;
 
+    /// Returns the block with matching hash from the tree, if it exists.
+    ///
+    /// Caution: This will not return blocks from the canonical chain or buffered blocks that are
+    /// disconnected from the canonical chain.
+    fn block_with_senders_by_hash(&self, hash: BlockHash) -> Option<SealedBlockWithSenders>;
+
     /// Returns the _buffered_ (disconnected) block with matching hash from the internal buffer if
     /// it exists.
     ///
@@ -269,7 +301,7 @@ pub trait BlockchainTreeViewer: Send + Sync {
     fn find_canonical_ancestor(&self, parent_hash: BlockHash) -> Option<BlockHash>;
 
     /// Return whether or not the block is known and in the canonical chain.
-    fn is_canonical(&self, hash: BlockHash) -> RethResult<bool>;
+    fn is_canonical(&self, hash: BlockHash) -> Result<bool, ProviderError>;
 
     /// Given the hash of a block, this checks the buffered blocks for the lowest ancestor in the
     /// buffer.
@@ -293,6 +325,11 @@ pub trait BlockchainTreeViewer: Send + Sync {
     /// Returns the pending block if there is one.
     fn pending_block(&self) -> Option<SealedBlock> {
         self.block_by_hash(self.pending_block_num_hash()?.hash)
+    }
+
+    /// Returns the pending block if there is one.
+    fn pending_block_with_senders(&self) -> Option<SealedBlockWithSenders> {
+        self.block_with_senders_by_hash(self.pending_block_num_hash()?.hash)
     }
 
     /// Returns the pending block and its receipts in one call.

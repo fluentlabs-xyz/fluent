@@ -14,11 +14,12 @@ use secp256k1::SecretKey;
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
     net::{IpAddr, SocketAddr},
+    pin::Pin,
     sync::Arc,
-    task::{Context, Poll},
+    task::{ready, Context, Poll},
 };
 use tokio::{sync::mpsc, task::JoinHandle};
-use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::{wrappers::ReceiverStream, Stream};
 
 /// An abstraction over the configured discovery protocol.
 ///
@@ -116,7 +117,6 @@ impl Discovery {
     }
 
     /// Updates the `eth:ForkId` field in discv4.
-    #[allow(unused)]
     pub(crate) fn update_fork_id(&self, fork_id: ForkId) {
         if let Some(discv4) = &self.discv4 {
             // use forward-compatible forkid entry
@@ -136,6 +136,11 @@ impl Discovery {
         if let Some(discv4) = &self.discv4 {
             discv4.ban(peer_id, ip)
         }
+    }
+
+    /// Returns a shared reference to the discv4.
+    pub fn discv4(&self) -> Option<Discv4> {
+        self.discv4.clone()
     }
 
     /// Returns the id with which the local identifies itself in the network
@@ -213,6 +218,14 @@ impl Discovery {
                 return Poll::Pending
             }
         }
+    }
+}
+
+impl Stream for Discovery {
+    type Item = DiscoveryEvent;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Poll::Ready(Some(ready!(self.get_mut().poll(cx))))
     }
 }
 

@@ -6,9 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = """
-Pruning implementation
-"""
+description = "Pruning implementation"
+
+[lints]
+workspace = true
 
 [dependencies]
 # reth
@@ -16,11 +17,8 @@ reth-primitives.workspace = true
 reth-db.workspace = true
 reth-provider.workspace = true
 reth-interfaces.workspace = true
-reth-snapshot = { path = "../snapshot" }
 reth-tokio-util.workspace = true
-
-# async
-tokio = { workspace = true, features = ["sync"] }
+reth-config.workspace = true
 
 # metrics
 reth-metrics.workspace = true
@@ -36,8 +34,10 @@ tokio-stream.workspace = true
 [dev-dependencies]
 # reth
 reth-db = { workspace = true, features = ["test-utils"] }
-reth-stages = { path = "../stages", features = ["test-utils"] }
+reth-stages = { workspace = true, features = ["test-utils"] }
+reth-tracing.workspace = true
 
 # misc
+derive_more.workspace = true
 
 assert_matches.workspace = true

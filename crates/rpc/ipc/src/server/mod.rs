@@ -46,7 +46,10 @@ pub struct IpcServer<B = Identity, L = ()> {
     service_builder: tower::ServiceBuilder<B>,
 }
 
-impl IpcServer {
+impl<L> IpcServer<Identity, L>
+where
+    L: Logger,
+{
     /// Returns the configured [Endpoint]
     pub fn endpoint(&self) -> &Endpoint {
         &self.endpoint
@@ -91,14 +94,13 @@ impl IpcServer {
         Ok(ServerHandle::new(stop_tx))
     }
 
-    #[allow(clippy::let_unit_value)]
     async fn start_inner(
         self,
         methods: Methods,
         stop_handle: StopHandle,
         on_ready: oneshot::Sender<Result<(), String>>,
     ) -> io::Result<()> {
-        trace!( endpoint = ?self.endpoint.path(), "starting ipc server");
+        trace!(endpoint = ?self.endpoint.path(), "starting ipc server");
 
         if cfg!(unix) {
             // ensure the file does not exist
@@ -119,6 +121,7 @@ impl IpcServer {
         let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
 
         let mut connections = FutureDriver::default();
+        let endpoint_path = self.endpoint.path().to_string();
         let incoming = match self.endpoint.incoming() {
             Ok(connections) => {
                 #[cfg(windows)]
@@ -126,7 +129,8 @@ impl IpcServer {
                 Incoming::new(connections)
             }
             Err(err) => {
-                on_ready.send(Err(err.to_string())).ok();
+                let msg = format!("failed to listen on ipc endpoint `{endpoint_path}`: {err}");
+                on_ready.send(Err(msg)).ok();
                 return Err(err)
             }
         };
@@ -162,7 +166,7 @@ impl IpcServer {
                             stop_handle: stop_handle.clone(),
                             max_subscriptions_per_connection,
                             conn_id: id,
-                            logger,
+                            logger: logger.clone(),
                             conn: Arc::new(conn),
                             bounded_subscriptions: BoundedSubscriptions::new(
                                 max_subscriptions_per_connection,
@@ -205,7 +209,7 @@ impl std::fmt::Debug for IpcServer {
 
 /// Data required by the server to handle requests received via an IPC connection
 #[derive(Debug, Clone)]
-#[allow(unused)]
+#[allow(dead_code)]
 pub(crate) struct ServiceData<L: Logger> {
     /// Registered server methods.
     pub(crate) methods: Methods,
@@ -327,7 +331,7 @@ async fn spawn_connection<S, T>(
                     // shutdown
                     break
                 }
-            };
+            }
         }
     });
 

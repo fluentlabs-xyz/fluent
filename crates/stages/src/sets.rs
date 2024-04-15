@@ -12,44 +12,55 @@
 //! ```no_run
 //! # use reth_stages::Pipeline;
 //! # use reth_stages::sets::{OfflineStages};
-//! # use reth_revm::Factory;
-//! # use reth_primitives::MAINNET;
-//! use reth_db::test_utils::create_test_rw_db;
+//! # use reth_revm::EvmProcessorFactory;
+//! # use reth_primitives::{PruneModes, MAINNET};
+//! # use reth_node_ethereum::EthEvmConfig;
+//! # use reth_provider::test_utils::create_test_provider_factory;
+//! # use reth_static_file::StaticFileProducer;
 //!
-//! # let factory = Factory::new(MAINNET.clone());
-//! # let db = create_test_rw_db();
+//! # let executor_factory = EvmProcessorFactory::new(MAINNET.clone(), EthEvmConfig::default());
+//! # let provider_factory = create_test_provider_factory();
+//! # let static_file_producer =  StaticFileProducer::new(
+//!     provider_factory.clone(),
+//!     provider_factory.static_file_provider(),
+//!     PruneModes::default(),
+//! );
 //! // Build a pipeline with all offline stages.
-//! # let pipeline =
-//! Pipeline::builder().add_stages(OfflineStages::new(factory)).build(db, MAINNET.clone());
+//! # let pipeline = Pipeline::builder()
+//!     .add_stages(OfflineStages::new(executor_factory))
+//!     .build(provider_factory, static_file_producer);
 //! ```
 //!
 //! ```ignore
 //! # use reth_stages::Pipeline;
 //! # use reth_stages::{StageSet, sets::OfflineStages};
-//! # use reth_revm::Factory;
+//! # use reth_revm::EvmProcessorFactory;
+//! # use reth_node_ethereum::EthEvmConfig;
 //! # use reth_primitives::MAINNET;
 //! // Build a pipeline with all offline stages and a custom stage at the end.
-//! # let factory = Factory::new(MAINNET.clone());
+//! # let executor_factory = EvmProcessorFactory::new(MAINNET.clone(), EthEvmConfig::default());
 //! Pipeline::builder()
 //!     .add_stages(
-//!         OfflineStages::new(factory).builder().add_stage(MyCustomStage)
+//!         OfflineStages::new(executor_factory).builder().add_stage(MyCustomStage)
 //!     )
 //!     .build();
 //! ```
+
 use crate::{
     stages::{
-        AccountHashingStage, BodyStage, ExecutionStage, FinishStage, HeaderStage, HeaderSyncMode,
+        AccountHashingStage, BodyStage, ExecutionStage, FinishStage, HeaderStage,
         IndexAccountHistoryStage, IndexStorageHistoryStage, MerkleStage, SenderRecoveryStage,
-        StorageHashingStage, TotalDifficultyStage, TransactionLookupStage,
+        StorageHashingStage, TransactionLookupStage,
     },
     StageSet, StageSetBuilder,
 };
+use reth_config::config::EtlConfig;
 use reth_db::database::Database;
 use reth_interfaces::{
     consensus::Consensus,
     p2p::{bodies::downloader::BodyDownloader, headers::downloader::HeaderDownloader},
 };
-use reth_provider::ExecutorFactory;
+use reth_provider::{ExecutorFactory, HeaderSyncGapProvider, HeaderSyncMode};
 use std::sync::Arc;
 
 /// A set containing all stages to run a fully syncing instance of reth.
@@ -62,7 +73,6 @@ use std::sync::Arc;
 ///
 /// This expands to the following series of stages:
 /// - [`HeaderStage`]
-/// - [`TotalDifficultyStage`]
 /// - [`BodyStage`]
 /// - [`SenderRecoveryStage`]
 /// - [`ExecutionStage`]
@@ -75,33 +85,42 @@ use std::sync::Arc;
 /// - [`IndexAccountHistoryStage`]
 /// - [`FinishStage`]
 #[derive(Debug)]
-pub struct DefaultStages<H, B, EF> {
+pub struct DefaultStages<Provider, H, B, EF> {
     /// Configuration for the online stages
-    online: OnlineStages<H, B>,
+    online: OnlineStages<Provider, H, B>,
     /// Executor factory needs for execution stage
     executor_factory: EF,
 }
 
-impl<H, B, EF> DefaultStages<H, B, EF> {
+impl<Provider, H, B, EF> DefaultStages<Provider, H, B, EF> {
     /// Create a new set of default stages with default values.
     pub fn new(
+        provider: Provider,
         header_mode: HeaderSyncMode,
         consensus: Arc<dyn Consensus>,
         header_downloader: H,
         body_downloader: B,
         executor_factory: EF,
+        etl_config: EtlConfig,
     ) -> Self
     where
         EF: ExecutorFactory,
     {
         Self {
-            online: OnlineStages::new(header_mode, consensus, header_downloader, body_downloader),
+            online: OnlineStages::new(
+                provider,
+                header_mode,
+                consensus,
+                header_downloader,
+                body_downloader,
+                etl_config,
+            ),
             executor_factory,
         }
     }
 }
 
-impl<H, B, EF> DefaultStages<H, B, EF>
+impl<Provider, H, B, EF> DefaultStages<Provider, H, B, EF>
 where
     EF: ExecutorFactory,
 {
@@ -110,16 +129,20 @@ where
         default_offline: StageSetBuilder<DB>,
         executor_factory: EF,
     ) -> StageSetBuilder<DB> {
-        default_offline.add_set(OfflineStages::new(executor_factory)).add_stage(FinishStage)
+        StageSetBuilder::default()
+            .add_set(default_offline)
+            .add_set(OfflineStages::new(executor_factory))
+            .add_stage(FinishStage)
     }
 }
 
-impl<DB, H, B, EF> StageSet<DB> for DefaultStages<H, B, EF>
+impl<Provider, H, B, EF, DB> StageSet<DB> for DefaultStages<Provider, H, B, EF>
 where
-    DB: Database,
+    Provider: HeaderSyncGapProvider + 'static,
     H: HeaderDownloader + 'static,
     B: BodyDownloader + 'static,
     EF: ExecutorFactory,
+    DB: Database + 'static,
 {
     fn builder(self) -> StageSetBuilder<DB> {
         Self::add_offline_stages(self.online.builder(), self.executor_factory)
@@ -131,7 +154,9 @@ where
 /// These stages *can* be run without network access if the specified downloaders are
 /// themselves offline.
 #[derive(Debug)]
-pub struct OnlineStages<H, B> {
+pub struct OnlineStages<Provider, H, B> {
+    /// Sync gap provider for the headers stage.
+    provider: Provider,
     /// The sync mode for the headers stage.
     header_mode: HeaderSyncMode,
     /// The consensus engine used to validate incoming data.
@@ -140,62 +165,76 @@ pub struct OnlineStages<H, B> {
     header_downloader: H,
     /// The block body downloader
     body_downloader: B,
+    /// ETL configuration
+    etl_config: EtlConfig,
 }
 
-impl<H, B> OnlineStages<H, B> {
+impl<Provider, H, B> OnlineStages<Provider, H, B> {
     /// Create a new set of online stages with default values.
     pub fn new(
+        provider: Provider,
         header_mode: HeaderSyncMode,
         consensus: Arc<dyn Consensus>,
         header_downloader: H,
         body_downloader: B,
+        etl_config: EtlConfig,
     ) -> Self {
-        Self { header_mode, consensus, header_downloader, body_downloader }
+        Self { provider, header_mode, consensus, header_downloader, body_downloader, etl_config }
     }
 }
 
-impl<H, B> OnlineStages<H, B>
+impl<Provider, H, B> OnlineStages<Provider, H, B>
 where
+    Provider: HeaderSyncGapProvider + 'static,
     H: HeaderDownloader + 'static,
     B: BodyDownloader + 'static,
 {
     /// Create a new builder using the given headers stage.
     pub fn builder_with_headers<DB: Database>(
-        headers: HeaderStage<H>,
+        headers: HeaderStage<Provider, H>,
         body_downloader: B,
-        consensus: Arc<dyn Consensus>,
     ) -> StageSetBuilder<DB> {
-        StageSetBuilder::default()
-            .add_stage(headers)
-            .add_stage(TotalDifficultyStage::new(consensus.clone()))
-            .add_stage(BodyStage { downloader: body_downloader, consensus })
+        StageSetBuilder::default().add_stage(headers).add_stage(BodyStage::new(body_downloader))
     }
 
     /// Create a new builder using the given bodies stage.
     pub fn builder_with_bodies<DB: Database>(
         bodies: BodyStage<B>,
+        provider: Provider,
         mode: HeaderSyncMode,
         header_downloader: H,
         consensus: Arc<dyn Consensus>,
+        etl_config: EtlConfig,
     ) -> StageSetBuilder<DB> {
         StageSetBuilder::default()
-            .add_stage(HeaderStage::new(header_downloader, mode))
-            .add_stage(TotalDifficultyStage::new(consensus.clone()))
+            .add_stage(HeaderStage::new(
+                provider,
+                header_downloader,
+                mode,
+                consensus.clone(),
+                etl_config,
+            ))
             .add_stage(bodies)
     }
 }
 
-impl<DB, H, B> StageSet<DB> for OnlineStages<H, B>
+impl<DB, Provider, H, B> StageSet<DB> for OnlineStages<Provider, H, B>
 where
     DB: Database,
+    Provider: HeaderSyncGapProvider + 'static,
     H: HeaderDownloader + 'static,
     B: BodyDownloader + 'static,
 {
     fn builder(self) -> StageSetBuilder<DB> {
         StageSetBuilder::default()
-            .add_stage(HeaderStage::new(self.header_downloader, self.header_mode))
-            .add_stage(TotalDifficultyStage::new(self.consensus.clone()))
-            .add_stage(BodyStage { downloader: self.body_downloader, consensus: self.consensus })
+            .add_stage(HeaderStage::new(
+                self.provider,
+                self.header_downloader,
+                self.header_mode,
+                self.consensus.clone(),
+                self.etl_config.clone(),
+            ))
+            .add_stage(BodyStage::new(self.body_downloader))
     }
 }
 

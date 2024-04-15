@@ -9,12 +9,22 @@ use reth_eth_wire::{
 use std::{fmt, io, io::ErrorKind, net::SocketAddr};
 
 /// Service kind.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ServiceKind {
     /// Listener service.
     Listener(SocketAddr),
     /// Discovery service.
     Discovery(SocketAddr),
+}
+
+impl ServiceKind {
+    /// Returns the appropriate flags for each variant.
+    pub fn flags(&self) -> &'static str {
+        match self {
+            ServiceKind::Listener(_) => "--port",
+            ServiceKind::Discovery(_) => "--discovery.port",
+        }
+    }
 }
 
 impl fmt::Display for ServiceKind {
@@ -33,7 +43,7 @@ pub enum NetworkError {
     #[error(transparent)]
     Io(#[from] io::Error),
     /// Error when an address is already in use.
-    #[error("address {kind} is already in use (os error 98)")]
+    #[error("address {kind} is already in use (os error 98). Choose a different port using {}", kind.flags())]
     AddressAlreadyInUse {
         /// Service kind.
         kind: ServiceKind,
@@ -67,7 +77,7 @@ impl NetworkError {
 
 /// Abstraction over errors that can lead to a failed session
 #[auto_impl::auto_impl(&)]
-pub(crate) trait SessionError: fmt::Debug {
+pub(crate) trait SessionError: fmt::Debug + fmt::Display {
     /// Returns true if the error indicates that the corresponding peer should be removed from peer
     /// discovery, for example if it's using a different genesis hash.
     fn merits_discovery_ban(&self) -> bool;
@@ -154,7 +164,8 @@ impl SessionError for EthStreamError {
                         )) |
                         P2PStreamError::UnknownReservedMessageId(_) |
                         P2PStreamError::EmptyProtocolMessage |
-                        P2PStreamError::ParseVersionError(_) |
+                        P2PStreamError::ParseSharedCapability(_) |
+                        P2PStreamError::CapabilityNotShared |
                         P2PStreamError::Disconnected(DisconnectReason::UselessPeer) |
                         P2PStreamError::Disconnected(
                             DisconnectReason::IncompatibleP2PProtocolVersion
@@ -223,6 +234,7 @@ impl SessionError for PendingSessionHandshakeError {
         match self {
             PendingSessionHandshakeError::Eth(eth) => eth.merits_discovery_ban(),
             PendingSessionHandshakeError::Ecies(_) => true,
+            PendingSessionHandshakeError::Timeout => false,
         }
     }
 
@@ -230,6 +242,7 @@ impl SessionError for PendingSessionHandshakeError {
         match self {
             PendingSessionHandshakeError::Eth(eth) => eth.is_fatal_protocol_error(),
             PendingSessionHandshakeError::Ecies(_) => true,
+            PendingSessionHandshakeError::Timeout => false,
         }
     }
 
@@ -237,6 +250,7 @@ impl SessionError for PendingSessionHandshakeError {
         match self {
             PendingSessionHandshakeError::Eth(eth) => eth.should_backoff(),
             PendingSessionHandshakeError::Ecies(_) => Some(BackoffKind::Low),
+            PendingSessionHandshakeError::Timeout => Some(BackoffKind::Medium),
         }
     }
 }
@@ -268,6 +282,7 @@ impl SessionError for io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::{Ipv4Addr, SocketAddrV4};
 
     #[test]
     fn test_is_fatal_disconnect() {
@@ -293,5 +308,20 @@ mod tests {
             P2PHandshakeError::NoResponse,
         ));
         assert_eq!(err.should_backoff(), Some(BackoffKind::Low));
+    }
+
+    #[test]
+    fn test_address_in_use_message() {
+        let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1234));
+        let kinds = [ServiceKind::Discovery(addr), ServiceKind::Listener(addr)];
+
+        for kind in &kinds {
+            let err = NetworkError::AddressAlreadyInUse {
+                kind: *kind,
+                error: io::Error::from(ErrorKind::AddrInUse),
+            };
+
+            assert!(err.to_string().contains(kind.flags()));
+        }
     }
 }

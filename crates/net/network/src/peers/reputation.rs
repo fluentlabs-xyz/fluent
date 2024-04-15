@@ -33,6 +33,17 @@ const ALREADY_SEEN_TRANSACTION_REPUTATION_CHANGE: i32 = 0;
 /// The reputation change to apply to a peer which violates protocol rules: minimal reputation
 const BAD_PROTOCOL_REPUTATION_CHANGE: i32 = i32::MIN;
 
+/// The reputation change to apply to a peer that sent a bad announcement.
+// todo: current value is a hint, needs to be set properly
+const BAD_ANNOUNCEMENT_REPUTATION_CHANGE: i32 = REPUTATION_UNIT;
+
+/// The maximum reputation change that can be applied to a trusted peer.
+/// This is used to prevent a single bad message from a trusted peer to cause a significant change.
+/// This gives a trusted peer more leeway when interacting with the node, which is useful for in
+/// custom setups. By not setting this to `0` we still allow trusted peer penalization but less than
+/// untrusted peers.
+pub(crate) const MAX_TRUSTED_PEER_REPUTATION_CHANGE: Reputation = 2 * REPUTATION_UNIT;
+
 /// Returns `true` if the given reputation is below the [`BANNED_REPUTATION`] threshold
 #[inline]
 pub(crate) fn is_banned_reputation(reputation: i32) -> bool {
@@ -40,8 +51,9 @@ pub(crate) fn is_banned_reputation(reputation: i32) -> bool {
 }
 
 /// How the [`ReputationChangeKind`] are weighted.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
 pub struct ReputationChangeWeights {
     /// Weight for [`ReputationChangeKind::BadMessage`]
     pub bad_message: Reputation,
@@ -59,6 +71,8 @@ pub struct ReputationChangeWeights {
     pub failed_to_connect: Reputation,
     /// Weight for [`ReputationChangeKind::Dropped`]
     pub dropped: Reputation,
+    /// Weight for [`ReputationChangeKind::BadAnnouncement`]
+    pub bad_announcement: Reputation,
 }
 
 // === impl ReputationChangeWeights ===
@@ -78,6 +92,7 @@ impl ReputationChangeWeights {
             ReputationChangeKind::Dropped => self.dropped.into(),
             ReputationChangeKind::Reset => DEFAULT_REPUTATION.into(),
             ReputationChangeKind::Other(val) => val.into(),
+            ReputationChangeKind::BadAnnouncement => self.bad_announcement.into(),
         }
     }
 }
@@ -93,6 +108,7 @@ impl Default for ReputationChangeWeights {
             bad_protocol: BAD_PROTOCOL_REPUTATION_CHANGE,
             failed_to_connect: FAILED_TO_CONNECT_REPUTATION_CHANGE,
             dropped: REMOTE_DISCONNECT_REPUTATION_CHANGE,
+            bad_announcement: BAD_ANNOUNCEMENT_REPUTATION_CHANGE,
         }
     }
 }

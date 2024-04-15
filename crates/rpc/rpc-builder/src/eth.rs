@@ -1,21 +1,22 @@
 use crate::constants::{
-    DEFAULT_MAX_BLOCKS_PER_FILTER, DEFAULT_MAX_LOGS_PER_RESPONSE, DEFAULT_MAX_TRACING_REQUESTS,
+    default_max_tracing_requests, DEFAULT_MAX_BLOCKS_PER_FILTER, DEFAULT_MAX_LOGS_PER_RESPONSE,
 };
 use reth_rpc::{
     eth::{
         cache::{EthStateCache, EthStateCacheConfig},
         gas_oracle::GasPriceOracleConfig,
-        EthFilterConfig, RPC_DEFAULT_GAS_CAP,
+        EthFilterConfig, FeeHistoryCacheConfig, RPC_DEFAULT_GAS_CAP,
     },
-    BlockingTaskPool, EthApi, EthFilter, EthPubSub,
+    EthApi, EthFilter, EthPubSub,
 };
+use reth_tasks::pool::BlockingTaskPool;
 use serde::{Deserialize, Serialize};
 
 /// All handlers for the `eth` namespace
 #[derive(Debug, Clone)]
-pub struct EthHandlers<Provider, Pool, Network, Events> {
+pub struct EthHandlers<Provider, Pool, Network, Events, EvmConfig> {
     /// Main `eth_` request handler
-    pub api: EthApi<Provider, Pool, Network>,
+    pub api: EthApi<Provider, Pool, Network, EvmConfig>,
     /// The async caching layer used by the eth handlers
     pub cache: EthStateCache,
     /// Polling based filter handler available on all transports
@@ -34,7 +35,7 @@ pub struct EthConfig {
     /// Settings for the gas price oracle
     pub gas_oracle: GasPriceOracleConfig,
     /// The maximum number of tracing calls that can be executed in concurrently.
-    pub max_tracing_requests: u32,
+    pub max_tracing_requests: usize,
     /// Maximum number of blocks that could be scanned per filter request in `eth_getLogs` calls.
     pub max_blocks_per_filter: u64,
     /// Maximum number of logs that can be returned in a single response in `eth_getLogs` calls.
@@ -46,6 +47,8 @@ pub struct EthConfig {
     ///
     /// Sets TTL for stale filters
     pub stale_filter_ttl: std::time::Duration,
+    /// Settings for the fee history cache
+    pub fee_history_cache: FeeHistoryCacheConfig,
 }
 
 impl EthConfig {
@@ -66,11 +69,12 @@ impl Default for EthConfig {
         Self {
             cache: EthStateCacheConfig::default(),
             gas_oracle: GasPriceOracleConfig::default(),
-            max_tracing_requests: DEFAULT_MAX_TRACING_REQUESTS,
+            max_tracing_requests: default_max_tracing_requests(),
             max_blocks_per_filter: DEFAULT_MAX_BLOCKS_PER_FILTER,
             max_logs_per_response: DEFAULT_MAX_LOGS_PER_RESPONSE,
             rpc_gas_cap: RPC_DEFAULT_GAS_CAP.into(),
             stale_filter_ttl: DEFAULT_STALE_FILTER_TTL,
+            fee_history_cache: FeeHistoryCacheConfig::default(),
         }
     }
 }
@@ -89,7 +93,7 @@ impl EthConfig {
     }
 
     /// Configures the maximum number of tracing requests
-    pub fn max_tracing_requests(mut self, max_requests: u32) -> Self {
+    pub fn max_tracing_requests(mut self, max_requests: usize) -> Self {
         self.max_tracing_requests = max_requests;
         self
     }

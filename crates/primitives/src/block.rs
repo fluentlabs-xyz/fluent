@@ -1,5 +1,10 @@
-use crate::{Address, Header, SealedHeader, TransactionSigned, Withdrawal, B256};
+use crate::{
+    Address, Bytes, GotExpected, Header, SealedHeader, TransactionSigned,
+    TransactionSignedEcRecovered, Withdrawals, B256,
+};
 use alloy_rlp::{RlpDecodable, RlpEncodable};
+#[cfg(any(test, feature = "arbitrary"))]
+use proptest::prelude::{any, prop_compose};
 use reth_codecs::derive_arbitrary;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -11,20 +16,35 @@ pub use reth_rpc_types::{
 /// Ethereum full block.
 ///
 /// Withdrawals can be optionally included at the end of the RLP encoded message.
+#[derive_arbitrary(rlp, 25)]
 #[derive(
     Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable,
 )]
-#[derive_arbitrary(rlp, 25)]
 #[rlp(trailing)]
 pub struct Block {
     /// Block header.
+    #[cfg_attr(any(test, feature = "arbitrary"), proptest(strategy = "valid_header_strategy()"))]
     pub header: Header,
     /// Transactions in this block.
+    #[cfg_attr(
+        any(test, feature = "arbitrary"),
+        proptest(
+            strategy = "proptest::collection::vec(proptest::arbitrary::any::<TransactionSigned>(), 0..=100)"
+        )
+    )]
     pub body: Vec<TransactionSigned>,
     /// Ommers/uncles header.
+    #[cfg_attr(
+        any(test, feature = "arbitrary"),
+        proptest(strategy = "proptest::collection::vec(valid_header_strategy(), 0..=2)")
+    )]
     pub ommers: Vec<Header>,
     /// Block withdrawals.
-    pub withdrawals: Option<Vec<Withdrawal>>,
+    #[cfg_attr(
+        any(test, feature = "arbitrary"),
+        proptest(strategy = "proptest::option::of(proptest::arbitrary::any::<Withdrawals>())")
+    )]
+    pub withdrawals: Option<Withdrawals>,
 }
 
 impl Block {
@@ -50,14 +70,61 @@ impl Block {
         }
     }
 
-    /// Transform into a [`BlockWithSenders`].
-    pub fn with_senders(self, senders: Vec<Address>) -> BlockWithSenders {
-        assert_eq!(self.body.len(), senders.len(), "Unequal number of senders");
+    /// Expensive operation that recovers transaction signer. See [SealedBlockWithSenders].
+    pub fn senders(&self) -> Option<Vec<Address>> {
+        TransactionSigned::recover_signers(&self.body, self.body.len())
+    }
 
-        BlockWithSenders { block: self, senders }
+    /// Transform into a [`BlockWithSenders`].
+    ///
+    /// # Panics
+    ///
+    /// If the number of senders does not match the number of transactions in the block
+    /// and the signer recovery for one of the transactions fails.
+    ///
+    /// Note: this is expected to be called with blocks read from disk.
+    #[track_caller]
+    pub fn with_senders_unchecked(self, senders: Vec<Address>) -> BlockWithSenders {
+        self.try_with_senders_unchecked(senders).expect("stored block is valid")
+    }
+
+    /// Transform into a [`BlockWithSenders`] using the given senders.
+    ///
+    /// If the number of senders does not match the number of transactions in the block, this falls
+    /// back to manually recovery, but _without ensuring that the signature has a low `s` value_.
+    /// See also [TransactionSigned::recover_signer_unchecked]
+    ///
+    /// Returns an error if a signature is invalid.
+    #[track_caller]
+    pub fn try_with_senders_unchecked(
+        self,
+        senders: Vec<Address>,
+    ) -> Result<BlockWithSenders, Self> {
+        let senders = if self.body.len() == senders.len() {
+            senders
+        } else {
+            let Some(senders) =
+                TransactionSigned::recover_signers_unchecked(&self.body, self.body.len())
+            else {
+                return Err(self)
+            };
+            senders
+        };
+
+        Ok(BlockWithSenders { block: self, senders })
+    }
+
+    /// **Expensive**. Transform into a [`BlockWithSenders`] by recovering senders in the contained
+    /// transactions.
+    ///
+    /// Returns `None` if a transaction is invalid.
+    pub fn with_recovered_senders(self) -> Option<BlockWithSenders> {
+        let senders = self.senders()?;
+        Some(BlockWithSenders { block: self, senders })
     }
 
     /// Returns whether or not the block contains any blob transactions.
+    #[inline]
     pub fn has_blob_transactions(&self) -> bool {
         self.body.iter().any(|tx| tx.is_eip4844())
     }
@@ -69,7 +136,7 @@ impl Block {
             // take into account capacity
             self.body.iter().map(TransactionSigned::size).sum::<usize>() + self.body.capacity() * std::mem::size_of::<TransactionSigned>() +
             self.ommers.iter().map(Header::size).sum::<usize>() + self.ommers.capacity() * std::mem::size_of::<Header>() +
-            self.withdrawals.as_ref().map(|w| w.iter().map(Withdrawal::size).sum::<usize>() + w.capacity() * std::mem::size_of::<Withdrawal>()).unwrap_or(std::mem::size_of::<Option<Vec<Withdrawal>>>())
+            self.withdrawals.as_ref().map_or(std::mem::size_of::<Option<Withdrawals>>(), Withdrawals::total_size)
     }
 }
 
@@ -92,12 +159,50 @@ pub struct BlockWithSenders {
 impl BlockWithSenders {
     /// New block with senders. Return none if len of tx and senders does not match
     pub fn new(block: Block, senders: Vec<Address>) -> Option<Self> {
-        (!block.body.len() != senders.len()).then_some(Self { block, senders })
+        (block.body.len() == senders.len()).then_some(Self { block, senders })
+    }
+
+    /// Seal the block with a known hash.
+    ///
+    /// WARNING: This method does not perform validation whether the hash is correct.
+    #[inline]
+    pub fn seal(self, hash: B256) -> SealedBlockWithSenders {
+        let Self { block, senders } = self;
+        SealedBlockWithSenders { block: block.seal(hash), senders }
     }
 
     /// Split Structure to its components
+    #[inline]
     pub fn into_components(self) -> (Block, Vec<Address>) {
         (self.block, self.senders)
+    }
+
+    /// Returns an iterator over all transactions in the block.
+    #[inline]
+    pub fn transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
+        self.block.body.iter()
+    }
+
+    /// Returns an iterator over all transactions and their sender.
+    #[inline]
+    pub fn transactions_with_sender(
+        &self,
+    ) -> impl Iterator<Item = (&Address, &TransactionSigned)> + '_ {
+        self.senders.iter().zip(self.block.body.iter())
+    }
+
+    /// Consumes the block and returns the transactions of the block.
+    #[inline]
+    pub fn into_transactions(self) -> Vec<TransactionSigned> {
+        self.block.body
+    }
+
+    /// Returns an iterator over all transactions in the chain.
+    #[inline]
+    pub fn into_transactions_ecrecovered(
+        self,
+    ) -> impl Iterator<Item = TransactionSignedEcRecovered> {
+        self.block.body.into_iter().zip(self.senders).map(|(tx, sender)| tx.with_signer(sender))
     }
 }
 
@@ -118,7 +223,7 @@ impl std::ops::DerefMut for BlockWithSenders {
 /// Sealed Ethereum full block.
 ///
 /// Withdrawals can be optionally included at the end of the RLP encoded message.
-#[derive_arbitrary(rlp, 10)]
+#[derive_arbitrary(rlp)]
 #[derive(
     Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, RlpEncodable, RlpDecodable,
 )]
@@ -127,11 +232,85 @@ pub struct SealedBlock {
     /// Locked block header.
     pub header: SealedHeader,
     /// Transactions with signatures.
+    #[cfg_attr(
+        any(test, feature = "arbitrary"),
+        proptest(
+            strategy = "proptest::collection::vec(proptest::arbitrary::any::<TransactionSigned>(), 0..=100)"
+        )
+    )]
     pub body: Vec<TransactionSigned>,
     /// Ommer/uncle headers
+    #[cfg_attr(
+        any(test, feature = "arbitrary"),
+        proptest(strategy = "proptest::collection::vec(valid_header_strategy(), 0..=2)")
+    )]
     pub ommers: Vec<Header>,
     /// Block withdrawals.
-    pub withdrawals: Option<Vec<Withdrawal>>,
+    #[cfg_attr(
+        any(test, feature = "arbitrary"),
+        proptest(strategy = "proptest::option::of(proptest::arbitrary::any::<Withdrawals>())")
+    )]
+    pub withdrawals: Option<Withdrawals>,
+}
+
+/// Generates a header which is valid __with respect to past and future forks__. This means, for
+/// example, that if the withdrawals root is present, the base fee per gas is also present.
+///
+/// If blob gas used were present, then the excess blob gas and parent beacon block root are also
+/// present. In this example, the withdrawals root would also be present.
+///
+/// This __does not, and should not guarantee__ that the header is valid with respect to __anything
+/// else__.
+#[cfg(any(test, feature = "arbitrary"))]
+pub fn generate_valid_header(
+    mut header: Header,
+    eip_4844_active: bool,
+    blob_gas_used: u64,
+    excess_blob_gas: u64,
+    parent_beacon_block_root: B256,
+) -> Header {
+    // EIP-1559 logic
+    if header.base_fee_per_gas.is_none() {
+        // If EIP-1559 is not active, clear related fields
+        header.withdrawals_root = None;
+        header.blob_gas_used = None;
+        header.excess_blob_gas = None;
+        header.parent_beacon_block_root = None;
+    } else if header.withdrawals_root.is_none() {
+        // If EIP-4895 is not active, clear related fields
+        header.blob_gas_used = None;
+        header.excess_blob_gas = None;
+        header.parent_beacon_block_root = None;
+    } else if eip_4844_active {
+        // Set fields based on EIP-4844 being active
+        header.blob_gas_used = Some(blob_gas_used);
+        header.excess_blob_gas = Some(excess_blob_gas);
+        header.parent_beacon_block_root = Some(parent_beacon_block_root);
+    } else {
+        // If EIP-4844 is not active, clear related fields
+        header.blob_gas_used = None;
+        header.excess_blob_gas = None;
+        header.parent_beacon_block_root = None;
+    }
+
+    header
+}
+
+#[cfg(any(test, feature = "arbitrary"))]
+prop_compose! {
+    /// Generates a proptest strategy for constructing an instance of a header which is valid __with
+    /// respect to past and future forks__.
+    ///
+    /// See docs for [generate_valid_header] for more information.
+    pub fn valid_header_strategy()(
+        header in any::<Header>(),
+        eip_4844_active in any::<bool>(),
+        blob_gas_used in any::<u64>(),
+        excess_blob_gas in any::<u64>(),
+        parent_beacon_block_root in any::<B256>()
+    ) -> Header {
+        generate_valid_header(header, eip_4844_active, blob_gas_used, excess_blob_gas, parent_beacon_block_root)
+    }
 }
 
 impl SealedBlock {
@@ -144,7 +323,7 @@ impl SealedBlock {
 
     /// Header hash.
     #[inline]
-    pub fn hash(&self) -> B256 {
+    pub const fn hash(&self) -> B256 {
         self.header.hash()
     }
 
@@ -167,9 +346,30 @@ impl SealedBlock {
         )
     }
 
+    /// Returns an iterator over all blob transactions of the block
+    #[inline]
+    pub fn blob_transactions_iter(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
+        self.body.iter().filter(|tx| tx.is_eip4844())
+    }
+
     /// Returns only the blob transactions, if any, from the block body.
+    #[inline]
     pub fn blob_transactions(&self) -> Vec<&TransactionSigned> {
-        self.body.iter().filter(|tx| tx.is_eip4844()).collect()
+        self.blob_transactions_iter().collect()
+    }
+
+    /// Returns an iterator over all blob versioned hashes from the block body.
+    #[inline]
+    pub fn blob_versioned_hashes_iter(&self) -> impl Iterator<Item = &B256> + '_ {
+        self.blob_transactions_iter()
+            .filter_map(|tx| tx.as_eip4844().map(|blob_tx| &blob_tx.blob_versioned_hashes))
+            .flatten()
+    }
+
+    /// Returns all blob versioned hashes from the block body.
+    #[inline]
+    pub fn blob_versioned_hashes(&self) -> Vec<&B256> {
+        self.blob_versioned_hashes_iter().collect()
     }
 
     /// Expensive operation that recovers transaction signer. See [SealedBlockWithSenders].
@@ -207,12 +407,42 @@ impl SealedBlock {
             // take into account capacity
             self.body.iter().map(TransactionSigned::size).sum::<usize>() + self.body.capacity() * std::mem::size_of::<TransactionSigned>() +
             self.ommers.iter().map(Header::size).sum::<usize>() + self.ommers.capacity() * std::mem::size_of::<Header>() +
-            self.withdrawals.as_ref().map(|w| w.iter().map(Withdrawal::size).sum::<usize>() + w.capacity() * std::mem::size_of::<Withdrawal>()).unwrap_or(std::mem::size_of::<Option<Vec<Withdrawal>>>())
+            self.withdrawals.as_ref().map_or(std::mem::size_of::<Option<Withdrawals>>(), Withdrawals::total_size)
     }
 
     /// Calculates the total gas used by blob transactions in the sealed block.
     pub fn blob_gas_used(&self) -> u64 {
         self.blob_transactions().iter().filter_map(|tx| tx.blob_gas_used()).sum()
+    }
+
+    /// Ensures that the transaction root in the block header is valid.
+    ///
+    /// The transaction root is the Keccak 256-bit hash of the root node of the trie structure
+    /// populated with each transaction in the transactions list portion of the block.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if the calculated transaction root matches the one stored in the header,
+    /// indicating that the transactions in the block are correctly represented in the trie.
+    ///
+    /// Returns `Err(error)` if the transaction root validation fails, providing a `GotExpected`
+    /// error containing the calculated and expected roots.
+    pub fn ensure_transaction_root_valid(&self) -> Result<(), GotExpected<B256>> {
+        let calculated_root = crate::proofs::calculate_transaction_root(&self.body);
+
+        if self.header.transactions_root != calculated_root {
+            return Err(GotExpected {
+                got: calculated_root,
+                expected: self.header.transactions_root,
+            })
+        }
+
+        Ok(())
+    }
+
+    /// Returns a vector of transactions RLP encoded with [TransactionSigned::encode_enveloped].
+    pub fn raw_transactions(&self) -> Vec<Bytes> {
+        self.body.iter().map(|tx| tx.envelope_encoded()).collect()
     }
 }
 
@@ -248,12 +478,48 @@ pub struct SealedBlockWithSenders {
 impl SealedBlockWithSenders {
     /// New sealed block with sender. Return none if len of tx and senders does not match
     pub fn new(block: SealedBlock, senders: Vec<Address>) -> Option<Self> {
-        (!block.body.len() != senders.len()).then_some(Self { block, senders })
+        (block.body.len() == senders.len()).then_some(Self { block, senders })
     }
 
     /// Split Structure to its components
+    #[inline]
     pub fn into_components(self) -> (SealedBlock, Vec<Address>) {
         (self.block, self.senders)
+    }
+
+    /// Returns the unsealed [BlockWithSenders]
+    #[inline]
+    pub fn unseal(self) -> BlockWithSenders {
+        let Self { block, senders } = self;
+        BlockWithSenders { block: block.unseal(), senders }
+    }
+
+    /// Returns an iterator over all transactions in the block.
+    #[inline]
+    pub fn transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
+        self.block.body.iter()
+    }
+
+    /// Returns an iterator over all transactions and their sender.
+    #[inline]
+    pub fn transactions_with_sender(
+        &self,
+    ) -> impl Iterator<Item = (&Address, &TransactionSigned)> + '_ {
+        self.senders.iter().zip(self.block.body.iter())
+    }
+
+    /// Consumes the block and returns the transactions of the block.
+    #[inline]
+    pub fn into_transactions(self) -> Vec<TransactionSigned> {
+        self.block.body
+    }
+
+    /// Returns an iterator over all transactions in the chain.
+    #[inline]
+    pub fn into_transactions_ecrecovered(
+        self,
+    ) -> impl Iterator<Item = TransactionSignedEcRecovered> {
+        self.block.body.into_iter().zip(self.senders).map(|(tx, sender)| tx.with_signer(sender))
     }
 }
 
@@ -291,19 +557,11 @@ pub struct BlockBody {
     /// Uncle headers for the given block
     #[cfg_attr(
         any(test, feature = "arbitrary"),
-        proptest(
-            strategy = "proptest::collection::vec(proptest::arbitrary::any::<Header>(), 0..=2)"
-        )
+        proptest(strategy = "proptest::collection::vec(valid_header_strategy(), 0..=2)")
     )]
     pub ommers: Vec<Header>,
     /// Withdrawals in the block.
-    #[cfg_attr(
-        any(test, feature = "arbitrary"),
-        proptest(
-            strategy = "proptest::option::of(proptest::collection::vec(proptest::arbitrary::any::<Withdrawal>(), 0..=16))"
-        )
-    )]
-    pub withdrawals: Option<Vec<Withdrawal>>,
+    pub withdrawals: Option<Withdrawals>,
 }
 
 impl BlockBody {
@@ -333,15 +591,6 @@ impl BlockBody {
         self.withdrawals.as_ref().map(|w| crate::proofs::calculate_withdrawals_root(w))
     }
 
-    /// Calculate all roots (transaction, ommers, withdrawals) for the block body.
-    pub fn calculate_roots(&self) -> BlockBodyRoots {
-        BlockBodyRoots {
-            tx_root: self.calculate_tx_root(),
-            ommers_hash: self.calculate_ommers_root(),
-            withdrawals_root: self.calculate_withdrawals_root(),
-        }
-    }
-
     /// Calculates a heuristic for the in-memory size of the [BlockBody].
     #[inline]
     pub fn size(&self) -> usize {
@@ -351,29 +600,13 @@ impl BlockBody {
             self.ommers.capacity() * std::mem::size_of::<Header>() +
             self.withdrawals
                 .as_ref()
-                .map(|w| {
-                    w.iter().map(Withdrawal::size).sum::<usize>() +
-                        w.capacity() * std::mem::size_of::<Withdrawal>()
-                })
-                .unwrap_or(std::mem::size_of::<Option<Vec<Withdrawal>>>())
+                .map_or(std::mem::size_of::<Option<Withdrawals>>(), Withdrawals::total_size)
     }
 }
 
-/// A struct that represents roots associated with a block body. This can be used to correlate
-/// block body responses with headers.
-#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Hash)]
-pub struct BlockBodyRoots {
-    /// The transaction root for the block body.
-    pub tx_root: B256,
-    /// The ommers hash for the block body.
-    pub ommers_hash: B256,
-    /// The withdrawals root for the block body, if withdrawals exist.
-    pub withdrawals_root: Option<B256>,
-}
-
 #[cfg(test)]
-mod test {
-    use super::{BlockId, BlockNumberOrTag::*, *};
+mod tests {
+    use super::{BlockNumberOrTag::*, *};
     use crate::hex_literal::hex;
     use alloy_rlp::{Decodable, Encodable};
     use reth_rpc_types::HexStringMissingPrefixError;
@@ -529,5 +762,23 @@ mod test {
         let s = "\"2\"";
         let err = serde_json::from_str::<BlockNumberOrTag>(s).unwrap_err();
         assert_eq!(err.to_string(), HexStringMissingPrefixError::default().to_string());
+    }
+
+    #[test]
+    fn block_with_senders() {
+        let mut block = Block::default();
+        let sender = Address::random();
+        block.body.push(TransactionSigned::default());
+        assert_eq!(BlockWithSenders::new(block.clone(), vec![]), None);
+        assert_eq!(
+            BlockWithSenders::new(block.clone(), vec![sender]),
+            Some(BlockWithSenders { block: block.clone(), senders: vec![sender] })
+        );
+        let sealed = block.seal_slow();
+        assert_eq!(SealedBlockWithSenders::new(sealed.clone(), vec![]), None);
+        assert_eq!(
+            SealedBlockWithSenders::new(sealed.clone(), vec![sender]),
+            Some(SealedBlockWithSenders { block: sealed, senders: vec![sender] })
+        );
     }
 }

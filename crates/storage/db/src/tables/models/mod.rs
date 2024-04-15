@@ -1,4 +1,5 @@
 //! Implements data structures specific to the database
+
 use crate::{
     table::{Decode, Encode},
     DatabaseError,
@@ -11,6 +12,7 @@ use reth_primitives::{
 
 pub mod accounts;
 pub mod blocks;
+pub mod client_version;
 pub mod integer_list;
 pub mod sharded_key;
 pub mod storage_sharded_key;
@@ -18,6 +20,8 @@ pub mod storage_sharded_key;
 pub use accounts::*;
 pub use blocks::*;
 pub use sharded_key::ShardedKey;
+
+use self::client_version::ClientVersion;
 
 /// Macro that implements [`Encode`] and [`Decode`] for uint types.
 macro_rules! impl_uints {
@@ -107,7 +111,7 @@ impl Encode for StoredNibbles {
 
     // Delegate to the Compact implementation
     fn encode(self) -> Self::Encoded {
-        let mut buf = Vec::with_capacity(self.inner.len());
+        let mut buf = Vec::with_capacity(self.0.len());
         self.to_compact(&mut buf);
         buf
     }
@@ -149,6 +153,24 @@ impl Encode for PruneSegment {
 }
 
 impl Decode for PruneSegment {
+    fn decode<B: AsRef<[u8]>>(value: B) -> Result<Self, DatabaseError> {
+        let buf = value.as_ref();
+        Ok(Self::from_compact(buf, buf.len()).0)
+    }
+}
+
+impl Encode for ClientVersion {
+    type Encoded = Vec<u8>;
+
+    // Delegate to the Compact implementation
+    fn encode(self) -> Self::Encoded {
+        let mut buf = vec![];
+        self.to_compact(&mut buf);
+        buf
+    }
+}
+
+impl Decode for ClientVersion {
     fn decode<B: AsRef<[u8]>>(value: B) -> Result<Self, DatabaseError> {
         let buf = value.as_ref();
         Ok(Self::from_compact(buf, buf.len()).0)

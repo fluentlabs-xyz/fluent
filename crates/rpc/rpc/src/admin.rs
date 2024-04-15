@@ -2,9 +2,10 @@ use crate::result::ToRpcResult;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use reth_network_api::{NetworkInfo, PeerKind, Peers};
-use reth_primitives::NodeRecord;
+use reth_primitives::{AnyNode, ChainSpec, NodeRecord};
 use reth_rpc_api::AdminApiServer;
 use reth_rpc_types::{NodeInfo, PeerEthProtocolInfo, PeerInfo, PeerNetworkInfo, PeerProtocolsInfo};
+use std::sync::Arc;
 
 /// `admin` API implementation.
 ///
@@ -12,12 +13,14 @@ use reth_rpc_types::{NodeInfo, PeerEthProtocolInfo, PeerInfo, PeerNetworkInfo, P
 pub struct AdminApi<N> {
     /// An interface to interact with the network
     network: N,
+    /// The specification of the blockchain's configuration.
+    chain_spec: Arc<ChainSpec>,
 }
 
 impl<N> AdminApi<N> {
     /// Creates a new instance of `AdminApi`.
-    pub fn new(network: N) -> Self {
-        AdminApi { network }
+    pub fn new(network: N, chain_spec: Arc<ChainSpec>) -> Self {
+        AdminApi { network, chain_spec }
     }
 }
 
@@ -33,29 +36,32 @@ where
     }
 
     /// Handler for `admin_removePeer`
-    fn remove_peer(&self, record: NodeRecord) -> RpcResult<bool> {
-        self.network.remove_peer(record.id, PeerKind::Basic);
+    fn remove_peer(&self, record: AnyNode) -> RpcResult<bool> {
+        self.network.remove_peer(record.peer_id(), PeerKind::Basic);
         Ok(true)
     }
 
     /// Handler for `admin_addTrustedPeer`
-    fn add_trusted_peer(&self, record: NodeRecord) -> RpcResult<bool> {
-        self.network.add_trusted_peer(record.id, record.tcp_addr());
+    fn add_trusted_peer(&self, record: AnyNode) -> RpcResult<bool> {
+        if let Some(record) = record.node_record() {
+            self.network.add_trusted_peer(record.id, record.tcp_addr())
+        }
+        self.network.add_trusted_peer_id(record.peer_id());
         Ok(true)
     }
 
     /// Handler for `admin_removeTrustedPeer`
-    fn remove_trusted_peer(&self, record: NodeRecord) -> RpcResult<bool> {
-        self.network.remove_peer(record.id, PeerKind::Trusted);
+    fn remove_trusted_peer(&self, record: AnyNode) -> RpcResult<bool> {
+        self.network.remove_peer(record.peer_id(), PeerKind::Trusted);
         Ok(true)
     }
 
     async fn peers(&self) -> RpcResult<Vec<PeerInfo>> {
-        let peers = self.network.get_peers().await.to_rpc_result()?;
+        let peers = self.network.get_all_peers().await.to_rpc_result()?;
         let peers = peers
             .into_iter()
             .map(|peer| PeerInfo {
-                id: Some(format!("{:?}", peer.remote_id)),
+                id: Some(peer.remote_id.to_string()),
                 name: peer.client_version.to_string(),
                 caps: peer.capabilities.capabilities().iter().map(|cap| cap.to_string()).collect(),
                 network: PeerNetworkInfo {
@@ -68,7 +74,7 @@ where
                 protocols: PeerProtocolsInfo {
                     eth: Some(PeerEthProtocolInfo {
                         difficulty: Some(peer.status.total_difficulty),
-                        head: format!("{:?}", peer.status.blockhash),
+                        head: peer.status.blockhash.to_string(),
                         version: peer.status.version as u32,
                     }),
                     pip: None,
@@ -83,8 +89,9 @@ where
     async fn node_info(&self) -> RpcResult<NodeInfo> {
         let enr = self.network.local_node_record();
         let status = self.network.network_status().await.to_rpc_result()?;
+        let config = self.chain_spec.genesis().config.clone();
 
-        Ok(NodeInfo::new(enr, status))
+        Ok(NodeInfo::new(enr, status, config))
     }
 
     /// Handler for `admin_peerEvents`

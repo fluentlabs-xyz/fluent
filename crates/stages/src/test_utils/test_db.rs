@@ -1,97 +1,83 @@
 use reth_db::{
     common::KeyValue,
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO},
-    database::DatabaseGAT,
+    database::Database,
     models::{AccountBeforeTx, StoredBlockBodyIndices},
-    table::{Table, TableRow},
+    table::Table,
     tables,
-    test_utils::{create_test_rw_db, create_test_rw_db_with_path, TempDatabase},
-    transaction::{DbTx, DbTxGAT, DbTxMut, DbTxMutGAT},
+    test_utils::{
+        create_test_rw_db, create_test_rw_db_with_path, create_test_static_files_dir, TempDatabase,
+    },
+    transaction::{DbTx, DbTxMut},
     DatabaseEnv, DatabaseError as DbError,
 };
-use reth_interfaces::{test_utils::generators::ChangeSet, RethResult};
+use reth_interfaces::{provider::ProviderResult, test_utils::generators::ChangeSet};
 use reth_primitives::{
-    keccak256, Account, Address, BlockNumber, Receipt, SealedBlock, SealedHeader, StorageEntry,
-    TxHash, TxNumber, B256, MAINNET, U256,
+    keccak256, Account, Address, BlockNumber, Receipt, SealedBlock, SealedHeader,
+    StaticFileSegment, StorageEntry, TxHash, TxNumber, B256, MAINNET, U256,
 };
-use reth_provider::{DatabaseProviderRO, DatabaseProviderRW, HistoryWriter, ProviderFactory};
-use std::{
-    borrow::Borrow,
-    collections::BTreeMap,
-    ops::RangeInclusive,
-    path::{Path, PathBuf},
-    sync::Arc,
+use reth_provider::{
+    providers::{StaticFileProviderRWRefMut, StaticFileWriter},
+    HistoryWriter, ProviderError, ProviderFactory,
 };
+use std::{collections::BTreeMap, path::Path, sync::Arc};
+use tempfile::TempDir;
 
-/// The [TestTransaction] is used as an internal
-/// database for testing stage implementation.
-///
-/// ```rust,ignore
-/// let tx = TestTransaction::default();
-/// stage.execute(&mut tx.container(), input);
-/// ```
+/// Test database that is used for testing stage implementations.
 #[derive(Debug)]
-pub struct TestTransaction {
-    /// DB
-    pub tx: Arc<TempDatabase<DatabaseEnv>>,
-    pub path: Option<PathBuf>,
+pub struct TestStageDB {
     pub factory: ProviderFactory<Arc<TempDatabase<DatabaseEnv>>>,
+    pub temp_static_files_dir: TempDir,
 }
 
-impl Default for TestTransaction {
-    /// Create a new instance of [TestTransaction]
+impl Default for TestStageDB {
+    /// Create a new instance of [TestStageDB]
     fn default() -> Self {
-        let tx = create_test_rw_db();
-        Self { tx: tx.clone(), path: None, factory: ProviderFactory::new(tx, MAINNET.clone()) }
+        let (static_dir, static_dir_path) = create_test_static_files_dir();
+        Self {
+            temp_static_files_dir: static_dir,
+            factory: ProviderFactory::new(create_test_rw_db(), MAINNET.clone(), static_dir_path)
+                .unwrap(),
+        }
     }
 }
 
-impl TestTransaction {
+impl TestStageDB {
     pub fn new(path: &Path) -> Self {
-        let tx = create_test_rw_db_with_path(path);
+        let (static_dir, static_dir_path) = create_test_static_files_dir();
+
         Self {
-            tx: tx.clone(),
-            path: Some(path.to_path_buf()),
-            factory: ProviderFactory::new(tx, MAINNET.clone()),
+            temp_static_files_dir: static_dir,
+            factory: ProviderFactory::new(
+                create_test_rw_db_with_path(path),
+                MAINNET.clone(),
+                static_dir_path,
+            )
+            .unwrap(),
         }
     }
 
-    /// Return a database wrapped in [DatabaseProviderRW].
-    pub fn inner_rw(&self) -> DatabaseProviderRW<'_, Arc<TempDatabase<DatabaseEnv>>> {
-        self.factory.provider_rw().expect("failed to create db container")
-    }
-
-    /// Return a database wrapped in [DatabaseProviderRO].
-    pub fn inner(&self) -> DatabaseProviderRO<'_, Arc<TempDatabase<DatabaseEnv>>> {
-        self.factory.provider().expect("failed to create db container")
-    }
-
-    /// Get a pointer to an internal database.
-    pub fn inner_raw(&self) -> Arc<TempDatabase<DatabaseEnv>> {
-        self.tx.clone()
-    }
-
     /// Invoke a callback with transaction committing it afterwards
-    pub fn commit<F>(&self, f: F) -> Result<(), DbError>
+    pub fn commit<F>(&self, f: F) -> ProviderResult<()>
     where
-        F: FnOnce(&<DatabaseEnv as DatabaseGAT<'_>>::TXMut) -> Result<(), DbError>,
+        F: FnOnce(&<DatabaseEnv as Database>::TXMut) -> ProviderResult<()>,
     {
-        let mut tx = self.inner_rw();
+        let tx = self.factory.provider_rw()?;
         f(tx.tx_ref())?;
         tx.commit().expect("failed to commit");
         Ok(())
     }
 
     /// Invoke a callback with a read transaction
-    pub fn query<F, R>(&self, f: F) -> Result<R, DbError>
+    pub fn query<F, Ok>(&self, f: F) -> ProviderResult<Ok>
     where
-        F: FnOnce(&<DatabaseEnv as DatabaseGAT<'_>>::TX) -> Result<R, DbError>,
+        F: FnOnce(&<DatabaseEnv as Database>::TX) -> ProviderResult<Ok>,
     {
-        f(self.inner().tx_ref())
+        f(self.factory.provider()?.tx_ref())
     }
 
     /// Check if the table is empty
-    pub fn table_is_empty<T: Table>(&self) -> Result<bool, DbError> {
+    pub fn table_is_empty<T: Table>(&self) -> ProviderResult<bool> {
         self.query(|tx| {
             let last = tx.cursor_read::<T>()?.last()?;
             Ok(last.is_none())
@@ -99,70 +85,21 @@ impl TestTransaction {
     }
 
     /// Return full table as Vec
-    pub fn table<T: Table>(&self) -> Result<Vec<KeyValue<T>>, DbError>
+    pub fn table<T: Table>(&self) -> ProviderResult<Vec<KeyValue<T>>>
     where
         T::Key: Default + Ord,
     {
         self.query(|tx| {
-            tx.cursor_read::<T>()?
+            Ok(tx
+                .cursor_read::<T>()?
                 .walk(Some(T::Key::default()))?
-                .collect::<Result<Vec<_>, DbError>>()
-        })
-    }
-
-    /// Map a collection of values and store them in the database.
-    /// This function commits the transaction before exiting.
-    ///
-    /// ```rust,ignore
-    /// let tx = TestTransaction::default();
-    /// tx.map_put::<Table, _, _>(&items, |item| item)?;
-    /// ```
-    #[allow(dead_code)]
-    pub fn map_put<T, S, F>(&self, values: &[S], mut map: F) -> Result<(), DbError>
-    where
-        T: Table,
-        S: Clone,
-        F: FnMut(&S) -> TableRow<T>,
-    {
-        self.commit(|tx| {
-            values.iter().try_for_each(|src| {
-                let (k, v) = map(src);
-                tx.put::<T>(k, v)
-            })
-        })
-    }
-
-    /// Transform a collection of values using a callback and store
-    /// them in the database. The callback additionally accepts the
-    /// optional last element that was stored.
-    /// This function commits the transaction before exiting.
-    ///
-    /// ```rust,ignore
-    /// let tx = TestTransaction::default();
-    /// tx.transform_append::<Table, _, _>(&items, |prev, item| prev.unwrap_or_default() + item)?;
-    /// ```
-    #[allow(dead_code)]
-    pub fn transform_append<T, S, F>(&self, values: &[S], mut transform: F) -> Result<(), DbError>
-    where
-        T: Table,
-        <T as Table>::Value: Clone,
-        S: Clone,
-        F: FnMut(&Option<<T as Table>::Value>, &S) -> TableRow<T>,
-    {
-        self.commit(|tx| {
-            let mut cursor = tx.cursor_write::<T>()?;
-            let mut last = cursor.last()?.map(|(_, v)| v);
-            values.iter().try_for_each(|src| {
-                let (k, v) = transform(&last, src);
-                last = Some(v.clone());
-                cursor.append(k, v)
-            })
+                .collect::<Result<Vec<_>, DbError>>()?)
         })
     }
 
     /// Check that there is no table entry above a given
     /// number by [Table::Key]
-    pub fn ensure_no_entry_above<T, F>(&self, num: u64, mut selector: F) -> Result<(), DbError>
+    pub fn ensure_no_entry_above<T, F>(&self, num: u64, mut selector: F) -> ProviderResult<()>
     where
         T: Table,
         F: FnMut(T::Key) -> BlockNumber,
@@ -182,7 +119,7 @@ impl TestTransaction {
         &self,
         num: u64,
         mut selector: F,
-    ) -> Result<(), DbError>
+    ) -> ProviderResult<()>
     where
         T: Table,
         F: FnMut(T::Value) -> BlockNumber,
@@ -197,52 +134,111 @@ impl TestTransaction {
         })
     }
 
-    /// Inserts a single [SealedHeader] into the corresponding tables of the headers stage.
-    fn insert_header<TX: DbTxMut + DbTx>(tx: &TX, header: &SealedHeader) -> Result<(), DbError> {
-        tx.put::<tables::CanonicalHeaders>(header.number, header.hash())?;
+    /// Insert header to static file if `writer` exists, otherwise to DB.
+    pub fn insert_header<TX: DbTx + DbTxMut>(
+        writer: Option<&mut StaticFileProviderRWRefMut<'_>>,
+        tx: &TX,
+        header: &SealedHeader,
+        td: U256,
+    ) -> ProviderResult<()> {
+        if let Some(writer) = writer {
+            // Backfill: some tests start at a forward block number, but static files require no
+            // gaps.
+            let segment_header = writer.user_header();
+            if segment_header.block_end().is_none() && segment_header.expected_block_start() == 0 {
+                for block_number in 0..header.number {
+                    let mut prev = header.clone().unseal();
+                    prev.number = block_number;
+                    writer.append_header(prev, U256::ZERO, B256::ZERO)?;
+                }
+            }
+
+            writer.append_header(header.header().clone(), td, header.hash())?;
+        } else {
+            tx.put::<tables::CanonicalHeaders>(header.number, header.hash())?;
+            tx.put::<tables::HeaderTerminalDifficulties>(header.number, td.into())?;
+            tx.put::<tables::Headers>(header.number, header.header().clone())?;
+        }
+
         tx.put::<tables::HeaderNumbers>(header.hash(), header.number)?;
-        tx.put::<tables::Headers>(header.number, header.clone().unseal())
+        Ok(())
     }
 
-    /// Insert ordered collection of [SealedHeader] into the corresponding tables
-    /// that are supposed to be populated by the headers stage.
-    pub fn insert_headers<'a, I>(&self, headers: I) -> Result<(), DbError>
+    fn insert_headers_inner<'a, I, const TD: bool>(&self, headers: I) -> ProviderResult<()>
     where
-        I: Iterator<Item = &'a SealedHeader>,
+        I: IntoIterator<Item = &'a SealedHeader>,
     {
-        self.commit(|tx| headers.into_iter().try_for_each(|header| Self::insert_header(tx, header)))
-    }
+        let provider = self.factory.static_file_provider();
+        let mut writer = provider.latest_writer(StaticFileSegment::Headers)?;
+        let tx = self.factory.provider_rw()?.into_tx();
+        let mut td = U256::ZERO;
 
-    /// Inserts total difficulty of headers into the corresponding tables.
-    ///
-    /// Superset functionality of [TestTransaction::insert_headers].
-    pub fn insert_headers_with_td<'a, I>(&self, headers: I) -> Result<(), DbError>
-    where
-        I: Iterator<Item = &'a SealedHeader>,
-    {
-        self.commit(|tx| {
-            let mut td = U256::ZERO;
-            headers.into_iter().try_for_each(|header| {
-                Self::insert_header(tx, header)?;
+        for header in headers {
+            if TD {
                 td += header.difficulty;
-                tx.put::<tables::HeaderTD>(header.number, td.into())
-            })
-        })
+            }
+            Self::insert_header(Some(&mut writer), &tx, header, td)?;
+        }
+
+        writer.commit()?;
+        tx.commit()?;
+
+        Ok(())
+    }
+
+    /// Insert ordered collection of [SealedHeader] into the corresponding static file and tables
+    /// that are supposed to be populated by the headers stage.
+    pub fn insert_headers<'a, I>(&self, headers: I) -> ProviderResult<()>
+    where
+        I: IntoIterator<Item = &'a SealedHeader>,
+    {
+        self.insert_headers_inner::<I, false>(headers)
+    }
+
+    /// Inserts total difficulty of headers into the corresponding static file and tables.
+    ///
+    /// Superset functionality of [TestStageDB::insert_headers].
+    pub fn insert_headers_with_td<'a, I>(&self, headers: I) -> ProviderResult<()>
+    where
+        I: IntoIterator<Item = &'a SealedHeader>,
+    {
+        self.insert_headers_inner::<I, true>(headers)
     }
 
     /// Insert ordered collection of [SealedBlock] into corresponding tables.
-    /// Superset functionality of [TestTransaction::insert_headers].
+    /// Superset functionality of [TestStageDB::insert_headers].
+    ///
+    /// If tx_offset is set to `None`, then transactions will be stored on static files, otherwise
+    /// database.
     ///
     /// Assumes that there's a single transition for each transaction (i.e. no block rewards).
-    pub fn insert_blocks<'a, I>(&self, blocks: I, tx_offset: Option<u64>) -> Result<(), DbError>
+    pub fn insert_blocks<'a, I>(&self, blocks: I, storage_kind: StorageKind) -> ProviderResult<()>
     where
-        I: Iterator<Item = &'a SealedBlock>,
+        I: IntoIterator<Item = &'a SealedBlock>,
     {
-        self.commit(|tx| {
-            let mut next_tx_num = tx_offset.unwrap_or_default();
+        let provider = self.factory.static_file_provider();
+
+        let tx = self.factory.provider_rw().unwrap().into_tx();
+        let mut next_tx_num = storage_kind.tx_offset();
+
+        let blocks = blocks.into_iter().collect::<Vec<_>>();
+
+        {
+            let mut headers_writer = provider.latest_writer(StaticFileSegment::Headers)?;
+
+            blocks.iter().try_for_each(|block| {
+                Self::insert_header(Some(&mut headers_writer), &tx, &block.header, U256::ZERO)
+            })?;
+
+            headers_writer.commit()?;
+        }
+
+        {
+            let mut txs_writer = storage_kind
+                .is_static()
+                .then(|| provider.latest_writer(StaticFileSegment::Transactions).unwrap());
 
             blocks.into_iter().try_for_each(|block| {
-                Self::insert_header(tx, &block.header)?;
                 // Insert into body tables.
                 let block_body_indices = StoredBlockBodyIndices {
                     first_tx_num: next_tx_num,
@@ -250,61 +246,88 @@ impl TestTransaction {
                 };
 
                 if !block.body.is_empty() {
-                    tx.put::<tables::TransactionBlock>(
+                    tx.put::<tables::TransactionBlocks>(
                         block_body_indices.last_tx_num(),
                         block.number,
                     )?;
                 }
                 tx.put::<tables::BlockBodyIndices>(block.number, block_body_indices)?;
 
-                block.body.iter().try_for_each(|body_tx| {
-                    tx.put::<tables::Transactions>(next_tx_num, body_tx.clone().into())?;
+                let res = block.body.iter().try_for_each(|body_tx| {
+                    if let Some(txs_writer) = &mut txs_writer {
+                        txs_writer.append_transaction(next_tx_num, body_tx.clone().into())?;
+                    } else {
+                        tx.put::<tables::Transactions>(next_tx_num, body_tx.clone().into())?
+                    }
                     next_tx_num += 1;
-                    Ok(())
-                })
-            })
-        })
+                    Ok::<(), ProviderError>(())
+                });
+
+                if let Some(txs_writer) = &mut txs_writer {
+                    // Backfill: some tests start at a forward block number, but static files
+                    // require no gaps.
+                    let segment_header = txs_writer.user_header();
+                    if segment_header.block_end().is_none() &&
+                        segment_header.expected_block_start() == 0
+                    {
+                        for block in 0..block.number {
+                            txs_writer.increment_block(StaticFileSegment::Transactions, block)?;
+                        }
+                    }
+                    txs_writer.increment_block(StaticFileSegment::Transactions, block.number)?;
+                }
+                res
+            })?;
+
+            if let Some(txs_writer) = &mut txs_writer {
+                txs_writer.commit()?;
+            }
+        }
+
+        tx.commit()?;
+
+        Ok(())
     }
 
-    pub fn insert_tx_hash_numbers<I>(&self, tx_hash_numbers: I) -> Result<(), DbError>
+    pub fn insert_tx_hash_numbers<I>(&self, tx_hash_numbers: I) -> ProviderResult<()>
     where
         I: IntoIterator<Item = (TxHash, TxNumber)>,
     {
         self.commit(|tx| {
             tx_hash_numbers.into_iter().try_for_each(|(tx_hash, tx_num)| {
                 // Insert into tx hash numbers table.
-                tx.put::<tables::TxHashNumber>(tx_hash, tx_num)
+                Ok(tx.put::<tables::TransactionHashNumbers>(tx_hash, tx_num)?)
             })
         })
     }
 
     /// Insert collection of ([TxNumber], [Receipt]) into the corresponding table.
-    pub fn insert_receipts<I>(&self, receipts: I) -> Result<(), DbError>
+    pub fn insert_receipts<I>(&self, receipts: I) -> ProviderResult<()>
     where
         I: IntoIterator<Item = (TxNumber, Receipt)>,
     {
         self.commit(|tx| {
             receipts.into_iter().try_for_each(|(tx_num, receipt)| {
                 // Insert into receipts table.
-                tx.put::<tables::Receipts>(tx_num, receipt)
+                Ok(tx.put::<tables::Receipts>(tx_num, receipt)?)
             })
         })
     }
 
-    pub fn insert_transaction_senders<I>(&self, transaction_senders: I) -> Result<(), DbError>
+    pub fn insert_transaction_senders<I>(&self, transaction_senders: I) -> ProviderResult<()>
     where
         I: IntoIterator<Item = (TxNumber, Address)>,
     {
         self.commit(|tx| {
             transaction_senders.into_iter().try_for_each(|(tx_num, sender)| {
                 // Insert into receipts table.
-                tx.put::<tables::TxSenders>(tx_num, sender)
+                Ok(tx.put::<tables::TransactionSenders>(tx_num, sender)?)
             })
         })
     }
 
     /// Insert collection of ([Address], [Account]) into corresponding tables.
-    pub fn insert_accounts_and_storages<I, S>(&self, accounts: I) -> Result<(), DbError>
+    pub fn insert_accounts_and_storages<I, S>(&self, accounts: I) -> ProviderResult<()>
     where
         I: IntoIterator<Item = (Address, (Account, S))>,
         S: IntoIterator<Item = StorageEntry>,
@@ -315,25 +338,27 @@ impl TestTransaction {
 
                 // Insert into account tables.
                 tx.put::<tables::PlainAccountState>(address, account)?;
-                tx.put::<tables::HashedAccount>(hashed_address, account)?;
+                tx.put::<tables::HashedAccounts>(hashed_address, account)?;
 
                 // Insert into storage tables.
                 storage.into_iter().filter(|e| e.value != U256::ZERO).try_for_each(|entry| {
                     let hashed_entry = StorageEntry { key: keccak256(entry.key), ..entry };
 
                     let mut cursor = tx.cursor_dup_write::<tables::PlainStorageState>()?;
-                    if let Some(e) = cursor
+                    if cursor
                         .seek_by_key_subkey(address, entry.key)?
                         .filter(|e| e.key == entry.key)
+                        .is_some()
                     {
                         cursor.delete_current()?;
                     }
                     cursor.upsert(address, entry)?;
 
-                    let mut cursor = tx.cursor_dup_write::<tables::HashedStorage>()?;
-                    if let Some(e) = cursor
+                    let mut cursor = tx.cursor_dup_write::<tables::HashedStorages>()?;
+                    if cursor
                         .seek_by_key_subkey(hashed_address, hashed_entry.key)?
                         .filter(|e| e.key == hashed_entry.key)
+                        .is_some()
                     {
                         cursor.delete_current()?;
                     }
@@ -350,7 +375,7 @@ impl TestTransaction {
         &self,
         changesets: I,
         block_offset: Option<u64>,
-    ) -> Result<(), DbError>
+    ) -> ProviderResult<()>
     where
         I: IntoIterator<Item = ChangeSet>,
     {
@@ -360,7 +385,7 @@ impl TestTransaction {
                 changeset.into_iter().try_for_each(|(address, old_account, old_storage)| {
                     let block = offset + block as u64;
                     // Insert into account changeset.
-                    tx.put::<tables::AccountChangeSet>(
+                    tx.put::<tables::AccountChangeSets>(
                         block,
                         AccountBeforeTx { address, info: Some(old_account) },
                     )?;
@@ -369,14 +394,14 @@ impl TestTransaction {
 
                     // Insert into storage changeset.
                     old_storage.into_iter().try_for_each(|entry| {
-                        tx.put::<tables::StorageChangeSet>(block_address, entry)
+                        Ok(tx.put::<tables::StorageChangeSets>(block_address, entry)?)
                     })
                 })
             })
         })
     }
 
-    pub fn insert_history<I>(&self, changesets: I, block_offset: Option<u64>) -> RethResult<()>
+    pub fn insert_history<I>(&self, changesets: I, _block_offset: Option<u64>) -> ProviderResult<()>
     where
         I: IntoIterator<Item = ChangeSet>,
     {
@@ -392,11 +417,36 @@ impl TestTransaction {
             }
         }
 
-        let provider = self.factory.provider_rw()?;
-        provider.insert_account_history_index(accounts)?;
-        provider.insert_storage_history_index(storages)?;
-        provider.commit()?;
+        let provider_rw = self.factory.provider_rw()?;
+        provider_rw.insert_account_history_index(accounts)?;
+        provider_rw.insert_storage_history_index(storages)?;
+        provider_rw.commit()?;
 
         Ok(())
+    }
+}
+
+/// Used to identify where to store data when setting up a test.
+#[derive(Debug)]
+pub enum StorageKind {
+    Database(Option<u64>),
+    Static,
+}
+
+impl StorageKind {
+    #[allow(dead_code)]
+    fn is_database(&self) -> bool {
+        matches!(self, Self::Database(_))
+    }
+
+    fn is_static(&self) -> bool {
+        matches!(self, Self::Static)
+    }
+
+    fn tx_offset(&self) -> u64 {
+        if let Self::Database(offset) = self {
+            return offset.unwrap_or_default()
+        }
+        0
     }
 }

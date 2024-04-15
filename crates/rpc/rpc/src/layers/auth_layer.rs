@@ -69,7 +69,7 @@ where
 
 /// This type is the actual implementation of the middleware. It follows the [`Service`]
 /// specification to correctly proxy Http requests to its inner service after headers validation.
-#[allow(missing_debug_implementations)]
+#[derive(Debug)]
 pub struct AuthService<S, V> {
     /// Performs auth validation logics
     validator: V,
@@ -234,14 +234,14 @@ mod tests {
         let jwt = "this jwt has serious encoding problems".to_string();
         let (status, body) = send_request(Some(jwt)).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
-        assert_eq!(body, "JWT decoding error: Error(InvalidToken)".to_string());
+        assert_eq!(body, "JWT decoding error: InvalidToken".to_string());
     }
 
     async fn send_request(jwt: Option<String>) -> (StatusCode, String) {
         let server = spawn_server().await;
         let client = hyper::Client::new();
 
-        let jwt = jwt.unwrap_or("".into());
+        let jwt = jwt.unwrap_or_default();
         let address = format!("http://{AUTH_ADDR}:{AUTH_PORT}");
         let bearer = format!("Bearer {jwt}");
         let body = r#"{"jsonrpc": "2.0", "method": "greet_melkor", "params": [], "id": 1}"#;

@@ -27,14 +27,20 @@ pub use chain_info::CanonChainTracker;
 mod header;
 pub use header::HeaderProvider;
 
+mod header_sync_gap;
+pub use header_sync_gap::{HeaderSyncGap, HeaderSyncGapProvider, HeaderSyncMode};
+
 mod receipts;
 pub use receipts::{ReceiptProvider, ReceiptProviderIdExt};
 
 mod state;
 pub use state::{
     BlockchainTreePendingStateProvider, BundleStateDataProvider, StateProvider, StateProviderBox,
-    StateProviderFactory, StateRootProvider,
+    StateProviderFactory,
 };
+
+mod trie;
+pub use trie::StateRootProvider;
 
 mod transactions;
 pub use transactions::{TransactionsProvider, TransactionsProviderExt};
@@ -47,8 +53,8 @@ pub use executor::{BlockExecutor, BlockExecutorStats, ExecutorFactory, PrunableB
 
 mod chain;
 pub use chain::{
-    CanonStateNotification, CanonStateNotificationSender, CanonStateNotifications,
-    CanonStateSubscriptions,
+    CanonStateNotification, CanonStateNotificationSender, CanonStateNotificationStream,
+    CanonStateNotifications, CanonStateSubscriptions,
 };
 
 mod spec;
@@ -65,3 +71,12 @@ pub use history::HistoryWriter;
 
 mod prune_checkpoint;
 pub use prune_checkpoint::{PruneCheckpointReader, PruneCheckpointWriter};
+
+mod database_provider;
+pub use database_provider::DatabaseProviderFactory;
+
+mod stats;
+pub use stats::StatsReader;
+
+mod full;
+pub use full::FullProvider;

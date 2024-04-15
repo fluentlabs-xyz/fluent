@@ -1,8 +1,8 @@
-use crate::RethError;
+use crate::{provider::ProviderError, trie::StateRootError};
 use reth_primitives::{
-    BlockNumHash, Bloom, GotExpected, GotExpectedBoxed, PruneSegmentError, B256,
+    revm_primitives::EVMError, BlockNumHash, Bloom, GotExpected, GotExpectedBoxed,
+    PruneSegmentError, B256,
 };
-use revm_primitives::EVMError;
 use thiserror::Error;
 
 /// Transaction validation errors
@@ -15,7 +15,7 @@ pub enum BlockValidationError {
         hash: B256,
         /// The EVM error.
         #[source]
-        error: Box<EVMError<RethError>>,
+        error: Box<EVMError<ProviderError>>,
     },
     /// Error when recovering the sender for a transaction
     #[error("failed to recover sender for transaction")]
@@ -29,6 +29,9 @@ pub enum BlockValidationError {
     /// Error when header bloom filter doesn't match expected value
     #[error("header bloom filter mismatch: {0}")]
     BloomLogDiff(GotExpectedBoxed<Bloom>),
+    /// Error when the state root does not match the expected value.
+    #[error(transparent)]
+    StateRoot(#[from] StateRootError),
     /// Error when transaction gas limit exceeds available block gas
     #[error("transaction gas limit {transaction_gas_limit} is more than blocks available gas {block_available_gas}")]
     TransactionGasLimitMoreThanAvailableBlockGas {
@@ -85,9 +88,6 @@ pub enum BlockExecutionError {
     /// Pruning error, transparently wrapping `PruneSegmentError`
     #[error(transparent)]
     Pruning(#[from] PruneSegmentError),
-    /// Error representing a provider error
-    #[error("provider error")]
-    ProviderError,
     /// Transaction error on revert with inner details
     #[error("transaction error on revert: {inner}")]
     CanonicalRevert {
@@ -115,6 +115,9 @@ pub enum BlockExecutionError {
     /// Note: this is not feature gated for convenience.
     #[error("execution unavailable for tests")]
     UnavailableForTest,
+    /// Error when fetching latest block state.
+    #[error(transparent)]
+    LatestBlock(#[from] ProviderError),
 
     /// Optimism Block Executor Errors
     #[cfg(feature = "optimism")]
@@ -127,11 +130,20 @@ pub enum BlockExecutionError {
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum OptimismBlockExecutionError {
     /// Error when trying to parse L1 block info
-    #[error("Could not get L1 block info from L2 block: {message:?}")]
+    #[error("could not get L1 block info from L2 block: {message:?}")]
     L1BlockInfoError {
         /// The inner error message
         message: String,
     },
+    /// Thrown when force deploy of create2deployer code fails.
+    #[error("failed to force create2deployer account code")]
+    ForceCreate2DeployerFail,
+    /// Thrown when a blob transaction is included in a sequencer's block.
+    #[error("blob transaction included in sequencer block")]
+    BlobTransactionRejected,
+    /// Thrown when a database account could not be loaded.
+    #[error("failed to load account {0}")]
+    AccountLoadFailed(reth_primitives::Address),
 }
 
 impl BlockExecutionError {

@@ -20,7 +20,7 @@ impl DurationsRecorder {
     /// `action` label.
     pub(crate) fn record_duration(&mut self, action: Action, duration: Duration) {
         self.actions.push((action, duration));
-        Metrics::new_with_labels(&[("action", format!("{action:?}"))]).duration.record(duration);
+        Metrics::new_with_labels(&[("action", action.as_str())]).duration.record(duration);
         self.latest = Some(self.start.elapsed());
     }
 
@@ -50,16 +50,15 @@ pub(crate) enum Action {
     InsertCanonicalHeaders,
     InsertHeaders,
     InsertHeaderNumbers,
-    InsertHeaderTD,
+    InsertHeaderTerminalDifficulties,
     InsertBlockOmmers,
-    InsertTxSenders,
+    InsertTransactionSenders,
     InsertTransactions,
-    InsertTxHashNumbers,
+    InsertTransactionHashNumbers,
     InsertBlockWithdrawals,
     InsertBlockBodyIndices,
-    InsertTransactionBlock,
+    InsertTransactionBlocks,
 
-    RecoverSigners,
     GetNextTxNum,
     GetParentTD,
 }
@@ -78,15 +77,14 @@ impl Action {
             Action::InsertCanonicalHeaders => "insert canonical headers",
             Action::InsertHeaders => "insert headers",
             Action::InsertHeaderNumbers => "insert header numbers",
-            Action::InsertHeaderTD => "insert header TD",
+            Action::InsertHeaderTerminalDifficulties => "insert header TD",
             Action::InsertBlockOmmers => "insert block ommers",
-            Action::InsertTxSenders => "insert tx senders",
+            Action::InsertTransactionSenders => "insert tx senders",
             Action::InsertTransactions => "insert transactions",
-            Action::InsertTxHashNumbers => "insert tx hash numbers",
+            Action::InsertTransactionHashNumbers => "insert transaction hash numbers",
             Action::InsertBlockWithdrawals => "insert block withdrawals",
             Action::InsertBlockBodyIndices => "insert block body indices",
-            Action::InsertTransactionBlock => "insert transaction block",
-            Action::RecoverSigners => "recover signers",
+            Action::InsertTransactionBlocks => "insert transaction blocks",
             Action::GetNextTxNum => "get next tx num",
             Action::GetParentTD => "get parent TD",
         }

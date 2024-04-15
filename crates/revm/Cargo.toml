@@ -8,24 +8,40 @@ homepage.workspace = true
 repository.workspace = true
 description = "reth specific revm utilities"
 
+[lints]
+workspace = true
+
 [dependencies]
 # reth
 reth-primitives.workspace = true
 reth-interfaces.workspace = true
 reth-provider.workspace = true
-reth-revm-inspectors = { path = "./revm-inspectors" }
-reth-consensus-common = { path = "../consensus/common" }
+reth-consensus-common.workspace = true
+reth-node-api.workspace = true
+
+# fluentbase
+fluentbase-sdk.workspace = true
+fluentbase-runtime.workspace = true
+fluentbase-core.workspace = true
+fluentbase-types.workspace = true
 
 # revm
 revm.workspace = true
+revm-inspectors.workspace = true
 
 # common
 tracing.workspace = true
+auto_impl = "1.0"
+
+[dev-dependencies]
+reth-trie.workspace = true
 
 [features]
 optimism = [
-  "revm/optimism",
-  "reth-primitives/optimism",
-  "reth-consensus-common/optimism",
-  "reth-interfaces/optimism",
+    "revm/optimism",
+    "reth-primitives/optimism",
+    "reth-provider/optimism",
+    "reth-consensus-common/optimism",
+    "reth-interfaces/optimism",
 ]
+js-tracer = ["revm-inspectors/js-tracer"]

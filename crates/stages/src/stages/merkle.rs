@@ -7,13 +7,13 @@ use reth_db::{
 };
 use reth_interfaces::consensus;
 use reth_primitives::{
-    hex,
     stage::{EntitiesCheckpoint, MerkleCheckpoint, StageCheckpoint, StageId},
     trie::StoredSubNode,
     BlockNumber, GotExpected, SealedHeader, B256,
 };
 use reth_provider::{
-    DatabaseProviderRW, HeaderProvider, ProviderError, StageCheckpointReader, StageCheckpointWriter,
+    DatabaseProviderRW, HeaderProvider, ProviderError, StageCheckpointReader,
+    StageCheckpointWriter, StatsReader,
 };
 use reth_trie::{IntermediateStateRootState, StateRoot, StateRootProgress};
 use std::fmt::Debug;
@@ -21,7 +21,7 @@ use tracing::*;
 
 /// The default threshold (in number of blocks) for switching from incremental trie building
 /// of changes to whole rebuild.
-pub const MERKLE_STAGE_DEFAULT_CLEAN_THRESHOLD: u64 = 50_000;
+pub const MERKLE_STAGE_DEFAULT_CLEAN_THRESHOLD: u64 = 5_000;
 
 /// The merkle hashing stage uses input from
 /// [`AccountHashingStage`][crate::stages::AccountHashingStage] and
@@ -54,11 +54,13 @@ pub enum MerkleStage {
     },
     /// The unwind portion of the merkle stage.
     Unwind,
-
     /// Able to execute and unwind. Used for tests
     #[cfg(any(test, feature = "test-utils"))]
-    #[allow(missing_docs)]
-    Both { clean_threshold: u64 },
+    Both {
+        /// The threshold (in number of blocks) for switching from incremental trie building
+        /// of changes to whole rebuild.
+        clean_threshold: u64,
+    },
 }
 
 impl MerkleStage {
@@ -80,7 +82,7 @@ impl MerkleStage {
     /// Gets the hashing progress
     pub fn get_execution_checkpoint<DB: Database>(
         &self,
-        provider: &DatabaseProviderRW<'_, &DB>,
+        provider: &DatabaseProviderRW<DB>,
     ) -> Result<Option<MerkleCheckpoint>, StageError> {
         let buf =
             provider.get_stage_checkpoint_progress(StageId::MerkleExecute)?.unwrap_or_default();
@@ -96,7 +98,7 @@ impl MerkleStage {
     /// Saves the hashing progress
     pub fn save_execution_checkpoint<DB: Database>(
         &mut self,
-        provider: &DatabaseProviderRW<'_, &DB>,
+        provider: &DatabaseProviderRW<DB>,
         checkpoint: Option<MerkleCheckpoint>,
     ) -> Result<(), StageError> {
         let mut buf = vec![];
@@ -104,7 +106,6 @@ impl MerkleStage {
             debug!(
                 target: "sync::stages::merkle::exec",
                 last_account_key = ?checkpoint.last_account_key,
-                last_walker_key = ?hex::encode(&checkpoint.last_walker_key),
                 "Saving inner merkle checkpoint"
             );
             checkpoint.to_compact(&mut buf);
@@ -113,7 +114,6 @@ impl MerkleStage {
     }
 }
 
-#[async_trait::async_trait]
 impl<DB: Database> Stage<DB> for MerkleStage {
     /// Return the id of the stage
     fn id(&self) -> StageId {
@@ -126,9 +126,9 @@ impl<DB: Database> Stage<DB> for MerkleStage {
     }
 
     /// Execute the stage.
-    async fn execute(
+    fn execute(
         &mut self,
-        provider: &DatabaseProviderRW<'_, &DB>,
+        provider: &DatabaseProviderRW<DB>,
         input: ExecInput,
     ) -> Result<ExecOutput, StageError> {
         let threshold = match self {
@@ -163,7 +163,6 @@ impl<DB: Database> Stage<DB> for MerkleStage {
                     current = ?current_block_number,
                     target = ?to_block,
                     last_account_key = ?checkpoint.last_account_key,
-                    last_walker_key = ?hex::encode(&checkpoint.last_walker_key),
                     "Continuing inner merkle checkpoint"
                 );
 
@@ -186,13 +185,13 @@ impl<DB: Database> Stage<DB> for MerkleStage {
             }
             .unwrap_or(EntitiesCheckpoint {
                 processed: 0,
-                total: (provider.tx_ref().entries::<tables::HashedAccount>()? +
-                    provider.tx_ref().entries::<tables::HashedStorage>()?)
+                total: (provider.count_entries::<tables::HashedAccounts>()? +
+                    provider.count_entries::<tables::HashedStorages>()?)
                     as u64,
             });
 
             let tx = provider.tx_ref();
-            let progress = StateRoot::new(tx)
+            let progress = StateRoot::from_tx(tx)
                 .with_intermediate_state(checkpoint.map(IntermediateStateRootState::from))
                 .root_with_progress()
                 .map_err(|e| StageError::Fatal(Box::new(e)))?;
@@ -232,8 +231,8 @@ impl<DB: Database> Stage<DB> for MerkleStage {
                     .map_err(|e| StageError::Fatal(Box::new(e)))?;
             updates.flush(provider.tx_ref())?;
 
-            let total_hashed_entries = (provider.tx_ref().entries::<tables::HashedAccount>()? +
-                provider.tx_ref().entries::<tables::HashedStorage>()?)
+            let total_hashed_entries = (provider.count_entries::<tables::HashedAccounts>()? +
+                provider.count_entries::<tables::HashedStorages>()?)
                 as u64;
 
             let entities_checkpoint = EntitiesCheckpoint {
@@ -260,9 +259,9 @@ impl<DB: Database> Stage<DB> for MerkleStage {
     }
 
     /// Unwind the stage.
-    async fn unwind(
+    fn unwind(
         &mut self,
-        provider: &DatabaseProviderRW<'_, &DB>,
+        provider: &DatabaseProviderRW<DB>,
         input: UnwindInput,
     ) -> Result<UnwindOutput, StageError> {
         let tx = provider.tx_ref();
@@ -275,8 +274,8 @@ impl<DB: Database> Stage<DB> for MerkleStage {
         let mut entities_checkpoint =
             input.checkpoint.entities_stage_checkpoint().unwrap_or(EntitiesCheckpoint {
                 processed: 0,
-                total: (tx.entries::<tables::HashedAccount>()? +
-                    tx.entries::<tables::HashedStorage>()?) as u64,
+                total: (tx.entries::<tables::HashedAccounts>()? +
+                    tx.entries::<tables::HashedStorages>()?) as u64,
             });
 
         if input.unwind_to == 0 {
@@ -296,7 +295,7 @@ impl<DB: Database> Stage<DB> for MerkleStage {
             let (block_root, updates) = StateRoot::incremental_root_with_updates(tx, range)
                 .map_err(|e| StageError::Fatal(Box::new(e)))?;
 
-            // Validate the calulated state root
+            // Validate the calculated state root
             let target = provider
                 .header_by_number(input.unwind_to)?
                 .ok_or_else(|| ProviderError::HeaderNotFound(input.unwind_to.into()))?;
@@ -338,15 +337,11 @@ fn validate_state_root(
 mod tests {
     use super::*;
     use crate::test_utils::{
-        stage_test_suite_ext, ExecuteStageTestRunner, StageTestRunner, TestRunnerError,
-        TestTransaction, UnwindStageTestRunner,
+        stage_test_suite_ext, ExecuteStageTestRunner, StageTestRunner, StorageKind,
+        TestRunnerError, TestStageDB, UnwindStageTestRunner,
     };
     use assert_matches::assert_matches;
-    use reth_db::{
-        cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO},
-        tables,
-        transaction::{DbTx, DbTxMut},
-    };
+    use reth_db::cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO};
     use reth_interfaces::test_utils::{
         generators,
         generators::{
@@ -354,8 +349,9 @@ mod tests {
         },
     };
     use reth_primitives::{
-        keccak256, stage::StageUnitCheckpoint, SealedBlock, StorageEntry, B256, U256,
+        keccak256, stage::StageUnitCheckpoint, SealedBlock, StaticFileSegment, StorageEntry, U256,
     };
+    use reth_provider::providers::StaticFileWriter;
     use reth_trie::test_utils::{state_root, state_root_prehashed};
     use std::collections::BTreeMap;
 
@@ -393,8 +389,8 @@ mod tests {
                 done: true
             }) if block_number == previous_stage && processed == total &&
                 total == (
-                    runner.tx.table::<tables::HashedAccount>().unwrap().len() +
-                    runner.tx.table::<tables::HashedStorage>().unwrap().len()
+                    runner.db.table::<tables::HashedAccounts>().unwrap().len() +
+                    runner.db.table::<tables::HashedStorages>().unwrap().len()
                 ) as u64
         );
 
@@ -433,8 +429,8 @@ mod tests {
                 done: true
             }) if block_number == previous_stage && processed == total &&
                 total == (
-                    runner.tx.table::<tables::HashedAccount>().unwrap().len() +
-                    runner.tx.table::<tables::HashedStorage>().unwrap().len()
+                    runner.db.table::<tables::HashedAccounts>().unwrap().len() +
+                    runner.db.table::<tables::HashedStorages>().unwrap().len()
                 ) as u64
         );
 
@@ -443,21 +439,21 @@ mod tests {
     }
 
     struct MerkleTestRunner {
-        tx: TestTransaction,
+        db: TestStageDB,
         clean_threshold: u64,
     }
 
     impl Default for MerkleTestRunner {
         fn default() -> Self {
-            Self { tx: TestTransaction::default(), clean_threshold: 10000 }
+            Self { db: TestStageDB::default(), clean_threshold: 10000 }
         }
     }
 
     impl StageTestRunner for MerkleTestRunner {
         type S = MerkleStage;
 
-        fn tx(&self) -> &TestTransaction {
-            &self.tx
+        fn db(&self) -> &TestStageDB {
+            &self.db
         }
 
         fn stage(&self) -> Self::S {
@@ -465,7 +461,6 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
     impl ExecuteStageTestRunner for MerkleTestRunner {
         type Seed = Vec<SealedBlock>;
 
@@ -475,17 +470,33 @@ mod tests {
             let end = input.target();
             let mut rng = generators::rng();
 
+            let mut preblocks = vec![];
+            if stage_progress > 0 {
+                preblocks.append(&mut random_block_range(
+                    &mut rng,
+                    0..=stage_progress - 1,
+                    B256::ZERO,
+                    0..1,
+                ));
+                self.db.insert_blocks(preblocks.iter(), StorageKind::Static)?;
+            }
+
             let num_of_accounts = 31;
             let accounts = random_contract_account_range(&mut rng, &mut (0..num_of_accounts))
                 .into_iter()
                 .collect::<BTreeMap<_, _>>();
 
-            self.tx.insert_accounts_and_storages(
+            self.db.insert_accounts_and_storages(
                 accounts.iter().map(|(addr, acc)| (*addr, (*acc, std::iter::empty()))),
             )?;
 
-            let SealedBlock { header, body, ommers, withdrawals } =
-                random_block(&mut rng, stage_progress, None, Some(0), None);
+            let SealedBlock { header, body, ommers, withdrawals } = random_block(
+                &mut rng,
+                stage_progress,
+                preblocks.last().map(|b| b.hash()),
+                Some(0),
+                None,
+            );
             let mut header = header.unseal();
 
             header.state_root = state_root(
@@ -499,7 +510,8 @@ mod tests {
             let head_hash = sealed_head.hash();
             let mut blocks = vec![sealed_head];
             blocks.extend(random_block_range(&mut rng, start..=end, head_hash, 0..3));
-            self.tx.insert_blocks(blocks.iter(), None)?;
+            let last_block = blocks.last().cloned().unwrap();
+            self.db.insert_blocks(blocks.iter(), StorageKind::Static)?;
 
             let (transitions, final_state) = random_changeset_range(
                 &mut rng,
@@ -509,14 +521,14 @@ mod tests {
                 0..256,
             );
             // add block changeset from block 1.
-            self.tx.insert_changesets(transitions, Some(start))?;
-            self.tx.insert_accounts_and_storages(final_state)?;
+            self.db.insert_changesets(transitions, Some(start))?;
+            self.db.insert_accounts_and_storages(final_state)?;
 
             // Calculate state root
-            let root = self.tx.query(|tx| {
+            let root = self.db.query(|tx| {
                 let mut accounts = BTreeMap::default();
-                let mut accounts_cursor = tx.cursor_read::<tables::HashedAccount>()?;
-                let mut storage_cursor = tx.cursor_dup_read::<tables::HashedStorage>()?;
+                let mut accounts_cursor = tx.cursor_read::<tables::HashedAccounts>()?;
+                let mut storage_cursor = tx.cursor_dup_read::<tables::HashedStorages>()?;
                 for entry in accounts_cursor.walk_range(..)? {
                     let (key, account) = entry?;
                     let mut storage_entries = Vec::new();
@@ -536,12 +548,16 @@ mod tests {
                 Ok(state_root_prehashed(accounts.into_iter()))
             })?;
 
-            let last_block_number = end;
-            self.tx.commit(|tx| {
-                let mut last_header = tx.get::<tables::Headers>(last_block_number)?.unwrap();
-                last_header.state_root = root;
-                tx.put::<tables::Headers>(last_block_number, last_header)
-            })?;
+            let static_file_provider = self.db.factory.static_file_provider();
+            let mut writer =
+                static_file_provider.latest_writer(StaticFileSegment::Headers).unwrap();
+            let mut last_header = last_block.header().clone();
+            last_header.state_root = root;
+
+            let hash = last_header.hash_slow();
+            writer.prune_headers(1).unwrap();
+            writer.append_header(last_header, U256::ZERO, hash).unwrap();
+            writer.commit().unwrap();
 
             Ok(blocks)
         }
@@ -565,25 +581,25 @@ mod tests {
         fn before_unwind(&self, input: UnwindInput) -> Result<(), TestRunnerError> {
             let target_block = input.unwind_to + 1;
 
-            self.tx
+            self.db
                 .commit(|tx| {
                     let mut storage_changesets_cursor =
-                        tx.cursor_dup_read::<tables::StorageChangeSet>().unwrap();
+                        tx.cursor_dup_read::<tables::StorageChangeSets>().unwrap();
                     let mut storage_cursor =
-                        tx.cursor_dup_write::<tables::HashedStorage>().unwrap();
+                        tx.cursor_dup_write::<tables::HashedStorages>().unwrap();
 
                     let mut tree: BTreeMap<B256, BTreeMap<B256, U256>> = BTreeMap::new();
 
                     let mut rev_changeset_walker =
                         storage_changesets_cursor.walk_back(None).unwrap();
-                    while let Some((tid_address, entry)) =
+                    while let Some((bn_address, entry)) =
                         rev_changeset_walker.next().transpose().unwrap()
                     {
-                        if tid_address.block_number() < target_block {
+                        if bn_address.block_number() < target_block {
                             break
                         }
 
-                        tree.entry(keccak256(tid_address.address()))
+                        tree.entry(keccak256(bn_address.address()))
                             .or_default()
                             .insert(keccak256(entry.key), entry.value);
                     }
@@ -604,7 +620,7 @@ mod tests {
                     }
 
                     let mut changeset_cursor =
-                        tx.cursor_dup_write::<tables::AccountChangeSet>().unwrap();
+                        tx.cursor_dup_write::<tables::AccountChangeSets>().unwrap();
                     let mut rev_changeset_walker = changeset_cursor.walk_back(None).unwrap();
 
                     while let Some((block_number, account_before_tx)) =
@@ -615,13 +631,13 @@ mod tests {
                         }
 
                         if let Some(acc) = account_before_tx.info {
-                            tx.put::<tables::HashedAccount>(
+                            tx.put::<tables::HashedAccounts>(
                                 keccak256(account_before_tx.address),
                                 acc,
                             )
                             .unwrap();
                         } else {
-                            tx.delete::<tables::HashedAccount>(
+                            tx.delete::<tables::HashedAccounts>(
                                 keccak256(account_before_tx.address),
                                 None,
                             )

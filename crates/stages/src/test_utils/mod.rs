@@ -1,16 +1,19 @@
-#![allow(unused)]
 use reth_primitives::stage::StageId;
 
+#[cfg(test)]
 mod macros;
+#[cfg(test)]
 pub(crate) use macros::*;
 
+#[cfg(test)]
 mod runner;
+#[cfg(test)]
 pub(crate) use runner::{
     ExecuteStageTestRunner, StageTestRunner, TestRunnerError, UnwindStageTestRunner,
 };
 
 mod test_db;
-pub use test_db::TestTransaction;
+pub use test_db::{StorageKind, TestStageDB};
 
 mod stage;
 pub use stage::TestStage;

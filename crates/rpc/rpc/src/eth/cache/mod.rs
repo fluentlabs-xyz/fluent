@@ -1,13 +1,18 @@
 //! Async caching support for eth RPC
 
 use futures::{future::Either, Stream, StreamExt};
-use reth_interfaces::{provider::ProviderError, RethResult};
-use reth_primitives::{Block, Receipt, SealedBlock, TransactionSigned, B256};
+use reth_interfaces::provider::{ProviderError, ProviderResult};
+use reth_node_api::ConfigureEvmEnv;
+use reth_primitives::{
+    Block, BlockHashOrNumber, BlockWithSenders, Receipt, SealedBlock, SealedBlockWithSenders,
+    TransactionSigned, TransactionSignedEcRecovered, B256,
+};
 use reth_provider::{
-    BlockReader, BlockSource, CanonStateNotification, EvmEnvProvider, StateProviderFactory,
+    BlockReader, CanonStateNotification, Chain, EvmEnvProvider, StateProviderFactory,
+    TransactionVariant,
 };
 use reth_tasks::{TaskSpawner, TokioTaskExecutor};
-use revm::primitives::{BlockEnv, CfgEnv};
+use revm::primitives::{BlockEnv, CfgEnv, CfgEnvWithHandlerCfg, SpecId};
 use schnellru::{ByLength, Limiter};
 use std::{
     future::Future,
@@ -30,27 +35,30 @@ mod multi_consumer;
 pub use multi_consumer::MultiConsumerLruCache;
 
 /// The type that can send the response to a requested [Block]
-type BlockResponseSender = oneshot::Sender<RethResult<Option<Block>>>;
+type BlockTransactionsResponseSender =
+    oneshot::Sender<ProviderResult<Option<Vec<TransactionSigned>>>>;
 
-/// The type that can send the response to a requested [Block]
-type BlockTransactionsResponseSender = oneshot::Sender<RethResult<Option<Vec<TransactionSigned>>>>;
+/// The type that can send the response to a requested [BlockWithSenders]
+type BlockWithSendersResponseSender = oneshot::Sender<ProviderResult<Option<BlockWithSenders>>>;
 
 /// The type that can send the response to the requested receipts of a block.
-type ReceiptsResponseSender = oneshot::Sender<RethResult<Option<Vec<Receipt>>>>;
+type ReceiptsResponseSender = oneshot::Sender<ProviderResult<Option<Arc<Vec<Receipt>>>>>;
 
 /// The type that can send the response to a requested env
-type EnvResponseSender = oneshot::Sender<RethResult<(CfgEnv, BlockEnv)>>;
+type EnvResponseSender = oneshot::Sender<ProviderResult<(CfgEnvWithHandlerCfg, BlockEnv)>>;
 
 type BlockLruCache<L> = MultiConsumerLruCache<
     B256,
-    Block,
+    BlockWithSenders,
     L,
-    Either<BlockResponseSender, BlockTransactionsResponseSender>,
+    Either<BlockWithSendersResponseSender, BlockTransactionsResponseSender>,
 >;
 
-type ReceiptsLruCache<L> = MultiConsumerLruCache<B256, Vec<Receipt>, L, ReceiptsResponseSender>;
+type ReceiptsLruCache<L> =
+    MultiConsumerLruCache<B256, Arc<Vec<Receipt>>, L, ReceiptsResponseSender>;
 
-type EnvLruCache<L> = MultiConsumerLruCache<B256, (CfgEnv, BlockEnv), L, EnvResponseSender>;
+type EnvLruCache<L> =
+    MultiConsumerLruCache<B256, (CfgEnvWithHandlerCfg, BlockEnv), L, EnvResponseSender>;
 
 /// Provides async access to cached eth data
 ///
@@ -63,14 +71,15 @@ pub struct EthStateCache {
 
 impl EthStateCache {
     /// Creates and returns both [EthStateCache] frontend and the memory bound service.
-    fn create<Provider, Tasks>(
+    fn create<Provider, Tasks, EvmConfig>(
         provider: Provider,
         action_task_spawner: Tasks,
+        evm_config: EvmConfig,
         max_blocks: u32,
         max_receipts: u32,
         max_envs: u32,
         max_concurrent_db_operations: usize,
-    ) -> (Self, EthStateCacheService<Provider, Tasks>) {
+    ) -> (Self, EthStateCacheService<Provider, Tasks, EvmConfig>) {
         let (to_service, rx) = unbounded_channel();
         let service = EthStateCacheService {
             provider,
@@ -81,6 +90,7 @@ impl EthStateCache {
             action_rx: UnboundedReceiverStream::new(rx),
             action_task_spawner,
             rate_limiter: Arc::new(Semaphore::new(max_concurrent_db_operations)),
+            evm_config,
         };
         let cache = EthStateCache { to_service };
         (cache, service)
@@ -90,31 +100,39 @@ impl EthStateCache {
     /// [tokio::spawn].
     ///
     /// See also [Self::spawn_with]
-    pub fn spawn<Provider>(provider: Provider, config: EthStateCacheConfig) -> Self
+    pub fn spawn<Provider, EvmConfig>(
+        provider: Provider,
+        config: EthStateCacheConfig,
+        evm_config: EvmConfig,
+    ) -> Self
     where
         Provider: StateProviderFactory + BlockReader + EvmEnvProvider + Clone + Unpin + 'static,
+        EvmConfig: ConfigureEvmEnv + 'static,
     {
-        Self::spawn_with(provider, config, TokioTaskExecutor::default())
+        Self::spawn_with(provider, config, TokioTaskExecutor::default(), evm_config)
     }
 
     /// Creates a new async LRU backed cache service task and spawns it to a new task via the given
     /// spawner.
     ///
     /// The cache is memory limited by the given max bytes values.
-    pub fn spawn_with<Provider, Tasks>(
+    pub fn spawn_with<Provider, Tasks, EvmConfig>(
         provider: Provider,
         config: EthStateCacheConfig,
         executor: Tasks,
+        evm_config: EvmConfig,
     ) -> Self
     where
         Provider: StateProviderFactory + BlockReader + EvmEnvProvider + Clone + Unpin + 'static,
         Tasks: TaskSpawner + Clone + 'static,
+        EvmConfig: ConfigureEvmEnv + 'static,
     {
         let EthStateCacheConfig { max_blocks, max_receipts, max_envs, max_concurrent_db_requests } =
             config;
         let (this, service) = Self::create(
             provider,
             executor.clone(),
+            evm_config,
             max_blocks,
             max_receipts,
             max_envs,
@@ -127,39 +145,56 @@ impl EthStateCache {
     /// Requests the [Block] for the block hash
     ///
     /// Returns `None` if the block does not exist.
-    pub(crate) async fn get_block(&self, block_hash: B256) -> RethResult<Option<Block>> {
+    pub async fn get_block(&self, block_hash: B256) -> ProviderResult<Option<Block>> {
         let (response_tx, rx) = oneshot::channel();
-        let _ = self.to_service.send(CacheAction::GetBlock { block_hash, response_tx });
-        rx.await.map_err(|_| ProviderError::CacheServiceUnavailable)?
+        let _ = self.to_service.send(CacheAction::GetBlockWithSenders { block_hash, response_tx });
+        let block_with_senders_res =
+            rx.await.map_err(|_| ProviderError::CacheServiceUnavailable)?;
+
+        if let Ok(Some(block_with_senders)) = block_with_senders_res {
+            Ok(Some(block_with_senders.block))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Requests the [Block] for the block hash, sealed with the given block hash.
     ///
     /// Returns `None` if the block does not exist.
-    pub(crate) async fn get_sealed_block(
-        &self,
-        block_hash: B256,
-    ) -> RethResult<Option<SealedBlock>> {
+    pub async fn get_sealed_block(&self, block_hash: B256) -> ProviderResult<Option<SealedBlock>> {
         Ok(self.get_block(block_hash).await?.map(|block| block.seal(block_hash)))
     }
 
     /// Requests the transactions of the [Block]
     ///
     /// Returns `None` if the block does not exist.
-    pub(crate) async fn get_block_transactions(
+    pub async fn get_block_transactions(
         &self,
         block_hash: B256,
-    ) -> RethResult<Option<Vec<TransactionSigned>>> {
+    ) -> ProviderResult<Option<Vec<TransactionSigned>>> {
         let (response_tx, rx) = oneshot::channel();
         let _ = self.to_service.send(CacheAction::GetBlockTransactions { block_hash, response_tx });
         rx.await.map_err(|_| ProviderError::CacheServiceUnavailable)?
     }
 
-    /// Fetches both transactions and receipts for the given block hash.
-    pub(crate) async fn get_transactions_and_receipts(
+    /// Requests the ecrecovered transactions of the [Block]
+    ///
+    /// Returns `None` if the block does not exist.
+    pub async fn get_block_transactions_ecrecovered(
         &self,
         block_hash: B256,
-    ) -> RethResult<Option<(Vec<TransactionSigned>, Vec<Receipt>)>> {
+    ) -> ProviderResult<Option<Vec<TransactionSignedEcRecovered>>> {
+        Ok(self
+            .get_block_with_senders(block_hash)
+            .await?
+            .map(|block| block.into_transactions_ecrecovered().collect()))
+    }
+
+    /// Fetches both transactions and receipts for the given block hash.
+    pub async fn get_transactions_and_receipts(
+        &self,
+        block_hash: B256,
+    ) -> ProviderResult<Option<(Vec<TransactionSigned>, Arc<Vec<Receipt>>)>> {
         let transactions = self.get_block_transactions(block_hash);
         let receipts = self.get_receipts(block_hash);
 
@@ -168,20 +203,45 @@ impl EthStateCache {
         Ok(transactions.zip(receipts))
     }
 
+    /// Requests the  [BlockWithSenders] for the block hash
+    ///
+    /// Returns `None` if the block does not exist.
+    pub async fn get_block_with_senders(
+        &self,
+        block_hash: B256,
+    ) -> ProviderResult<Option<BlockWithSenders>> {
+        let (response_tx, rx) = oneshot::channel();
+        let _ = self.to_service.send(CacheAction::GetBlockWithSenders { block_hash, response_tx });
+        rx.await.map_err(|_| ProviderError::CacheServiceUnavailable)?
+    }
+
+    /// Requests the  [SealedBlockWithSenders] for the block hash
+    ///
+    /// Returns `None` if the block does not exist.
+    pub async fn get_sealed_block_with_senders(
+        &self,
+        block_hash: B256,
+    ) -> ProviderResult<Option<SealedBlockWithSenders>> {
+        Ok(self.get_block_with_senders(block_hash).await?.map(|block| block.seal(block_hash)))
+    }
+
     /// Requests the [Receipt] for the block hash
     ///
     /// Returns `None` if the block was not found.
-    pub(crate) async fn get_receipts(&self, block_hash: B256) -> RethResult<Option<Vec<Receipt>>> {
+    pub async fn get_receipts(
+        &self,
+        block_hash: B256,
+    ) -> ProviderResult<Option<Arc<Vec<Receipt>>>> {
         let (response_tx, rx) = oneshot::channel();
         let _ = self.to_service.send(CacheAction::GetReceipts { block_hash, response_tx });
         rx.await.map_err(|_| ProviderError::CacheServiceUnavailable)?
     }
 
     /// Fetches both receipts and block for the given block hash.
-    pub(crate) async fn get_block_and_receipts(
+    pub async fn get_block_and_receipts(
         &self,
         block_hash: B256,
-    ) -> RethResult<Option<(SealedBlock, Vec<Receipt>)>> {
+    ) -> ProviderResult<Option<(SealedBlock, Arc<Vec<Receipt>>)>> {
         let block = self.get_sealed_block(block_hash);
         let receipts = self.get_receipts(block_hash);
 
@@ -194,7 +254,10 @@ impl EthStateCache {
     ///
     /// Returns an error if the corresponding header (required for populating the envs) was not
     /// found.
-    pub(crate) async fn get_evm_env(&self, block_hash: B256) -> RethResult<(CfgEnv, BlockEnv)> {
+    pub async fn get_evm_env(
+        &self,
+        block_hash: B256,
+    ) -> ProviderResult<(CfgEnvWithHandlerCfg, BlockEnv)> {
         let (response_tx, rx) = oneshot::channel();
         let _ = self.to_service.send(CacheAction::GetEnv { block_hash, response_tx });
         rx.await.map_err(|_| ProviderError::CacheServiceUnavailable)?
@@ -220,13 +283,14 @@ impl EthStateCache {
 pub(crate) struct EthStateCacheService<
     Provider,
     Tasks,
+    EvmConfig,
     LimitBlocks = ByLength,
     LimitReceipts = ByLength,
     LimitEnvs = ByLength,
 > where
-    LimitBlocks: Limiter<B256, Block>,
-    LimitReceipts: Limiter<B256, Vec<Receipt>>,
-    LimitEnvs: Limiter<B256, (CfgEnv, BlockEnv)>,
+    LimitBlocks: Limiter<B256, BlockWithSenders>,
+    LimitReceipts: Limiter<B256, Arc<Vec<Receipt>>>,
+    LimitEnvs: Limiter<B256, (CfgEnvWithHandlerCfg, BlockEnv)>,
 {
     /// The type used to lookup data from disk
     provider: Provider,
@@ -244,24 +308,28 @@ pub(crate) struct EthStateCacheService<
     action_task_spawner: Tasks,
     /// Rate limiter
     rate_limiter: Arc<Semaphore>,
+    /// The type that determines how to configure the EVM.
+    evm_config: EvmConfig,
 }
 
-impl<Provider, Tasks> EthStateCacheService<Provider, Tasks>
+impl<Provider, Tasks, EvmConfig> EthStateCacheService<Provider, Tasks, EvmConfig>
 where
     Provider: StateProviderFactory + BlockReader + EvmEnvProvider + Clone + Unpin + 'static,
     Tasks: TaskSpawner + Clone + 'static,
+    EvmConfig: ConfigureEvmEnv + 'static,
 {
-    fn on_new_block(&mut self, block_hash: B256, res: RethResult<Option<Block>>) {
+    fn on_new_block(&mut self, block_hash: B256, res: ProviderResult<Option<BlockWithSenders>>) {
         if let Some(queued) = self.full_block_cache.remove(&block_hash) {
             // send the response to queued senders
             for tx in queued {
                 match tx {
-                    Either::Left(block_tx) => {
-                        let _ = block_tx.send(res.clone());
+                    Either::Left(block_with_senders) => {
+                        let _ = block_with_senders.send(res.clone());
                     }
                     Either::Right(transaction_tx) => {
                         let _ = transaction_tx.send(
-                            res.clone().map(|maybe_block| maybe_block.map(|block| block.body)),
+                            res.clone()
+                                .map(|maybe_block| maybe_block.map(|block| block.block.body)),
                         );
                     }
                 }
@@ -274,7 +342,11 @@ where
         }
     }
 
-    fn on_new_receipts(&mut self, block_hash: B256, res: RethResult<Option<Vec<Receipt>>>) {
+    fn on_new_receipts(
+        &mut self,
+        block_hash: B256,
+        res: ProviderResult<Option<Arc<Vec<Receipt>>>>,
+    ) {
         if let Some(queued) = self.receipts_cache.remove(&block_hash) {
             // send the response to queued senders
             for tx in queued {
@@ -288,6 +360,38 @@ where
         }
     }
 
+    fn on_reorg_block(&mut self, block_hash: B256, res: ProviderResult<Option<BlockWithSenders>>) {
+        if let Some(queued) = self.full_block_cache.remove(&block_hash) {
+            // send the response to queued senders
+            for tx in queued {
+                match tx {
+                    Either::Left(block_with_senders) => {
+                        let _ = block_with_senders.send(res.clone());
+                    }
+                    Either::Right(transaction_tx) => {
+                        let _ = transaction_tx.send(
+                            res.clone()
+                                .map(|maybe_block| maybe_block.map(|block| block.block.body)),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    fn on_reorg_receipts(
+        &mut self,
+        block_hash: B256,
+        res: ProviderResult<Option<Arc<Vec<Receipt>>>>,
+    ) {
+        if let Some(queued) = self.receipts_cache.remove(&block_hash) {
+            // send the response to queued senders
+            for tx in queued {
+                let _ = tx.send(res.clone());
+            }
+        }
+    }
+
     fn update_cached_metrics(&self) {
         self.full_block_cache.update_cached_metrics();
         self.receipts_cache.update_cached_metrics();
@@ -295,10 +399,11 @@ where
     }
 }
 
-impl<Provider, Tasks> Future for EthStateCacheService<Provider, Tasks>
+impl<Provider, Tasks, EvmConfig> Future for EthStateCacheService<Provider, Tasks, EvmConfig>
 where
     Provider: StateProviderFactory + BlockReader + EvmEnvProvider + Clone + Unpin + 'static,
     Tasks: TaskSpawner + Clone + 'static,
+    EvmConfig: ConfigureEvmEnv + 'static,
 {
     type Output = ();
 
@@ -312,8 +417,7 @@ where
                 }
                 Some(action) => {
                     match action {
-                        CacheAction::GetBlock { block_hash, response_tx } => {
-                            // check if block is cached
+                        CacheAction::GetBlockWithSenders { block_hash, response_tx } => {
                             if let Some(block) = this.full_block_cache.get(&block_hash).cloned() {
                                 let _ = response_tx.send(Ok(Some(block)));
                                 continue
@@ -329,10 +433,14 @@ where
                                     let _permit = rate_limiter.acquire().await;
                                     // Only look in the database to prevent situations where we
                                     // looking up the tree is blocking
-                                    let res = provider
-                                        .find_block_by_hash(block_hash, BlockSource::Database);
-                                    let _ = action_tx
-                                        .send(CacheAction::BlockResult { block_hash, res });
+                                    let block_sender = provider.block_with_senders(
+                                        BlockHashOrNumber::Hash(block_hash),
+                                        TransactionVariant::WithHash,
+                                    );
+                                    let _ = action_tx.send(CacheAction::BlockWithSendersResult {
+                                        block_hash,
+                                        res: block_sender,
+                                    });
                                 }));
                             }
                         }
@@ -353,10 +461,14 @@ where
                                     let _permit = rate_limiter.acquire().await;
                                     // Only look in the database to prevent situations where we
                                     // looking up the tree is blocking
-                                    let res = provider
-                                        .find_block_by_hash(block_hash, BlockSource::Database);
-                                    let _ = action_tx
-                                        .send(CacheAction::BlockResult { block_hash, res });
+                                    let res = provider.block_with_senders(
+                                        BlockHashOrNumber::Hash(block_hash),
+                                        TransactionVariant::WithHash,
+                                    );
+                                    let _ = action_tx.send(CacheAction::BlockWithSendersResult {
+                                        block_hash,
+                                        res,
+                                    });
                                 }));
                             }
                         }
@@ -375,7 +487,10 @@ where
                                 this.action_task_spawner.spawn_blocking(Box::pin(async move {
                                     // Acquire permit
                                     let _permit = rate_limiter.acquire().await;
-                                    let res = provider.receipts_by_block(block_hash.into());
+                                    let res = provider
+                                        .receipts_by_block(block_hash.into())
+                                        .map(|maybe_receipts| maybe_receipts.map(Arc::new));
+
                                     let _ = action_tx
                                         .send(CacheAction::ReceiptsResult { block_hash, res });
                                 }));
@@ -394,13 +509,22 @@ where
                                 let provider = this.provider.clone();
                                 let action_tx = this.action_tx.clone();
                                 let rate_limiter = this.rate_limiter.clone();
+                                let evm_config = this.evm_config.clone();
                                 this.action_task_spawner.spawn_blocking(Box::pin(async move {
                                     // Acquire permit
                                     let _permit = rate_limiter.acquire().await;
-                                    let mut cfg = CfgEnv::default();
+                                    let mut cfg = CfgEnvWithHandlerCfg::new_with_spec_id(
+                                        CfgEnv::default(),
+                                        SpecId::LATEST,
+                                    );
                                     let mut block_env = BlockEnv::default();
                                     let res = provider
-                                        .fill_env_at(&mut cfg, &mut block_env, block_hash.into())
+                                        .fill_env_at(
+                                            &mut cfg,
+                                            &mut block_env,
+                                            block_hash.into(),
+                                            evm_config,
+                                        )
                                         .map(|_| (cfg, block_env));
                                     let _ = action_tx.send(CacheAction::EnvResult {
                                         block_hash,
@@ -409,12 +533,20 @@ where
                                 }));
                             }
                         }
-                        CacheAction::BlockResult { block_hash, res } => {
-                            this.on_new_block(block_hash, res);
-                        }
                         CacheAction::ReceiptsResult { block_hash, res } => {
                             this.on_new_receipts(block_hash, res);
                         }
+                        CacheAction::BlockWithSendersResult { block_hash, res } => match res {
+                            Ok(Some(block_with_senders)) => {
+                                this.on_new_block(block_hash, Ok(Some(block_with_senders)));
+                            }
+                            Ok(None) => {
+                                this.on_new_block(block_hash, Ok(None));
+                            }
+                            Err(e) => {
+                                this.on_new_block(block_hash, Err(e));
+                            }
+                        },
                         CacheAction::EnvResult { block_hash, res } => {
                             let res = *res;
                             if let Some(queued) = this.evm_env_cache.remove(&block_hash) {
@@ -429,17 +561,31 @@ where
                                 this.evm_env_cache.insert(block_hash, data);
                             }
                         }
-                        CacheAction::CacheNewCanonicalChain { blocks, receipts } => {
-                            for block in blocks {
-                                this.on_new_block(block.hash, Ok(Some(block.unseal())));
+                        CacheAction::CacheNewCanonicalChain { chain_change } => {
+                            for block in chain_change.blocks {
+                                this.on_new_block(block.hash(), Ok(Some(block.unseal())));
                             }
 
-                            for block_receipts in receipts {
+                            for block_receipts in chain_change.receipts {
                                 this.on_new_receipts(
                                     block_receipts.block_hash,
-                                    Ok(Some(
+                                    Ok(Some(Arc::new(
                                         block_receipts.receipts.into_iter().flatten().collect(),
-                                    )),
+                                    ))),
+                                );
+                            }
+                        }
+                        CacheAction::RemoveReorgedChain { chain_change } => {
+                            for block in chain_change.blocks {
+                                this.on_reorg_block(block.hash(), Ok(Some(block.unseal())));
+                            }
+
+                            for block_receipts in chain_change.receipts {
+                                this.on_reorg_receipts(
+                                    block_receipts.block_hash,
+                                    Ok(Some(Arc::new(
+                                        block_receipts.receipts.into_iter().flatten().collect(),
+                                    ))),
                                 );
                             }
                         }
@@ -453,14 +599,15 @@ where
 
 /// All message variants sent through the channel
 enum CacheAction {
-    GetBlock { block_hash: B256, response_tx: BlockResponseSender },
+    GetBlockWithSenders { block_hash: B256, response_tx: BlockWithSendersResponseSender },
     GetBlockTransactions { block_hash: B256, response_tx: BlockTransactionsResponseSender },
     GetEnv { block_hash: B256, response_tx: EnvResponseSender },
     GetReceipts { block_hash: B256, response_tx: ReceiptsResponseSender },
-    BlockResult { block_hash: B256, res: RethResult<Option<Block>> },
-    ReceiptsResult { block_hash: B256, res: RethResult<Option<Vec<Receipt>>> },
-    EnvResult { block_hash: B256, res: Box<RethResult<(CfgEnv, BlockEnv)>> },
-    CacheNewCanonicalChain { blocks: Vec<SealedBlock>, receipts: Vec<BlockReceipts> },
+    BlockWithSendersResult { block_hash: B256, res: ProviderResult<Option<BlockWithSenders>> },
+    ReceiptsResult { block_hash: B256, res: ProviderResult<Option<Arc<Vec<Receipt>>>> },
+    EnvResult { block_hash: B256, res: Box<ProviderResult<(CfgEnvWithHandlerCfg, BlockEnv)>> },
+    CacheNewCanonicalChain { chain_change: ChainChange },
+    RemoveReorgedChain { chain_change: ChainChange },
 }
 
 struct BlockReceipts {
@@ -468,32 +615,48 @@ struct BlockReceipts {
     receipts: Vec<Option<Receipt>>,
 }
 
+/// A change of the canonical chain
+struct ChainChange {
+    blocks: Vec<SealedBlockWithSenders>,
+    receipts: Vec<BlockReceipts>,
+}
+
+impl ChainChange {
+    fn new(chain: Arc<Chain>) -> Self {
+        let (blocks, receipts): (Vec<_>, Vec<_>) = chain
+            .blocks_and_receipts()
+            .map(|(block, receipts)| {
+                let block_receipts =
+                    BlockReceipts { block_hash: block.block.hash(), receipts: receipts.clone() };
+                (block.clone(), block_receipts)
+            })
+            .unzip();
+        Self { blocks, receipts }
+    }
+}
+
 /// Awaits for new chain events and directly inserts them into the cache so they're available
 /// immediately before they need to be fetched from disk.
+///
+/// Reorged blocks are removed from the cache.
 pub async fn cache_new_blocks_task<St>(eth_state_cache: EthStateCache, mut events: St)
 where
     St: Stream<Item = CanonStateNotification> + Unpin + 'static,
 {
     while let Some(event) = events.next().await {
+        if let Some(reverted) = event.reverted() {
+            let chain_change = ChainChange::new(reverted);
+
+            let _ =
+                eth_state_cache.to_service.send(CacheAction::RemoveReorgedChain { chain_change });
+        }
+
         if let Some(committed) = event.committed() {
-            // we're only interested in new committed blocks
-            let (blocks, state) = committed.inner();
-
-            let blocks = blocks.iter().map(|(_, block)| block.block.clone()).collect::<Vec<_>>();
-
-            // also cache all receipts of the blocks
-            let mut receipts = Vec::with_capacity(blocks.len());
-            for block in &blocks {
-                let block_receipts = BlockReceipts {
-                    block_hash: block.hash,
-                    receipts: state.receipts_by_block(block.number).to_vec(),
-                };
-                receipts.push(block_receipts);
-            }
+            let chain_change = ChainChange::new(committed);
 
             let _ = eth_state_cache
                 .to_service
-                .send(CacheAction::CacheNewCanonicalChain { blocks, receipts });
+                .send(CacheAction::CacheNewCanonicalChain { chain_change });
         }
     }
 }

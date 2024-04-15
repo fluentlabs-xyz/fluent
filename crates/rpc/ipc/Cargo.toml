@@ -6,9 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = """
-IPC support for reth
-"""
+description = "IPC support for reth"
+
+[lints]
+workspace = true
 
 [dependencies]
 
@@ -20,7 +21,7 @@ tokio-util = { workspace = true, features = ["codec"] }
 tokio-stream.workspace = true
 async-trait.workspace = true
 pin-project.workspace = true
-tower = "0.4"
+tower.workspace = true
 
 # misc
 jsonrpsee = { workspace = true, features = ["server", "client"] }

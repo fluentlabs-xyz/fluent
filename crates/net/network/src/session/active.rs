@@ -4,6 +4,7 @@ use crate::{
     message::{NewBlockMessage, PeerMessage, PeerRequest, PeerResponse, PeerResponseResult},
     session::{
         config::INITIAL_REQUEST_TIMEOUT,
+        conn::EthRlpxConnection,
         handle::{ActiveSessionMessage, SessionCommand},
         SessionId,
     },
@@ -11,16 +12,14 @@ use crate::{
 use core::sync::atomic::Ordering;
 use fnv::FnvHashMap;
 use futures::{stream::Fuse, SinkExt, StreamExt};
-use reth_ecies::stream::ECIESStream;
 use reth_eth_wire::{
     capability::Capabilities,
     errors::{EthHandshakeError, EthStreamError, P2PStreamError},
     message::{EthBroadcastMessage, RequestPair},
-    DisconnectReason, EthMessage, EthStream, P2PStream,
+    DisconnectP2P, DisconnectReason, EthMessage,
 };
 use reth_interfaces::p2p::error::RequestError;
 use reth_metrics::common::mpsc::MeteredPollSender;
-use reth_net_common::bandwidth_meter::MeteredStream;
 use reth_primitives::PeerId;
 use std::{
     collections::VecDeque,
@@ -32,7 +31,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    net::TcpStream,
     sync::{mpsc::error::TrySendError, oneshot},
     time::Interval,
 };
@@ -51,11 +49,6 @@ const SAMPLE_IMPACT: f64 = 0.1;
 /// Amount of RTTs before timeout
 const TIMEOUT_SCALING: u32 = 3;
 
-/// The type of the underlying peer network connection.
-// This type is boxed because the underlying stream is ~6KB,
-// mostly coming from `P2PStream`'s `snap::Encoder` (2072), and `ECIESStream` (3600).
-pub type PeerConnection = Box<EthStream<P2PStream<ECIESStream<MeteredStream<TcpStream>>>>>;
-
 /// The type that advances an established session by listening for incoming messages (from local
 /// node or read from connection) and emitting events back to the
 /// [`SessionManager`](super::SessionManager).
@@ -65,12 +58,12 @@ pub type PeerConnection = Box<EthStream<P2PStream<ECIESStream<MeteredStream<TcpS
 ///    - incoming _internal_ requests/broadcasts via the request/command channel
 ///    - incoming requests/broadcasts _from remote_ via the connection
 ///    - responses for handled ETH requests received from the remote peer.
-#[allow(unused)]
+#[allow(dead_code)]
 pub(crate) struct ActiveSession {
     /// Keeps track of request ids.
     pub(crate) next_id: u64,
     /// The underlying connection.
-    pub(crate) conn: PeerConnection,
+    pub(crate) conn: EthRlpxConnection,
     /// Identifier of the node we're connected to.
     pub(crate) remote_peer_id: PeerId,
     /// The address we're connected to.
@@ -166,7 +159,7 @@ impl ActiveSession {
                             // request was already timed out internally
                             self.update_request_timeout(req.timestamp, Instant::now());
                         }
-                    };
+                    }
                 } else {
                     // we received a response to a request we never sent
                     self.on_bad_message();
@@ -299,7 +292,7 @@ impl ActiveSession {
                 self.queued_outgoing.push_back(msg.into());
             }
             Err(err) => {
-                debug!(target: "net", ?err, "Failed to respond to received request");
+                debug!(target: "net", %err, "Failed to respond to received request");
             }
         }
     }
@@ -414,7 +407,7 @@ impl ActiveSession {
                 self.poll_disconnect(cx)
             }
             Err(err) => {
-                debug!(target: "net::session", ?err, remote_peer_id=?self.remote_peer_id, "could not send disconnect");
+                debug!(target: "net::session", %err, remote_peer_id=?self.remote_peer_id, "could not send disconnect");
                 self.close_on_error(err, cx)
             }
         }
@@ -563,7 +556,7 @@ impl Future for ActiveSession {
                         OutgoingMessage::Broadcast(msg) => this.conn.start_send_broadcast(msg),
                     };
                     if let Err(err) = res {
-                        debug!(target: "net::session", ?err,  remote_peer_id=?this.remote_peer_id, "failed to send message");
+                        debug!(target: "net::session", %err, remote_peer_id=?this.remote_peer_id, "failed to send message");
                         // notify the manager
                         return this.close_on_error(err, cx)
                     }
@@ -620,7 +613,7 @@ impl Future for ActiveSession {
                                         progress = true;
                                     }
                                     OnIncomingMessageOutcome::BadMessage { error, message } => {
-                                        debug!(target: "net::session", ?error, msg=?message,  remote_peer_id=?this.remote_peer_id, "received invalid protocol message");
+                                        debug!(target: "net::session", %error, msg=?message, remote_peer_id=?this.remote_peer_id, "received invalid protocol message");
                                         return this.close_on_error(error, cx)
                                     }
                                     OnIncomingMessageOutcome::NoCapacity(msg) => {
@@ -631,7 +624,7 @@ impl Future for ActiveSession {
                                 }
                             }
                             Err(err) => {
-                                debug!(target: "net::session", ?err, remote_peer_id=?this.remote_peer_id, "failed to receive message");
+                                debug!(target: "net::session", %err, remote_peer_id=?this.remote_peer_id, "failed to receive message");
                                 return this.close_on_error(err, cx)
                             }
                         }
@@ -667,7 +660,7 @@ pub(crate) struct ReceivedRequest {
     /// Receiver half of the channel that's supposed to receive the proper response.
     rx: PeerResponse,
     /// Timestamp when we read this msg from the wire.
-    #[allow(unused)]
+    #[allow(dead_code)]
     received: Instant,
 }
 
@@ -711,7 +704,7 @@ impl InflightRequest {
 enum OnIncomingMessageOutcome {
     /// Message successfully handled.
     Ok,
-    /// Message is considered to be in violation fo the protocol
+    /// Message is considered to be in violation of the protocol
     BadMessage { error: EthStreamError, message: EthMessage },
     /// Currently no capacity to handle the message
     NoCapacity(ActiveSessionMessage),
@@ -767,23 +760,25 @@ fn calculate_new_timeout(current_timeout: Duration, estimated_rtt: Duration) -> 
 mod tests {
     use super::*;
     use crate::session::{
-        config::{INITIAL_REQUEST_TIMEOUT, PROTOCOL_BREACH_REQUEST_TIMEOUT},
-        handle::PendingSessionEvent,
+        config::PROTOCOL_BREACH_REQUEST_TIMEOUT, handle::PendingSessionEvent,
         start_pending_incoming_session,
     };
-    use reth_ecies::util::pk2id;
+    use reth_ecies::stream::ECIESStream;
     use reth_eth_wire::{
-        GetBlockBodies, HelloMessage, Status, StatusBuilder, UnauthedEthStream, UnauthedP2PStream,
+        EthStream, GetBlockBodies, HelloMessageWithProtocols, P2PStream, Status, StatusBuilder,
+        UnauthedEthStream, UnauthedP2PStream,
     };
-    use reth_net_common::bandwidth_meter::BandwidthMeter;
-    use reth_primitives::{ForkFilter, Hardfork, MAINNET};
+    use reth_net_common::bandwidth_meter::{BandwidthMeter, MeteredStream};
+    use reth_primitives::{pk2id, ForkFilter, Hardfork, MAINNET};
     use secp256k1::{SecretKey, SECP256K1};
-    use std::time::Duration;
-    use tokio::{net::TcpListener, sync::mpsc};
+    use tokio::{
+        net::{TcpListener, TcpStream},
+        sync::mpsc,
+    };
 
     /// Returns a testing `HelloMessage` and new secretkey
-    fn eth_hello(server_key: &SecretKey) -> HelloMessage {
-        HelloMessage::builder(pk2id(&server_key.public_key(SECP256K1))).build()
+    fn eth_hello(server_key: &SecretKey) -> HelloMessageWithProtocols {
+        HelloMessageWithProtocols::builder(pk2id(&server_key.public_key(SECP256K1))).build()
     }
 
     struct SessionBuilder {
@@ -793,7 +788,7 @@ mod tests {
         to_sessions: Vec<mpsc::Sender<SessionCommand>>,
         secret_key: SecretKey,
         local_peer_id: PeerId,
-        hello: HelloMessage,
+        hello: HelloMessageWithProtocols,
         status: Status,
         fork_filter: ForkFilter,
         next_id: usize,
@@ -855,6 +850,7 @@ mod tests {
                 self.hello.clone(),
                 self.status,
                 self.fork_filter.clone(),
+                Default::default(),
             ));
 
             let mut stream = ReceiverStream::new(pending_sessions_rx);
@@ -925,8 +921,8 @@ mod tests {
                 secret_key,
                 local_peer_id,
                 status: StatusBuilder::default().build(),
-                fork_filter: Hardfork::Frontier
-                    .fork_filter(&MAINNET)
+                fork_filter: MAINNET
+                    .hardfork_fork_filter(Hardfork::Frontier)
                     .expect("The Frontier fork filter should exist on mainnet"),
                 bandwidth_meter: BandwidthMeter::default(),
             }

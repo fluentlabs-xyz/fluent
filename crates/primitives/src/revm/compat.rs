@@ -3,20 +3,16 @@ use crate::{
     Account, Address, Log as RethLog, TransactionKind, KECCAK_EMPTY, U256,
 };
 use revm::{
-    interpreter::gas::initial_tx_gas,
     primitives::{MergeSpec, ShanghaiSpec},
 };
+use revm::gas::validate_initial_tx_gas;
+use revm_primitives::POSEIDON_EMPTY;
 
 /// Check equality between Revm and Reth `Log`s.
-pub fn is_log_equal(revm_log: &Log, reth_log: &crate::Log) -> bool {
+pub fn is_log_equal(revm_log: &Log, reth_log: &RethLog) -> bool {
     revm_log.address == reth_log.address &&
-        revm_log.data == reth_log.data &&
-        revm_log.topics == reth_log.topics
-}
-
-/// Converts a Revm `Log` into a Reth `Log`.
-pub fn into_reth_log(log: Log) -> RethLog {
-    RethLog { address: log.address, topics: log.topics, data: log.data }
+        revm_log.data.data == reth_log.data &&
+        revm_log.topics() == reth_log.topics
 }
 
 /// Converts a Revm [`AccountInfo`] into a Reth [`Account`].
@@ -24,10 +20,12 @@ pub fn into_reth_log(log: Log) -> RethLog {
 /// Sets `bytecode_hash` to `None` if `code_hash` is [`KECCAK_EMPTY`].
 pub fn into_reth_acc(revm_acc: AccountInfo) -> Account {
     let code_hash = revm_acc.code_hash;
+    let rwasm_code_hash = revm_acc.rwasm_code_hash;
     Account {
         balance: revm_acc.balance,
         nonce: revm_acc.nonce,
         bytecode_hash: (code_hash != KECCAK_EMPTY).then_some(code_hash),
+        rwasm_hash: (revm_acc.rwasm_code_hash != POSEIDON_EMPTY).then_some(rwasm_code_hash),
     }
 }
 
@@ -39,7 +37,9 @@ pub fn into_revm_acc(reth_acc: Account) -> AccountInfo {
         balance: reth_acc.balance,
         nonce: reth_acc.nonce,
         code_hash: reth_acc.bytecode_hash.unwrap_or(KECCAK_EMPTY),
+        rwasm_code_hash: reth_acc.rwasm_hash.unwrap_or(POSEIDON_EMPTY),
         code: None,
+        rwasm_code: None,
     }
 }
 
@@ -54,8 +54,8 @@ pub fn calculate_intrinsic_gas_after_merge(
     is_shanghai: bool,
 ) -> u64 {
     if is_shanghai {
-        initial_tx_gas::<ShanghaiSpec>(input, kind.is_create(), access_list)
+        validate_initial_tx_gas::<ShanghaiSpec>(input, kind.is_create(), access_list)
     } else {
-        initial_tx_gas::<MergeSpec>(input, kind.is_create(), access_list)
+        validate_initial_tx_gas::<MergeSpec>(input, kind.is_create(), access_list)
     }
 }

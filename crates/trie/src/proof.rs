@@ -1,18 +1,17 @@
 use crate::{
-    account::EthAccount,
     hashed_cursor::{HashedCursorFactory, HashedStorageCursor},
     node_iter::{AccountNode, AccountNodeIter, StorageNode, StorageNodeIter},
     prefix_set::PrefixSetMut,
-    trie_cursor::{AccountTrieCursor, StorageTrieCursor},
+    trie_cursor::{DatabaseAccountTrieCursor, DatabaseStorageTrieCursor},
     walker::TrieWalker,
-    StateRootError, StorageRootError,
 };
 use alloy_rlp::{BufMut, Encodable};
 use reth_db::{tables, transaction::DbTx};
+use reth_interfaces::trie::{StateRootError, StorageRootError};
 use reth_primitives::{
     constants::EMPTY_ROOT_HASH,
     keccak256,
-    trie::{AccountProof, HashBuilder, Nibbles, StorageProof},
+    trie::{AccountProof, HashBuilder, Nibbles, StorageProof, TrieAccount},
     Address, B256,
 };
 
@@ -52,7 +51,8 @@ where
         let mut account_proof = AccountProof::new(address);
 
         let hashed_account_cursor = self.hashed_cursor_factory.hashed_account_cursor()?;
-        let trie_cursor = AccountTrieCursor::new(self.tx.cursor_read::<tables::AccountsTrie>()?);
+        let trie_cursor =
+            DatabaseAccountTrieCursor::new(self.tx.cursor_read::<tables::AccountsTrie>()?);
 
         // Create the walker.
         let mut prefix_set = PrefixSetMut::default();
@@ -61,7 +61,7 @@ where
 
         // Create a hash builder to rebuild the root node since it is not available in the database.
         let mut hash_builder =
-            HashBuilder::default().with_proof_retainer(Vec::from([target_nibbles.clone()]));
+            HashBuilder::default().with_proof_retainer(Vec::from([target_nibbles]));
 
         let mut account_rlp = Vec::with_capacity(128);
         let mut account_node_iter = AccountNodeIter::new(walker, hashed_account_cursor);
@@ -81,7 +81,7 @@ where
                     };
 
                     account_rlp.clear();
-                    let account = EthAccount::from(account).with_storage_root(storage_root);
+                    let account = TrieAccount::from((account, storage_root));
                     account.encode(&mut account_rlp as &mut dyn BufMut);
 
                     hash_builder.add_leaf(Nibbles::unpack(hashed_address), &account_rlp);
@@ -120,7 +120,7 @@ where
 
         let target_nibbles = proofs.iter().map(|p| p.nibbles.clone()).collect::<Vec<_>>();
         let prefix_set = PrefixSetMut::from(target_nibbles.clone()).freeze();
-        let trie_cursor = StorageTrieCursor::new(
+        let trie_cursor = DatabaseStorageTrieCursor::new(
             self.tx.cursor_dup_read::<tables::StoragesTrie>()?,
             hashed_address,
         );
@@ -165,11 +165,12 @@ where
 mod tests {
     use super::*;
     use crate::StateRoot;
+    use alloy_chains::Chain;
     use once_cell::sync::Lazy;
-    use reth_db::{database::Database, test_utils::create_test_rw_db};
+    use reth_db::database::Database;
     use reth_interfaces::RethResult;
-    use reth_primitives::{Account, Bytes, Chain, ChainSpec, StorageEntry, HOLESKY, MAINNET, U256};
-    use reth_provider::{HashingWriter, ProviderFactory};
+    use reth_primitives::{Account, Bytes, ChainSpec, StorageEntry, HOLESKY, MAINNET, U256};
+    use reth_provider::{test_utils::create_test_provider_factory, HashingWriter, ProviderFactory};
     use std::{str::FromStr, sync::Arc};
 
     /*
@@ -185,7 +186,7 @@ mod tests {
     */
     static TEST_SPEC: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         ChainSpec {
-            chain: Chain::Id(12345),
+            chain: Chain::from_id(12345),
             genesis: serde_json::from_str(include_str!("../testdata/proof-genesis.json"))
                 .expect("Can't deserialize test genesis json"),
             ..Default::default()
@@ -197,14 +198,19 @@ mod tests {
         path.into_iter().map(Bytes::from_str).collect::<Result<Vec<_>, _>>().unwrap()
     }
 
-    fn insert_genesis<DB: Database>(db: DB, chain_spec: Arc<ChainSpec>) -> RethResult<()> {
-        let provider_factory = ProviderFactory::new(db, chain_spec.clone());
+    fn insert_genesis<DB: Database>(
+        provider_factory: &ProviderFactory<DB>,
+        chain_spec: Arc<ChainSpec>,
+    ) -> RethResult<()> {
         let mut provider = provider_factory.provider_rw()?;
 
         // Hash accounts and insert them into hashing table.
         let genesis = chain_spec.genesis();
-        let alloc_accounts =
-            genesis.alloc.clone().into_iter().map(|(addr, account)| (addr, Some(account.into())));
+        let alloc_accounts = genesis
+            .alloc
+            .clone()
+            .into_iter()
+            .map(|(addr, account)| (addr, Some(Account::from_genesis_account(account))));
         provider.insert_account_for_hashing(alloc_accounts).unwrap();
 
         let alloc_storage = genesis.alloc.clone().into_iter().filter_map(|(addr, account)| {
@@ -220,7 +226,7 @@ mod tests {
         });
         provider.insert_storage_for_hashing(alloc_storage)?;
 
-        let (_, updates) = StateRoot::new(provider.tx_ref())
+        let (_, updates) = StateRoot::from_tx(provider.tx_ref())
             .root_with_updates()
             .map_err(Into::<reth_db::DatabaseError>::into)?;
         updates.flush(provider.tx_mut())?;
@@ -233,10 +239,8 @@ mod tests {
     #[test]
     fn testspec_proofs() {
         // Create test database and insert genesis accounts.
-        let db = create_test_rw_db();
-        insert_genesis(db.clone(), TEST_SPEC.clone()).unwrap();
-
-        let tx = db.tx().unwrap();
+        let factory = create_test_provider_factory();
+        insert_genesis(&factory, TEST_SPEC.clone()).unwrap();
 
         let data = Vec::from([
             (
@@ -277,10 +281,11 @@ mod tests {
             ),
         ]);
 
+        let provider = factory.provider().unwrap();
         for (target, expected_proof) in data {
             let target = Address::from_str(target).unwrap();
-            let account_proof = Proof::new(&tx).account_proof(target, &[]).unwrap();
-            pretty_assertions::assert_eq!(
+            let account_proof = Proof::new(provider.tx_ref()).account_proof(target, &[]).unwrap();
+            similar_asserts::assert_eq!(
                 account_proof.proof,
                 expected_proof,
                 "proof for {target:?} does not match"
@@ -291,14 +296,14 @@ mod tests {
     #[test]
     fn testspec_empty_storage_proof() {
         // Create test database and insert genesis accounts.
-        let db = create_test_rw_db();
-        insert_genesis(db.clone(), TEST_SPEC.clone()).unwrap();
-
-        let tx = db.tx().unwrap();
+        let factory = create_test_provider_factory();
+        insert_genesis(&factory, TEST_SPEC.clone()).unwrap();
 
         let target = Address::from_str("0x1ed9b1dd266b607ee278726d324b855a093394a6").unwrap();
         let slots = Vec::from([B256::with_last_byte(1), B256::with_last_byte(3)]);
-        let account_proof = Proof::new(&tx).account_proof(target, &slots).unwrap();
+
+        let provider = factory.provider().unwrap();
+        let account_proof = Proof::new(provider.tx_ref()).account_proof(target, &slots).unwrap();
         assert_eq!(account_proof.storage_root, EMPTY_ROOT_HASH, "expected empty storage root");
 
         assert_eq!(slots.len(), account_proof.storage_proofs.len());
@@ -310,8 +315,8 @@ mod tests {
     #[test]
     fn mainnet_genesis_account_proof() {
         // Create test database and insert genesis accounts.
-        let db = create_test_rw_db();
-        insert_genesis(db.clone(), MAINNET.clone()).unwrap();
+        let factory = create_test_provider_factory();
+        insert_genesis(&factory, MAINNET.clone()).unwrap();
 
         // Address from mainnet genesis allocation.
         // keccak256 - `0xcf67b71c90b0d523dd5004cf206f325748da347685071b34812e21801f5270c4`
@@ -326,16 +331,16 @@ mod tests {
             "0xf8719f20b71c90b0d523dd5004cf206f325748da347685071b34812e21801f5270c4b84ff84d80890ad78ebc5ac6200000a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
         ]);
 
-        let tx = db.tx().unwrap();
-        let account_proof = Proof::new(&tx).account_proof(target, &[]).unwrap();
-        pretty_assertions::assert_eq!(account_proof.proof, expected_account_proof);
+        let provider = factory.provider().unwrap();
+        let account_proof = Proof::new(provider.tx_ref()).account_proof(target, &[]).unwrap();
+        similar_asserts::assert_eq!(account_proof.proof, expected_account_proof);
     }
 
     #[test]
     fn mainnet_genesis_account_proof_nonexistent() {
         // Create test database and insert genesis accounts.
-        let db = create_test_rw_db();
-        insert_genesis(db.clone(), MAINNET.clone()).unwrap();
+        let factory = create_test_provider_factory();
+        insert_genesis(&factory, MAINNET.clone()).unwrap();
 
         // Address that does not exist in mainnet genesis allocation.
         // keccak256 - `0x18f415ffd7f66bb1924d90f0e82fb79ca8c6d8a3473cd9a95446a443b9db1761`
@@ -348,18 +353,16 @@ mod tests {
             "0xf901d1a0b7c55b381eb205712a2f5d1b7d6309ac725da79ab159cb77dc2783af36e6596da0b3b48aa390e0f3718b486ccc32b01682f92819e652315c1629058cd4d9bb1545a0e3c0cc68af371009f14416c27e17f05f4f696566d2ba45362ce5711d4a01d0e4a0bad1e085e431b510508e2a9e3712633a414b3fe6fd358635ab206021254c1e10a0f8407fe8d5f557b9e012d52e688139bd932fec40d48630d7ff4204d27f8cc68da08c6ca46eff14ad4950e65469c394ca9d6b8690513b1c1a6f91523af00082474c80a0630c034178cb1290d4d906edf28688804d79d5e37a3122c909adab19ac7dc8c5a059f6d047c5d1cc75228c4517a537763cb410c38554f273e5448a53bc3c7166e7a0d842f53ce70c3aad1e616fa6485d3880d15c936fcc306ec14ae35236e5a60549a0218ee2ee673c69b4e1b953194b2568157a69085b86e4f01644fa06ab472c6cf9a016a35a660ea496df7c0da646378bfaa9562f401e42a5c2fe770b7bbe22433585a0dd0fbbe227a4d50868cdbb3107573910fd97131ea8d835bef81d91a2fc30b175a06aafa3d78cf179bf055bd5ec629be0ff8352ce0aec9125a4d75be3ee7eb71f10a01d6817ef9f64fcbb776ff6df0c83138dcd2001bd752727af3e60f4afc123d8d58080"
         ]);
 
-        let tx = db.tx().unwrap();
-        let account_proof = Proof::new(&tx).account_proof(target, &[]).unwrap();
-        pretty_assertions::assert_eq!(account_proof.proof, expected_account_proof);
+        let provider = factory.provider().unwrap();
+        let account_proof = Proof::new(provider.tx_ref()).account_proof(target, &[]).unwrap();
+        similar_asserts::assert_eq!(account_proof.proof, expected_account_proof);
     }
 
     #[test]
     fn holesky_deposit_contract_proof() {
         // Create test database and insert genesis accounts.
-        let db = create_test_rw_db();
-        insert_genesis(db.clone(), HOLESKY.clone()).unwrap();
-
-        let tx = db.tx().unwrap();
+        let factory = create_test_provider_factory();
+        insert_genesis(&factory, HOLESKY.clone()).unwrap();
 
         let target = Address::from_str("0x4242424242424242424242424242424242424242").unwrap();
         // existent
@@ -435,7 +438,8 @@ mod tests {
             ])
         };
 
-        let account_proof = Proof::new(&tx).account_proof(target, &slots).unwrap();
-        pretty_assertions::assert_eq!(account_proof, expected);
+        let provider = factory.provider().unwrap();
+        let account_proof = Proof::new(provider.tx_ref()).account_proof(target, &slots).unwrap();
+        similar_asserts::assert_eq!(account_proof, expected);
     }
 }

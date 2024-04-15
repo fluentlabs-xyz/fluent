@@ -8,9 +8,12 @@ homepage.workspace = true
 repository.workspace = true
 description = "reth metrics utilities"
 
+[lints]
+workspace = true
+
 [dependencies]
 # reth
-reth-metrics-derive = { path = "./metrics-derive" }
+reth-metrics-derive.workspace = true
 
 # metrics
 metrics.workspace = true

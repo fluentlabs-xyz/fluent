@@ -1,4 +1,4 @@
-pub use reth_rpc_types::NodeRecord;
+pub use reth_rpc_types::{NodeRecord, NodeRecordParseError};
 
 // <https://github.com/ledgerwatch/erigon/blob/610e648dc43ec8cd6563313e28f06f534a9091b3/params/bootnodes.go>
 
@@ -62,7 +62,7 @@ pub fn holesky_nodes() -> Vec<NodeRecord> {
 }
 
 /// Parses all the nodes
-fn parse_nodes(nodes: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<NodeRecord> {
+pub fn parse_nodes(nodes: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<NodeRecord> {
     nodes.into_iter().map(|s| s.as_ref().parse().unwrap()).collect()
 }
 
@@ -74,8 +74,7 @@ mod tests {
     };
 
     use super::*;
-    use alloy_rlp::{Decodable, Encodable};
-    use bytes::BytesMut;
+    use alloy_rlp::Decodable;
     use rand::{thread_rng, Rng, RngCore};
     use reth_rpc_types::PeerId;
 
@@ -126,10 +125,7 @@ mod tests {
                 id: rng.gen(),
             };
 
-            let mut buf = BytesMut::new();
-            record.encode(&mut buf);
-
-            let decoded = NodeRecord::decode(&mut buf.as_ref()).unwrap();
+            let decoded = NodeRecord::decode(&mut alloy_rlp::encode(record).as_slice()).unwrap();
             assert_eq!(record, decoded);
         }
     }
@@ -147,10 +143,7 @@ mod tests {
                 id: rng.gen(),
             };
 
-            let mut buf = BytesMut::new();
-            record.encode(&mut buf);
-
-            let decoded = NodeRecord::decode(&mut buf.as_ref()).unwrap();
+            let decoded = NodeRecord::decode(&mut alloy_rlp::encode(record).as_slice()).unwrap();
             assert_eq!(record, decoded);
         }
     }

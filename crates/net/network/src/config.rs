@@ -5,20 +5,23 @@ use crate::{
     import::{BlockImport, ProofOfStakeBlockImport},
     peers::PeersConfig,
     session::SessionsConfig,
+    transactions::TransactionsManagerConfig,
     NetworkHandle, NetworkManager,
 };
 use reth_discv4::{Discv4Config, Discv4ConfigBuilder, DEFAULT_DISCOVERY_ADDRESS};
+use reth_discv5::config::OPSTACK;
 use reth_dns_discovery::DnsDiscoveryConfig;
-use reth_ecies::util::pk2id;
-use reth_eth_wire::{HelloMessage, Status};
+use reth_eth_wire::{HelloMessage, HelloMessageWithProtocols, Status};
 use reth_primitives::{
-    mainnet_nodes, sepolia_nodes, ChainSpec, ForkFilter, Head, NodeRecord, PeerId, MAINNET,
+    mainnet_nodes, pk2id, sepolia_nodes, Chain, ChainSpec, ForkFilter, Head, NamedChain,
+    NodeRecord, PeerId, MAINNET,
 };
 use reth_provider::{BlockReader, HeaderProvider};
 use reth_tasks::{TaskSpawner, TokioTaskExecutor};
 use secp256k1::SECP256K1;
 use std::{collections::HashSet, net::SocketAddr, sync::Arc};
 // re-export for convenience
+use crate::protocol::{IntoRlpxSubProtocol, RlpxSubProtocols};
 pub use secp256k1::SecretKey;
 
 /// Convenience function to create a new random [`SecretKey`]
@@ -42,6 +45,8 @@ pub struct NetworkConfig<C> {
     pub dns_discovery_config: Option<DnsDiscoveryConfig>,
     /// How to set up discovery.
     pub discovery_v4_config: Option<Discv4Config>,
+    /// How to set up discovery version 5.
+    pub discovery_v5_config: Option<reth_discv5::Config>,
     /// Address to use for discovery
     pub discovery_addr: SocketAddr,
     /// Address to listen for incoming connections
@@ -68,15 +73,19 @@ pub struct NetworkConfig<C> {
     /// The `Status` message to send to peers at the beginning.
     pub status: Status,
     /// Sets the hello message for the p2p handshake in RLPx
-    pub hello_message: HelloMessage,
+    pub hello_message: HelloMessageWithProtocols,
+    /// Additional protocols to announce and handle in RLPx
+    pub extra_protocols: RlpxSubProtocols,
     /// Whether to disable transaction gossip
     pub tx_gossip_disabled: bool,
+    /// How to instantiate transactions manager.
+    pub transactions_manager_config: TransactionsManagerConfig,
     /// Optimism Network Config
     #[cfg(feature = "optimism")]
     pub optimism_network_config: OptimismNetworkConfig,
 }
 
-/// Optimmism Network Config
+/// Optimism Network Config
 #[cfg(feature = "optimism")]
 #[derive(Debug, Clone, Default)]
 pub struct OptimismNetworkConfig {
@@ -102,6 +111,54 @@ impl<C> NetworkConfig<C> {
     /// Sets the config to use for the discovery v4 protocol.
     pub fn set_discovery_v4(mut self, discovery_config: Discv4Config) -> Self {
         self.discovery_v4_config = Some(discovery_config);
+        self
+    }
+
+    /// Sets the config to use for the discovery v5 protocol, with help of the
+    /// [`reth_discv5::ConfigBuilder`].
+    /// ```
+    /// use reth_network::NetworkConfigBuilder;
+    /// use secp256k1::{rand::thread_rng, SecretKey};
+    ///
+    /// let sk = SecretKey::new(&mut thread_rng());
+    /// let network_config = NetworkConfigBuilder::new(sk).build(());
+    /// let fork_id = network_config.status.forkid;
+    /// let network_config = network_config
+    ///     .discovery_v5_with_config_builder(|builder| builder.fork(b"eth", fork_id).build());
+    /// ```
+
+    pub fn discovery_v5_with_config_builder(
+        self,
+        f: impl FnOnce(reth_discv5::ConfigBuilder) -> reth_discv5::Config,
+    ) -> Self {
+        let rlpx_port = self.listener_addr.port();
+        let chain = self.chain_spec.chain;
+        let fork_id = self.status.forkid;
+        let boot_nodes = self.boot_nodes.clone();
+
+        let mut builder =
+            reth_discv5::Config::builder(rlpx_port).add_unsigned_boot_nodes(boot_nodes.into_iter()); // todo: store discv5 peers in separate file
+
+        if chain.is_optimism() {
+            builder = builder.fork(OPSTACK, fork_id)
+        }
+
+        if chain == Chain::optimism_mainnet() || chain == Chain::base_mainnet() {
+            builder = builder.add_optimism_mainnet_boot_nodes()
+        } else if chain == Chain::from_named(NamedChain::OptimismSepolia) ||
+            chain == Chain::from_named(NamedChain::BaseSepolia)
+        {
+            builder = builder.add_optimism_sepolia_boot_nodes()
+        }
+
+        self.set_discovery_v5(f(builder))
+    }
+
+    /// Sets the config to use for the discovery v5 protocol.
+
+    pub fn set_discovery_v5(mut self, discv5_config: reth_discv5::Config) -> Self {
+        self.discovery_v5_config = Some(discv5_config);
+        self.discovery_addr = self.discovery_v5_config.as_ref().unwrap().discovery_socket();
         self
     }
 
@@ -132,14 +189,15 @@ where
 /// Builder for [`NetworkConfig`](struct.NetworkConfig.html).
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub struct NetworkConfigBuilder {
     /// The node's secret key, from which the node's identity is derived.
     secret_key: SecretKey,
     /// How to configure discovery over DNS.
     dns_discovery_config: Option<DnsDiscoveryConfig>,
-    /// How to set up discovery.
+    /// How to set up discovery version 4.
     discovery_v4_builder: Option<Discv4ConfigBuilder>,
+    /// Whether to enable discovery version 5. Disabled by default.
+    enable_discovery_v5: bool,
     /// All boot nodes to start network discovery with.
     boot_nodes: HashSet<NodeRecord>,
     /// Address to use for discovery
@@ -158,11 +216,19 @@ pub struct NetworkConfigBuilder {
     #[serde(skip)]
     executor: Option<Box<dyn TaskSpawner>>,
     /// Sets the hello message for the p2p handshake in RLPx
-    hello_message: Option<HelloMessage>,
+    hello_message: Option<HelloMessageWithProtocols>,
+    /// The executor to use for spawning tasks.
+    #[serde(skip)]
+    extra_protocols: RlpxSubProtocols,
     /// Head used to start set for the fork filter and status.
     head: Option<Head>,
     /// Whether tx gossip is disabled
     tx_gossip_disabled: bool,
+    /// The block importer type
+    #[serde(skip)]
+    block_import: Option<Box<dyn BlockImport>>,
+    /// How to instantiate transactions manager.
+    transactions_manager_config: TransactionsManagerConfig,
     /// Optimism Network Config Builder
     #[cfg(feature = "optimism")]
     optimism_network_config: OptimismNetworkConfigBuilder,
@@ -186,6 +252,7 @@ impl NetworkConfigBuilder {
             secret_key,
             dns_discovery_config: Some(Default::default()),
             discovery_v4_builder: Some(Default::default()),
+            enable_discovery_v5: false,
             boot_nodes: Default::default(),
             discovery_addr: None,
             listener_addr: None,
@@ -195,10 +262,13 @@ impl NetworkConfigBuilder {
             network_mode: Default::default(),
             executor: None,
             hello_message: None,
+            extra_protocols: Default::default(),
             head: None,
             tx_gossip_disabled: false,
+            block_import: None,
             #[cfg(feature = "optimism")]
             optimism_network_config: OptimismNetworkConfigBuilder::default(),
+            transactions_manager_config: Default::default(),
         }
     }
 
@@ -239,7 +309,7 @@ impl NetworkConfigBuilder {
     /// builder.hello_message(HelloMessage::builder(peer_id).build());
     /// # }
     /// ```
-    pub fn hello_message(mut self, hello_message: HelloMessage) -> Self {
+    pub fn hello_message(mut self, hello_message: HelloMessageWithProtocols) -> Self {
         self.hello_message = Some(hello_message);
         self
     }
@@ -261,6 +331,11 @@ impl NetworkConfigBuilder {
     /// Sets a custom config for how sessions are handled.
     pub fn sessions_config(mut self, config: SessionsConfig) -> Self {
         self.sessions_config = Some(config);
+        self
+    }
+
+    pub fn transactions_manager_config(mut self, config: TransactionsManagerConfig) -> Self {
+        self.transactions_manager_config = config;
         self
     }
 
@@ -306,8 +381,15 @@ impl NetworkConfigBuilder {
     }
 
     /// Sets the discv4 config to use.
+    //
     pub fn discovery(mut self, builder: Discv4ConfigBuilder) -> Self {
         self.discovery_v4_builder = Some(builder);
+        self
+    }
+
+    /// Allows discv5 discovery.
+    pub fn discovery_v5(mut self) -> Self {
+        self.enable_discovery_v5 = true;
         self
     }
 
@@ -359,6 +441,12 @@ impl NetworkConfigBuilder {
         self
     }
 
+    /// Enable the Discv5 discovery.
+    pub fn enable_discv5_discovery(mut self) -> Self {
+        self.enable_discovery_v5 = true;
+        self
+    }
+
     /// Disable the DNS discovery if the given condition is true.
     pub fn disable_dns_discovery_if(self, disable: bool) -> Self {
         if disable {
@@ -377,9 +465,21 @@ impl NetworkConfigBuilder {
         }
     }
 
+    /// Adds a new additional protocol to the RLPx sub-protocol list.
+    pub fn add_rlpx_sub_protocol(mut self, protocol: impl IntoRlpxSubProtocol) -> Self {
+        self.extra_protocols.push(protocol);
+        self
+    }
+
     /// Sets whether tx gossip is disabled.
     pub fn disable_tx_gossip(mut self, disable_tx_gossip: bool) -> Self {
         self.tx_gossip_disabled = disable_tx_gossip;
+        self
+    }
+
+    /// Sets the block import type.
+    pub fn block_import(mut self, block_import: Box<dyn BlockImport>) -> Self {
+        self.block_import = Some(block_import);
         self
     }
 
@@ -388,6 +488,14 @@ impl NetworkConfigBuilder {
     pub fn sequencer_endpoint(mut self, endpoint: Option<String>) -> Self {
         self.optimism_network_config.sequencer_endpoint = endpoint;
         self
+    }
+
+    /// Convenience function for creating a [NetworkConfig] with a noop provider that does nothing.
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn build_with_noop_provider(
+        self,
+    ) -> NetworkConfig<reth_provider::test_utils::NoopProvider> {
+        self.build(reth_provider::test_utils::NoopProvider::default())
     }
 
     /// Consumes the type and creates the actual [`NetworkConfig`]
@@ -402,6 +510,7 @@ impl NetworkConfigBuilder {
             secret_key,
             mut dns_discovery_config,
             discovery_v4_builder,
+            enable_discovery_v5: _,
             boot_nodes,
             discovery_addr,
             listener_addr,
@@ -411,10 +520,13 @@ impl NetworkConfigBuilder {
             network_mode,
             executor,
             hello_message,
+            extra_protocols,
             head,
             tx_gossip_disabled,
+            block_import,
             #[cfg(feature = "optimism")]
                 optimism_network_config: OptimismNetworkConfigBuilder { sequencer_endpoint },
+            transactions_manager_config,
         } = self;
 
         let listener_addr = listener_addr.unwrap_or(DEFAULT_DISCOVERY_ADDRESS);
@@ -454,20 +566,23 @@ impl NetworkConfigBuilder {
             boot_nodes,
             dns_discovery_config,
             discovery_v4_config: discovery_v4_builder.map(|builder| builder.build()),
+            discovery_v5_config: None,
             discovery_addr: discovery_addr.unwrap_or(DEFAULT_DISCOVERY_ADDRESS),
             listener_addr,
             peers_config: peers_config.unwrap_or_default(),
             sessions_config: sessions_config.unwrap_or_default(),
             chain_spec,
-            block_import: Box::<ProofOfStakeBlockImport>::default(),
+            block_import: block_import.unwrap_or_else(|| Box::<ProofOfStakeBlockImport>::default()),
             network_mode,
             executor: executor.unwrap_or_else(|| Box::<TokioTaskExecutor>::default()),
             status,
             hello_message,
+            extra_protocols,
             fork_filter,
             tx_gossip_disabled,
             #[cfg(feature = "optimism")]
             optimism_network_config: OptimismNetworkConfig { sequencer_endpoint },
+            transactions_manager_config,
         }
     }
 }
@@ -501,7 +616,7 @@ mod tests {
     use super::*;
     use rand::thread_rng;
     use reth_dns_discovery::tree::LinkEntry;
-    use reth_primitives::{Chain, ForkHash};
+    use reth_primitives::ForkHash;
     use reth_provider::test_utils::NoopProvider;
     use std::collections::BTreeMap;
 

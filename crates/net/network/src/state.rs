@@ -12,6 +12,8 @@ use crate::{
     peers::{PeerAction, PeersManager},
     FetchClient,
 };
+use rand::seq::SliceRandom;
+
 use reth_eth_wire::{
     capability::Capabilities, BlockHashNumber, DisconnectReason, NewBlockHashes, Status,
 };
@@ -59,8 +61,6 @@ pub struct NetworkState<C> {
     client: C,
     /// Network discovery.
     discovery: Discovery,
-    /// The genesis hash of the network we're on
-    genesis_hash: B256,
     /// The type that handles requests.
     ///
     /// The fetcher streams RLPx related requests on a per-peer basis to this type. This type will
@@ -77,7 +77,6 @@ where
         client: C,
         discovery: Discovery,
         peers_manager: PeersManager,
-        genesis_hash: B256,
         num_active_peers: Arc<AtomicUsize>,
     ) -> Self {
         let state_fetcher = StateFetcher::new(peers_manager.handle(), num_active_peers);
@@ -87,7 +86,6 @@ where
             queued_messages: Default::default(),
             client,
             discovery,
-            genesis_hash,
             state_fetcher,
         }
     }
@@ -110,11 +108,6 @@ where
     /// Returns a new [`FetchClient`]
     pub(crate) fn fetch_client(&self) -> FetchClient {
         self.state_fetcher.client()
-    }
-
-    /// Configured genesis hash.
-    pub fn genesis_hash(&self) -> B256 {
-        self.genesis_hash
     }
 
     /// How many peers we're currently connected to.
@@ -170,13 +163,18 @@ where
     ///
     /// See also <https://github.com/ethereum/devp2p/blob/master/caps/eth.md>
     pub(crate) fn announce_new_block(&mut self, msg: NewBlockMessage) {
-        // send a `NewBlock` message to a fraction fo the connected peers (square root of the total
+        // send a `NewBlock` message to a fraction of the connected peers (square root of the total
         // number of peers)
         let num_propagate = (self.active_peers.len() as f64).sqrt() as u64 + 1;
 
         let number = msg.block.block.header.number;
         let mut count = 0;
-        for (peer_id, peer) in self.active_peers.iter_mut() {
+
+        // Shuffle to propagate to a random sample of peers on every block announcement
+        let mut peers: Vec<_> = self.active_peers.iter_mut().collect();
+        peers.shuffle(&mut rand::thread_rng());
+
+        for (peer_id, peer) in peers.into_iter() {
             if peer.blocks.contains(&msg.hash) {
                 // skip peers which already reported the block
                 continue
@@ -269,6 +267,11 @@ where
         self.discovery.ban(peer_id, ip)
     }
 
+    /// Marks the given peer as trusted.
+    pub(crate) fn add_trusted_peer_id(&mut self, peer_id: PeerId) {
+        self.peers_manager.add_trusted_peer_id(peer_id)
+    }
+
     /// Adds a peer and its address with the given kind to the peerset.
     pub(crate) fn add_peer_kind(&mut self, peer_id: PeerId, kind: PeerKind, addr: SocketAddr) {
         self.peers_manager.add_peer_kind(peer_id, kind, addr, None)
@@ -313,6 +316,10 @@ where
                 self.queued_messages.push_back(StateAction::Disconnect { peer_id, reason });
             }
             PeerAction::DisconnectBannedIncoming { peer_id } => {
+                self.state_fetcher.on_pending_disconnect(&peer_id);
+                self.queued_messages.push_back(StateAction::Disconnect { peer_id, reason: None });
+            }
+            PeerAction::DisconnectUntrustedIncoming { peer_id } => {
                 self.state_fetcher.on_pending_disconnect(&peer_id);
                 self.queued_messages.push_back(StateAction::Disconnect { peer_id, reason: None });
             }
@@ -471,7 +478,7 @@ pub(crate) struct ActivePeer {
     /// Best block of the peer.
     pub(crate) best_hash: B256,
     /// The capabilities of the remote peer.
-    #[allow(unused)]
+    #[allow(dead_code)]
     pub(crate) capabilities: Arc<Capabilities>,
     /// A communication channel directly to the session task.
     pub(crate) request_tx: PeerRequestSender,
@@ -549,7 +556,6 @@ mod tests {
             queued_messages: Default::default(),
             client: NoopProvider::default(),
             discovery: Discovery::noop(),
-            genesis_hash: Default::default(),
             state_fetcher: StateFetcher::new(handle, Default::default()),
         }
     }

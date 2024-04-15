@@ -13,42 +13,57 @@
 //!
 //! ```
 //! # use std::sync::Arc;
-//! # use reth_db::test_utils::create_test_rw_db;
 //! # use reth_downloaders::bodies::bodies::BodiesDownloaderBuilder;
 //! # use reth_downloaders::headers::reverse_headers::ReverseHeadersDownloaderBuilder;
 //! # use reth_interfaces::consensus::Consensus;
 //! # use reth_interfaces::test_utils::{TestBodiesClient, TestConsensus, TestHeadersClient};
-//! # use reth_revm::Factory;
-//! # use reth_primitives::{PeerId, MAINNET, B256};
+//! # use reth_revm::EvmProcessorFactory;
+//! # use reth_primitives::{PeerId, MAINNET, B256, PruneModes};
 //! # use reth_stages::Pipeline;
 //! # use reth_stages::sets::DefaultStages;
-//! # use reth_stages::stages::HeaderSyncMode;
 //! # use tokio::sync::watch;
+//! # use reth_node_ethereum::EthEvmConfig;
+//! # use reth_provider::ProviderFactory;
+//! # use reth_provider::HeaderSyncMode;
+//! # use reth_provider::test_utils::create_test_provider_factory;
+//! # use reth_static_file::StaticFileProducer;
+//! # use reth_config::config::EtlConfig;
+//! #
+//! # let chain_spec = MAINNET.clone();
 //! # let consensus: Arc<dyn Consensus> = Arc::new(TestConsensus::default());
 //! # let headers_downloader = ReverseHeadersDownloaderBuilder::default().build(
 //! #    Arc::new(TestHeadersClient::default()),
 //! #    consensus.clone()
 //! # );
-//! # let db = create_test_rw_db();
+//! # let provider_factory = create_test_provider_factory();
 //! # let bodies_downloader = BodiesDownloaderBuilder::default().build(
 //! #    Arc::new(TestBodiesClient { responder: |_| Ok((PeerId::ZERO, vec![]).into()) }),
 //! #    consensus.clone(),
-//! #    db.clone()
+//! #    provider_factory.clone()
 //! # );
 //! # let (tip_tx, tip_rx) = watch::channel(B256::default());
-//! # let factory = Factory::new(MAINNET.clone());
+//! # let executor_factory = EvmProcessorFactory::new(chain_spec.clone(), EthEvmConfig::default());
+//! # let static_file_producer = StaticFileProducer::new(
+//! #    provider_factory.clone(),
+//! #    provider_factory.static_file_provider(),
+//! #    PruneModes::default()
+//! # );
 //! // Create a pipeline that can fully sync
 //! # let pipeline =
 //! Pipeline::builder()
 //!     .with_tip_sender(tip_tx)
-//!     .add_stages(DefaultStages::new(
-//!         HeaderSyncMode::Tip(tip_rx),
-//!         consensus,
-//!         headers_downloader,
-//!         bodies_downloader,
-//!         factory,
-//!     ))
-//!     .build(db, MAINNET.clone());
+//!     .add_stages(
+//!         DefaultStages::new(
+//!             provider_factory.clone(),
+//!             HeaderSyncMode::Tip(tip_rx),
+//!             consensus,
+//!             headers_downloader,
+//!             bodies_downloader,
+//!             executor_factory,
+//!             EtlConfig::default(),
+//!         )
+//!     )
+//!     .build(provider_factory, static_file_producer);
 //! ```
 //!
 //! ## Feature Flags
@@ -60,9 +75,6 @@
     html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
-#![allow(clippy::result_large_err)] // TODO(danipopes): fix this
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub, rustdoc::all)]
-#![deny(unused_must_use, rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 mod error;

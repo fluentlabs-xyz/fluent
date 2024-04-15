@@ -177,7 +177,7 @@ pub(crate) struct ServerHandle(Arc<watch::Sender<()>>);
 
 impl ServerHandle {
     /// Wait for the server to stop.
-    #[allow(unused)]
+    #[allow(dead_code)]
     pub(crate) async fn stopped(self) {
         self.0.closed().await
     }
@@ -195,13 +195,13 @@ impl ConnectionGuard {
         match self.0.clone().try_acquire_owned() {
             Ok(guard) => Some(guard),
             Err(TryAcquireError::Closed) => {
-                unreachable!("Semaphore::Close is never called and can't be closed; qed")
+                unreachable!("Semaphore::Close is never called and can't be closed")
             }
             Err(TryAcquireError::NoPermits) => None,
         }
     }
 
-    #[allow(unused)]
+    #[allow(dead_code)]
     pub(crate) fn available_connections(&self) -> usize {
         self.0.available_permits()
     }

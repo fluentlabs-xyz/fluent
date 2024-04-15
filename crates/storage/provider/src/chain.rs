@@ -3,9 +3,11 @@
 use crate::bundle_state::BundleStateWithReceipts;
 use reth_interfaces::{executor::BlockExecutionError, RethResult};
 use reth_primitives::{
-    BlockHash, BlockNumHash, BlockNumber, ForkBlock, Receipt, SealedBlock, SealedBlockWithSenders,
-    SealedHeader, TransactionSigned, TxHash,
+    Address, BlockHash, BlockNumHash, BlockNumber, ForkBlock, Receipt, SealedBlock,
+    SealedBlockWithSenders, SealedHeader, TransactionSigned, TransactionSignedEcRecovered, TxHash,
 };
+use reth_trie::updates::TrieUpdates;
+use revm::db::BundleState;
 use std::{borrow::Cow, collections::BTreeMap, fmt};
 
 /// A chain of blocks and their final state.
@@ -16,16 +18,41 @@ use std::{borrow::Cow, collections::BTreeMap, fmt};
 /// Used inside the BlockchainTree.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Chain {
+    /// All blocks in this chain.
+    blocks: BTreeMap<BlockNumber, SealedBlockWithSenders>,
     /// The state of all accounts after execution of the _all_ blocks in this chain's range from
     /// [Chain::first] to [Chain::tip], inclusive.
     ///
     /// This state also contains the individual changes that lead to the current state.
-    pub state: BundleStateWithReceipts,
-    /// All blocks in this chain.
-    pub blocks: BTreeMap<BlockNumber, SealedBlockWithSenders>,
+    state: BundleStateWithReceipts,
+    /// State trie updates after block is added to the chain.
+    /// NOTE: Currently, trie updates are present only if the block extends canonical chain.
+    trie_updates: Option<TrieUpdates>,
 }
 
 impl Chain {
+    /// Create new Chain from blocks and state.
+    pub fn new(
+        blocks: impl IntoIterator<Item = SealedBlockWithSenders>,
+        state: BundleStateWithReceipts,
+        trie_updates: Option<TrieUpdates>,
+    ) -> Self {
+        Self {
+            blocks: BTreeMap::from_iter(blocks.into_iter().map(|b| (b.number, b))),
+            state,
+            trie_updates,
+        }
+    }
+
+    /// Create new Chain from a single block and its state.
+    pub fn from_block(
+        block: SealedBlockWithSenders,
+        state: BundleStateWithReceipts,
+        trie_updates: Option<TrieUpdates>,
+    ) -> Self {
+        Self::new([block], state, trie_updates)
+    }
+
     /// Get the blocks in this chain.
     pub fn blocks(&self) -> &BTreeMap<BlockNumber, SealedBlockWithSenders> {
         &self.blocks
@@ -41,9 +68,20 @@ impl Chain {
         self.blocks.values().map(|block| block.header.clone())
     }
 
+    /// Get cached trie updates for this chain.
+    pub fn trie_updates(&self) -> Option<&TrieUpdates> {
+        self.trie_updates.as_ref()
+    }
+
     /// Get post state of this chain
     pub fn state(&self) -> &BundleStateWithReceipts {
         &self.state
+    }
+
+    /// Prepends the given state to the current state.
+    pub fn prepend_state(&mut self, state: BundleState) {
+        self.state.prepend_state(state);
+        self.trie_updates.take(); // invalidate cached trie updates
     }
 
     /// Return true if chain is empty and has no blocks.
@@ -58,9 +96,12 @@ impl Chain {
 
     /// Returns the block with matching hash.
     pub fn block(&self, block_hash: BlockHash) -> Option<&SealedBlock> {
-        self.blocks
-            .iter()
-            .find_map(|(_num, block)| (block.hash() == block_hash).then_some(&block.block))
+        self.block_with_senders(block_hash).map(|block| &block.block)
+    }
+
+    /// Returns the block with matching hash.
+    pub fn block_with_senders(&self, block_hash: BlockHash) -> Option<&SealedBlockWithSenders> {
+        self.blocks.iter().find_map(|(_num, block)| (block.hash() == block_hash).then_some(block))
     }
 
     /// Return post state of the block at the `block_number` or None if block is not known
@@ -69,7 +110,7 @@ impl Chain {
             return Some(self.state.clone())
         }
 
-        if self.blocks.get(&block_number).is_some() {
+        if self.blocks.contains_key(&block_number) {
             let mut state = self.state.clone();
             state.revert_to(block_number);
             return Some(state)
@@ -79,8 +120,10 @@ impl Chain {
 
     /// Destructure the chain into its inner components, the blocks and the state at the tip of the
     /// chain.
-    pub fn into_inner(self) -> (ChainBlocks<'static>, BundleStateWithReceipts) {
-        (ChainBlocks { blocks: Cow::Owned(self.blocks) }, self.state)
+    pub fn into_inner(
+        self,
+    ) -> (ChainBlocks<'static>, BundleStateWithReceipts, Option<TrieUpdates>) {
+        (ChainBlocks { blocks: Cow::Owned(self.blocks) }, self.state, self.trie_updates)
     }
 
     /// Destructure the chain into its inner components, the blocks and the state at the tip of the
@@ -89,23 +132,28 @@ impl Chain {
         (ChainBlocks { blocks: Cow::Borrowed(&self.blocks) }, &self.state)
     }
 
+    /// Returns an iterator over all the receipts of the blocks in the chain.
+    pub fn block_receipts_iter(&self) -> impl Iterator<Item = &Vec<Option<Receipt>>> + '_ {
+        self.state.receipts().iter()
+    }
+
+    /// Returns an iterator over all blocks in the chain with increasing block number.
+    pub fn blocks_iter(&self) -> impl Iterator<Item = &SealedBlockWithSenders> + '_ {
+        self.blocks().iter().map(|block| block.1)
+    }
+
+    /// Returns an iterator over all blocks and their receipts in the chain.
+    pub fn blocks_and_receipts(
+        &self,
+    ) -> impl Iterator<Item = (&SealedBlockWithSenders, &Vec<Option<Receipt>>)> + '_ {
+        self.blocks_iter().zip(self.block_receipts_iter())
+    }
+
     /// Get the block at which this chain forked.
     #[track_caller]
     pub fn fork_block(&self) -> ForkBlock {
         let first = self.first();
         ForkBlock { number: first.number.saturating_sub(1), hash: first.parent_hash }
-    }
-
-    /// Get the block number at which this chain forked.
-    #[track_caller]
-    pub fn fork_block_number(&self) -> BlockNumber {
-        self.first().number.saturating_sub(1)
-    }
-
-    /// Get the block hash at which this chain forked.
-    #[track_caller]
-    pub fn fork_block_hash(&self) -> BlockHash {
-        self.first().parent_hash
     }
 
     /// Get the first block in this chain.
@@ -124,11 +172,6 @@ impl Chain {
         self.blocks.last_key_value().expect("Chain should have at least one block").1
     }
 
-    /// Create new chain with given blocks and post state.
-    pub fn new(blocks: Vec<SealedBlockWithSenders>, state: BundleStateWithReceipts) -> Self {
-        Self { state, blocks: blocks.into_iter().map(|b| (b.number, b)).collect() }
-    }
-
     /// Returns length of the chain.
     pub fn len(&self) -> usize {
         self.blocks.len()
@@ -144,7 +187,7 @@ impl Chain {
     ///
     /// Attachment includes block number, block hash, transaction hash and transaction index.
     pub fn receipts_with_attachment(&self) -> Vec<BlockReceipts> {
-        let mut receipt_attch = Vec::new();
+        let mut receipt_attach = Vec::new();
         for ((block_num, block), receipts) in self.blocks().iter().zip(self.state.receipts().iter())
         {
             let mut tx_receipts = Vec::new();
@@ -155,29 +198,56 @@ impl Chain {
                 ));
             }
             let block_num_hash = BlockNumHash::new(*block_num, block.hash());
-            receipt_attch.push(BlockReceipts { block: block_num_hash, tx_receipts });
+            receipt_attach.push(BlockReceipts { block: block_num_hash, tx_receipts });
         }
-        receipt_attch
+        receipt_attach
+    }
+
+    /// Append a single block with state to the chain.
+    /// This method assumes that blocks attachment to the chain has already been validated.
+    pub fn append_block(
+        &mut self,
+        block: SealedBlockWithSenders,
+        state: BundleStateWithReceipts,
+        trie_updates: Option<TrieUpdates>,
+    ) {
+        self.blocks.insert(block.number, block);
+        self.state.extend(state);
+        self.append_trie_updates(trie_updates);
     }
 
     /// Merge two chains by appending the given chain into the current one.
     ///
     /// The state of accounts for this chain is set to the state of the newest chain.
-    pub fn append_chain(&mut self, chain: Chain) -> RethResult<()> {
+    pub fn append_chain(&mut self, other: Chain) -> RethResult<()> {
         let chain_tip = self.tip();
-        if chain_tip.hash != chain.fork_block_hash() {
+        let other_fork_block = other.fork_block();
+        if chain_tip.hash() != other_fork_block.hash {
             return Err(BlockExecutionError::AppendChainDoesntConnect {
                 chain_tip: Box::new(chain_tip.num_hash()),
-                other_chain_fork: Box::new(chain.fork_block()),
+                other_chain_fork: Box::new(other_fork_block),
             }
             .into())
         }
 
         // Insert blocks from other chain
-        self.blocks.extend(chain.blocks);
-        self.state.extend(chain.state);
+        self.blocks.extend(other.blocks);
+        self.state.extend(other.state);
+        self.append_trie_updates(other.trie_updates);
 
         Ok(())
+    }
+
+    /// Append trie updates.
+    /// If existing or incoming trie updates are not set, reset as neither is valid anymore.
+    fn append_trie_updates(&mut self, other_trie_updates: Option<TrieUpdates>) {
+        if let Some((trie_updates, other)) = self.trie_updates.as_mut().zip(other_trie_updates) {
+            // Extend trie updates.
+            trie_updates.extend(other);
+        } else {
+            // Reset trie updates as they are no longer valid.
+            self.trie_updates.take();
+        }
     }
 
     /// Split this chain at the given block.
@@ -197,10 +267,10 @@ impl Chain {
     /// it retains the up to date state as if the chains were one, i.e. the second chain is an
     /// extension of the first.
     #[track_caller]
-    pub fn split(mut self, split_at: SplitAt) -> ChainSplit {
+    pub fn split(mut self, split_at: ChainSplitTarget) -> ChainSplit {
         let chain_tip = *self.blocks.last_entry().expect("chain is never empty").key();
         let block_number = match split_at {
-            SplitAt::Hash(block_hash) => {
+            ChainSplitTarget::Hash(block_hash) => {
                 let Some(block_number) = self.block_number(block_hash) else {
                     return ChainSplit::NoSplitPending(self)
                 };
@@ -210,7 +280,7 @@ impl Chain {
                 }
                 block_number
             }
-            SplitAt::Number(block_number) => {
+            ChainSplitTarget::Number(block_number) => {
                 if block_number >= chain_tip {
                     return ChainSplit::NoSplitCanonical(self)
                 }
@@ -221,15 +291,25 @@ impl Chain {
             }
         };
 
-        let higher_number_blocks = self.blocks.split_off(&(block_number + 1));
+        let split_at = block_number + 1;
+        let higher_number_blocks = self.blocks.split_off(&split_at);
 
-        let mut state = std::mem::take(&mut self.state);
-        let canonical_state =
-            state.split_at(block_number).expect("Detach block number to be in range");
+        let state = std::mem::take(&mut self.state);
+        let (canonical_state, pending_state) = state.split_at(split_at);
 
+        // TODO: Currently, trie updates are reset on chain split.
+        // Add tests ensuring that it is valid to leave updates in the pending chain.
         ChainSplit::Split {
-            canonical: Chain { state: canonical_state, blocks: self.blocks },
-            pending: Chain { state, blocks: higher_number_blocks },
+            canonical: Chain {
+                state: canonical_state.expect("split in range"),
+                blocks: self.blocks,
+                trie_updates: None,
+            },
+            pending: Chain {
+                state: pending_state,
+                blocks: higher_number_blocks,
+                trie_updates: None,
+            },
         }
     }
 }
@@ -244,9 +324,9 @@ impl<'a> fmt::Display for DisplayBlocksChain<'a> {
             write!(f, "[")?;
             let mut iter = self.0.values().map(|block| block.num_hash());
             if let Some(block_num_hash) = iter.next() {
-                write!(f, "{:?}", block_num_hash)?;
+                write!(f, "{block_num_hash:?}")?;
                 for block_num_hash_iter in iter {
-                    write!(f, ", {:?}", block_num_hash_iter)?;
+                    write!(f, ", {block_num_hash_iter:?}")?;
                 }
             }
             write!(f, "]")?;
@@ -273,11 +353,13 @@ impl<'a> ChainBlocks<'a> {
     /// Creates a consuming iterator over all blocks in the chain with increasing block number.
     ///
     /// Note: this always yields at least one block.
+    #[inline]
     pub fn into_blocks(self) -> impl Iterator<Item = SealedBlockWithSenders> {
         self.blocks.into_owned().into_values()
     }
 
     /// Creates an iterator over all blocks in the chain with increasing block number.
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&BlockNumber, &SealedBlockWithSenders)> {
         self.blocks.iter()
     }
@@ -287,6 +369,7 @@ impl<'a> ChainBlocks<'a> {
     /// # Note
     ///
     /// Chains always have at least one block.
+    #[inline]
     pub fn tip(&self) -> &SealedBlockWithSenders {
         self.blocks.last_key_value().expect("Chain should have at least one block").1
     }
@@ -296,13 +379,39 @@ impl<'a> ChainBlocks<'a> {
     /// # Note
     ///
     /// Chains always have at least one block.
+    #[inline]
     pub fn first(&self) -> &SealedBlockWithSenders {
         self.blocks.first_key_value().expect("Chain should have at least one block").1
     }
 
     /// Returns an iterator over all transactions in the chain.
+    #[inline]
     pub fn transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
         self.blocks.values().flat_map(|block| block.body.iter())
+    }
+
+    /// Returns an iterator over all transactions and their senders.
+    #[inline]
+    pub fn transactions_with_sender(
+        &self,
+    ) -> impl Iterator<Item = (&Address, &TransactionSigned)> + '_ {
+        self.blocks.values().flat_map(|block| block.transactions_with_sender())
+    }
+
+    /// Returns an iterator over all [TransactionSignedEcRecovered] in the blocks
+    ///
+    /// Note: This clones the transactions since it is assumed this is part of a shared [Chain].
+    #[inline]
+    pub fn transactions_ecrecovered(
+        &self,
+    ) -> impl Iterator<Item = TransactionSignedEcRecovered> + '_ {
+        self.transactions_with_sender().map(|(signer, tx)| tx.clone().with_signer(*signer))
+    }
+
+    /// Returns an iterator over all transaction hashes in the block
+    #[inline]
+    pub fn transaction_hashes(&self) -> impl Iterator<Item = TxHash> + '_ {
+        self.blocks.values().flat_map(|block| block.transactions().map(|tx| tx.hash))
     }
 }
 
@@ -325,9 +434,9 @@ pub struct BlockReceipts {
     pub tx_receipts: Vec<(TxHash, Receipt)>,
 }
 
-/// Used in spliting the chain.
+/// The target block where the chain should be split.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SplitAt {
+pub enum ChainSplitTarget {
     /// Split at block number.
     Number(BlockNumber),
     /// Split at block hash.
@@ -344,15 +453,17 @@ pub enum ChainSplit {
     /// Chain is not split. Canonical chain is returned.
     /// Given block split is lower than first block.
     NoSplitCanonical(Chain),
-    /// Chain is split into two.
-    /// Given block split is contained in first chain.
+    /// Chain is split into two: `[canonical]` and `[pending]`
+    /// The target of this chain split [ChainSplitTarget] belongs to the `canonical` chain.
     Split {
-        /// Left contains lower block numbers that get are considered canonicalized. It ends with
-        /// the [SplitAt] block. The substate of this chain is now empty and not usable.
+        /// Contains lower block numbers that are considered canonicalized. It ends with
+        /// the [ChainSplitTarget] block. The state of this chain is now empty and no longer
+        /// usable.
         canonical: Chain,
-        /// Right contains all subsequent blocks after the [SplitAt], that are still pending.
+        /// Right contains all subsequent blocks __after__ the [ChainSplitTarget] that are still
+        /// pending.
         ///
-        /// The substate of the original chain is moved here.
+        /// The state of the original chain is moved here.
         pending: Chain,
     },
 }
@@ -360,15 +471,12 @@ pub enum ChainSplit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reth_primitives::{Address, Receipts, B256};
-    use revm::{
-        db::BundleState,
-        primitives::{AccountInfo, HashMap},
-    };
+    use reth_primitives::{Receipts, B256};
+    use revm::primitives::{AccountInfo, HashMap};
 
     #[test]
     fn chain_append() {
-        let block = SealedBlockWithSenders::default();
+        let block: SealedBlockWithSenders = SealedBlockWithSenders::default();
         let block1_hash = B256::new([0x01; 32]);
         let block2_hash = B256::new([0x02; 32]);
         let block3_hash = B256::new([0x03; 32]);
@@ -379,12 +487,12 @@ mod tests {
         let mut block3 = block.clone();
         let mut block4 = block;
 
-        block1.block.header.hash = block1_hash;
-        block2.block.header.hash = block2_hash;
-        block3.block.header.hash = block3_hash;
-        block4.block.header.hash = block4_hash;
+        block1.block.header.set_hash(block1_hash);
+        block2.block.header.set_hash(block2_hash);
+        block3.block.header.set_hash(block3_hash);
+        block4.block.header.set_hash(block4_hash);
 
-        block3.block.header.header.parent_hash = block2_hash;
+        block3.set_parent_hash(block2_hash);
 
         let mut chain1 =
             Chain { blocks: BTreeMap::from([(1, block1), (2, block2)]), ..Default::default() };
@@ -432,29 +540,34 @@ mod tests {
 
         let mut block1 = SealedBlockWithSenders::default();
         let block1_hash = B256::new([15; 32]);
-        block1.number = 1;
-        block1.hash = block1_hash;
+        block1.set_block_number(1);
+        block1.set_hash(block1_hash);
         block1.senders.push(Address::new([4; 20]));
 
         let mut block2 = SealedBlockWithSenders::default();
         let block2_hash = B256::new([16; 32]);
-        block2.number = 2;
-        block2.hash = block2_hash;
+        block2.set_block_number(2);
+        block2.set_hash(block2_hash);
         block2.senders.push(Address::new([4; 20]));
 
-        let mut block_state_extended = block_state1.clone();
-        block_state_extended.extend(block_state2.clone());
+        let mut block_state_extended = block_state1;
+        block_state_extended.extend(block_state2);
 
-        let chain = Chain::new(vec![block1.clone(), block2.clone()], block_state_extended);
+        let chain = Chain::new(vec![block1.clone(), block2.clone()], block_state_extended, None);
 
-        let mut split2_state = chain.state.clone();
-        let split1_state = split2_state.split_at(1).unwrap();
+        let (split1_state, split2_state) = chain.state.clone().split_at(2);
 
-        let chain_split1 =
-            Chain { state: split1_state, blocks: BTreeMap::from([(1, block1.clone())]) };
+        let chain_split1 = Chain {
+            state: split1_state.unwrap(),
+            blocks: BTreeMap::from([(1, block1.clone())]),
+            trie_updates: None,
+        };
 
-        let chain_split2 =
-            Chain { state: split2_state, blocks: BTreeMap::from([(2, block2.clone())]) };
+        let chain_split2 = Chain {
+            state: split2_state,
+            blocks: BTreeMap::from([(2, block2.clone())]),
+            trie_updates: None,
+        };
 
         // return tip state
         assert_eq!(chain.state_at_block(block2.number), Some(chain.state.clone()));
@@ -464,23 +577,26 @@ mod tests {
 
         // split in two
         assert_eq!(
-            chain.clone().split(SplitAt::Hash(block1_hash)),
+            chain.clone().split(ChainSplitTarget::Hash(block1_hash)),
             ChainSplit::Split { canonical: chain_split1, pending: chain_split2 }
         );
 
         // split at unknown block hash
         assert_eq!(
-            chain.clone().split(SplitAt::Hash(B256::new([100; 32]))),
+            chain.clone().split(ChainSplitTarget::Hash(B256::new([100; 32]))),
             ChainSplit::NoSplitPending(chain.clone())
         );
 
         // split at higher number
         assert_eq!(
-            chain.clone().split(SplitAt::Number(10)),
+            chain.clone().split(ChainSplitTarget::Number(10)),
             ChainSplit::NoSplitCanonical(chain.clone())
         );
 
         // split at lower number
-        assert_eq!(chain.clone().split(SplitAt::Number(0)), ChainSplit::NoSplitPending(chain));
+        assert_eq!(
+            chain.clone().split(ChainSplitTarget::Number(0)),
+            ChainSplit::NoSplitPending(chain)
+        );
     }
 }

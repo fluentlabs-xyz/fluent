@@ -1,10 +1,9 @@
 use super::access_list::AccessList;
 use crate::{
     constants::eip4844::DATA_GAS_PER_BLOB, keccak256, Bytes, ChainId, Signature, TransactionKind,
-    TxType, TxValue, B256,
+    TxType, B256, U256,
 };
 use alloy_rlp::{length_of_length, Decodable, Encodable, Header};
-use bytes::BytesMut;
 use reth_codecs::{main_codec, Compact};
 use std::mem;
 
@@ -24,7 +23,7 @@ use std::ops::Deref;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct TxEip4844 {
     /// Added as EIP-pub 155: Simple replay attack protection
-    pub chain_id: u64,
+    pub chain_id: ChainId,
     /// A scalar value equal to the number of transactions sent by the sender; formally Tn.
     pub nonce: u64,
     /// A scalar value equal to the maximum
@@ -60,7 +59,7 @@ pub struct TxEip4844 {
     /// be transferred to the message call’s recipient or,
     /// in the case of contract creation, as an endowment
     /// to the newly created account; formally Tv.
-    pub value: TxValue,
+    pub value: U256,
     /// The accessList specifies a list of addresses and storage keys;
     /// these addresses and storage keys are added into the `accessed_addresses`
     /// and `accessed_storage_keys` global sets (introduced in EIP-2929).
@@ -139,14 +138,14 @@ impl TxEip4844 {
             // convert to KzgCommitment
             let commitment = KzgCommitment::from(*commitment.deref());
 
-            // Calculate the versioned hash
-            //
-            // TODO: should this method distinguish the type of validation failure? For example
-            // whether a certain versioned hash does not match, or whether the blob proof
-            // validation failed?
+            // calculate & verify the versioned hash
+            // https://eips.ethereum.org/EIPS/eip-4844#execution-layer-validation
             let calculated_versioned_hash = kzg_to_versioned_hash(commitment);
             if *versioned_hash != calculated_versioned_hash {
-                return Err(BlobTransactionValidationError::InvalidProof)
+                return Err(BlobTransactionValidationError::WrongVersionedHash {
+                    have: *versioned_hash,
+                    expected: calculated_versioned_hash,
+                })
             }
         }
 
@@ -169,7 +168,7 @@ impl TxEip4844 {
     /// Returns the total gas for all blobs in this transaction.
     #[inline]
     pub fn blob_gas(&self) -> u64 {
-        // SAFETY: we don't expect u64::MAX / DATA_GAS_PER_BLOB hashes in a single transaction
+        // NOTE: we don't expect u64::MAX / DATA_GAS_PER_BLOB hashes in a single transaction
         self.blob_versioned_hashes.len() as u64 * DATA_GAS_PER_BLOB
     }
 
@@ -207,19 +206,17 @@ impl TxEip4844 {
 
     /// Outputs the length of the transaction's fields, without a RLP header.
     pub(crate) fn fields_len(&self) -> usize {
-        let mut len = 0;
-        len += self.chain_id.length();
-        len += self.nonce.length();
-        len += self.gas_limit.length();
-        len += self.max_fee_per_gas.length();
-        len += self.max_priority_fee_per_gas.length();
-        len += self.to.length();
-        len += self.value.length();
-        len += self.access_list.length();
-        len += self.blob_versioned_hashes.length();
-        len += self.max_fee_per_blob_gas.length();
-        len += self.input.0.length();
-        len
+        self.chain_id.length() +
+            self.nonce.length() +
+            self.gas_limit.length() +
+            self.max_fee_per_gas.length() +
+            self.max_priority_fee_per_gas.length() +
+            self.to.length() +
+            self.value.length() +
+            self.access_list.length() +
+            self.blob_versioned_hashes.length() +
+            self.max_fee_per_blob_gas.length() +
+            self.input.0.length()
     }
 
     /// Encodes only the transaction's fields into the desired buffer, without a RLP header.
@@ -246,7 +243,7 @@ impl TxEip4844 {
         mem::size_of::<u128>() + // max_fee_per_gas
         mem::size_of::<u128>() + // max_priority_fee_per_gas
         self.to.size() + // to
-        mem::size_of::<TxValue>() + // value
+        mem::size_of::<U256>() + // value
         self.access_list.size() + // access_list
         self.input.len() +  // input
         self.blob_versioned_hashes.capacity() * mem::size_of::<B256>() + // blob hashes size
@@ -291,10 +288,16 @@ impl TxEip4844 {
 
     /// Get transaction type
     pub(crate) fn tx_type(&self) -> TxType {
-        TxType::EIP4844
+        TxType::Eip4844
     }
 
     /// Encodes the legacy transaction in RLP for signing.
+    ///
+    /// This encodes the transaction as:
+    /// `tx_type || rlp(chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, to,
+    /// value, input, access_list, max_fee_per_blob_gas, blob_versioned_hashes)`
+    ///
+    /// Note that there is no rlp header before the transaction type byte.
     pub(crate) fn encode_for_signing(&self, out: &mut dyn bytes::BufMut) {
         out.put_u8(self.tx_type() as u8);
         Header { list: true, payload_length: self.fields_len() }.encode(out);
@@ -311,7 +314,7 @@ impl TxEip4844 {
     /// Outputs the signature hash of the transaction by first encoding without a signature, then
     /// hashing.
     pub(crate) fn signature_hash(&self) -> B256 {
-        let mut buf = BytesMut::with_capacity(self.payload_len_for_signature());
+        let mut buf = Vec::with_capacity(self.payload_len_for_signature());
         self.encode_for_signing(&mut buf);
         keccak256(&buf)
     }
