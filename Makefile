@@ -409,3 +409,12 @@ pr:
 	make lint && \
 	make docs && \
 	make test
+
+DATADIR:=./datadir
+.PHONY: fluent_run
+fluent_run:
+	cargo run --package reth --bin reth -- --chain=dev node --datadir=$(DATADIR) --dev --full --http --port=30305
+
+.PHONY: clean_datadir
+fluent_clean_datadir:
+	rm -rf $(DATADIR)
