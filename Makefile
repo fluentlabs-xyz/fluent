@@ -410,6 +410,10 @@ pr:
 	make docs && \
 	make test
 
+.PHONY: fluent_build
+fluent_build:
+	cargo build -p reth
+
 DATADIR:=./datadir
 .PHONY: fluent_run
 fluent_run:
