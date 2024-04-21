@@ -51,7 +51,7 @@ pub struct Discv5 {
     #[deref]
     /// sigp/discv5 node.
     discv5: Arc<discv5::Discv5>,
-    /// [`IpMode`] of the the node.
+    /// [`IpMode`] of the node.
     ip_mode: IpMode,
     /// Key used in kv-pair to ID chain.
     fork_id_key: &'static [u8],
