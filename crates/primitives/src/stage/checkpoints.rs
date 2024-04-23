@@ -145,7 +145,7 @@ impl EntitiesCheckpoint {
     /// Return [None] if `total == 0`.
     pub fn fmt_percentage(&self) -> Option<String> {
         if self.total == 0 {
-            return None
+            return None;
         }
 
         // Calculate percentage with 2 decimal places.
@@ -209,14 +209,14 @@ impl StageCheckpoint {
         match stage_checkpoint {
             StageUnitCheckpoint::Account(AccountHashingCheckpoint {
                 progress: entities, ..
-            }) |
-            StageUnitCheckpoint::Storage(StorageHashingCheckpoint {
+            })
+            | StageUnitCheckpoint::Storage(StorageHashingCheckpoint {
                 progress: entities, ..
-            }) |
-            StageUnitCheckpoint::Entities(entities) |
-            StageUnitCheckpoint::Execution(ExecutionCheckpoint { progress: entities, .. }) |
-            StageUnitCheckpoint::Headers(HeadersCheckpoint { progress: entities, .. }) |
-            StageUnitCheckpoint::IndexHistory(IndexHistoryCheckpoint {
+            })
+            | StageUnitCheckpoint::Entities(entities)
+            | StageUnitCheckpoint::Execution(ExecutionCheckpoint { progress: entities, .. })
+            | StageUnitCheckpoint::Headers(HeadersCheckpoint { progress: entities, .. })
+            | StageUnitCheckpoint::IndexHistory(IndexHistoryCheckpoint {
                 progress: entities,
                 ..
             }) => Some(entities),

@@ -158,7 +158,7 @@ where
         }
 
         if tree.block_indices().is_block_hash_canonical(&parent) {
-            return Some(parent)
+            return Some(parent);
         }
 
         None

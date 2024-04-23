@@ -83,7 +83,7 @@ impl Discv5 {
                 err="key not utf-8",
                 "failed to update local enr"
             );
-            return
+            return;
         };
         if let Err(err) = self.enr_insert(key_str, &rlp) {
             error!(target: "discv5",
@@ -269,7 +269,7 @@ impl Discv5 {
             match node {
                 BootNode::Enr(node) => {
                     if let Err(err) = discv5.add_enr(node) {
-                        return Err(Error::Discv5ErrorStr(err))
+                        return Err(Error::Discv5ErrorStr(err));
                     }
                 }
                 BootNode::Enode(enode) => {
@@ -414,7 +414,7 @@ impl Discv5 {
 
                 self.metrics.discovered_peers.increment_established_sessions_unreachable_enr(1);
 
-                return None
+                return None;
             }
         };
         let fork_id = match self.filter_discovered_peer(enr) {
@@ -428,7 +428,7 @@ impl Discv5 {
 
                 self.metrics.discovered_peers.increment_established_sessions_filtered(1);
 
-                return None
+                return None;
             }
         };
 
@@ -462,7 +462,7 @@ impl Discv5 {
             IpMode::Ip4 | IpMode::DualStack => enr.tcp4(),
             IpMode::Ip6 => enr.tcp6(),
         }) else {
-            return Err(Error::IpVersionMismatchRlpx(self.ip_mode()))
+            return Err(Error::IpVersionMismatchRlpx(self.ip_mode()));
         };
 
         Ok(NodeRecord { address: udp_socket.ip(), tcp_port, udp_port: udp_socket.port(), id })

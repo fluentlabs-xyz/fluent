@@ -143,7 +143,7 @@ where
 
             if filter.block > best_number {
                 // no new blocks since the last poll
-                return Ok(FilterChanges::Empty)
+                return Ok(FilterChanges::Empty);
             }
 
             // update filter
@@ -212,7 +212,7 @@ where
                 *filter.clone()
             } else {
                 // Not a log filter
-                return Err(FilterError::FilterNotFound(id))
+                return Err(FilterError::FilterNotFound(id));
             }
         };
 
@@ -430,7 +430,7 @@ where
         let best_number = chain_info.best_number;
 
         if to_block - from_block > self.max_blocks_per_filter {
-            return Err(FilterError::QueryExceedsMaxBlocks(self.max_blocks_per_filter))
+            return Err(FilterError::QueryExceedsMaxBlocks(self.max_blocks_per_filter));
         }
 
         let mut all_logs = Vec::new();
@@ -450,7 +450,7 @@ where
                     false,
                 )?;
             }
-            return Ok(all_logs)
+            return Ok(all_logs);
         }
 
         // derive bloom filters from filter input, so we can check headers for matching logs
@@ -466,8 +466,8 @@ where
 
             for (idx, header) in headers.iter().enumerate() {
                 // only if filter matches
-                if FilteredParams::matches_address(header.logs_bloom, &address_filter) &&
-                    FilteredParams::matches_topics(header.logs_bloom, &topics_filter)
+                if FilteredParams::matches_address(header.logs_bloom, &address_filter)
+                    && FilteredParams::matches_topics(header.logs_bloom, &topics_filter)
                 {
                     // these are consecutive headers, so we can use the parent hash of the next
                     // block to get the current header's hash
@@ -495,7 +495,7 @@ where
                         if is_multi_block_range && all_logs.len() > self.max_logs_per_response {
                             return Err(FilterError::QueryExceedsMaxResults(
                                 self.max_logs_per_response,
-                            ))
+                            ));
                         }
                     }
                 }
@@ -735,7 +735,7 @@ impl Iterator for BlockRangeInclusiveIter {
         let start = self.iter.next()?;
         let end = (start + self.step).min(self.end);
         if start > end {
-            return None
+            return None;
         }
         Some((start, end))
     }

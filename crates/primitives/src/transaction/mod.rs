@@ -152,9 +152,9 @@ impl Transaction {
     pub fn chain_id(&self) -> Option<u64> {
         match self {
             Transaction::Legacy(TxLegacy { chain_id, .. }) => *chain_id,
-            Transaction::Eip2930(TxEip2930 { chain_id, .. }) |
-            Transaction::Eip1559(TxEip1559 { chain_id, .. }) |
-            Transaction::Eip4844(TxEip4844 { chain_id, .. }) => Some(*chain_id),
+            Transaction::Eip2930(TxEip2930 { chain_id, .. })
+            | Transaction::Eip1559(TxEip1559 { chain_id, .. })
+            | Transaction::Eip4844(TxEip4844 { chain_id, .. }) => Some(*chain_id),
             #[cfg(feature = "optimism")]
             Transaction::Deposit(_) => None,
         }
@@ -164,9 +164,9 @@ impl Transaction {
     pub fn set_chain_id(&mut self, chain_id: u64) {
         match self {
             Transaction::Legacy(TxLegacy { chain_id: ref mut c, .. }) => *c = Some(chain_id),
-            Transaction::Eip2930(TxEip2930 { chain_id: ref mut c, .. }) |
-            Transaction::Eip1559(TxEip1559 { chain_id: ref mut c, .. }) |
-            Transaction::Eip4844(TxEip4844 { chain_id: ref mut c, .. }) => *c = chain_id,
+            Transaction::Eip2930(TxEip2930 { chain_id: ref mut c, .. })
+            | Transaction::Eip1559(TxEip1559 { chain_id: ref mut c, .. })
+            | Transaction::Eip4844(TxEip4844 { chain_id: ref mut c, .. }) => *c = chain_id,
             #[cfg(feature = "optimism")]
             Transaction::Deposit(_) => { /* noop */ }
         }
@@ -176,10 +176,10 @@ impl Transaction {
     /// [`TransactionKind::Create`] if the transaction is a contract creation.
     pub fn kind(&self) -> &TransactionKind {
         match self {
-            Transaction::Legacy(TxLegacy { to, .. }) |
-            Transaction::Eip2930(TxEip2930 { to, .. }) |
-            Transaction::Eip1559(TxEip1559 { to, .. }) |
-            Transaction::Eip4844(TxEip4844 { to, .. }) => to,
+            Transaction::Legacy(TxLegacy { to, .. })
+            | Transaction::Eip2930(TxEip2930 { to, .. })
+            | Transaction::Eip1559(TxEip1559 { to, .. })
+            | Transaction::Eip4844(TxEip4844 { to, .. }) => to,
             #[cfg(feature = "optimism")]
             Transaction::Deposit(TxDeposit { to, .. }) => to,
         }
@@ -208,10 +208,10 @@ impl Transaction {
     /// Gets the transaction's value field.
     pub fn value(&self) -> U256 {
         *match self {
-            Transaction::Legacy(TxLegacy { value, .. }) |
-            Transaction::Eip2930(TxEip2930 { value, .. }) |
-            Transaction::Eip1559(TxEip1559 { value, .. }) |
-            Transaction::Eip4844(TxEip4844 { value, .. }) => value,
+            Transaction::Legacy(TxLegacy { value, .. })
+            | Transaction::Eip2930(TxEip2930 { value, .. })
+            | Transaction::Eip1559(TxEip1559 { value, .. })
+            | Transaction::Eip4844(TxEip4844 { value, .. }) => value,
             #[cfg(feature = "optimism")]
             Transaction::Deposit(TxDeposit { value, .. }) => value,
         }
@@ -220,10 +220,10 @@ impl Transaction {
     /// Get the transaction's nonce.
     pub fn nonce(&self) -> u64 {
         match self {
-            Transaction::Legacy(TxLegacy { nonce, .. }) |
-            Transaction::Eip2930(TxEip2930 { nonce, .. }) |
-            Transaction::Eip1559(TxEip1559 { nonce, .. }) |
-            Transaction::Eip4844(TxEip4844 { nonce, .. }) => *nonce,
+            Transaction::Legacy(TxLegacy { nonce, .. })
+            | Transaction::Eip2930(TxEip2930 { nonce, .. })
+            | Transaction::Eip1559(TxEip1559 { nonce, .. })
+            | Transaction::Eip4844(TxEip4844 { nonce, .. }) => *nonce,
             // Deposit transactions do not have nonces.
             #[cfg(feature = "optimism")]
             Transaction::Deposit(_) => 0,
@@ -247,10 +247,10 @@ impl Transaction {
     /// Get the gas limit of the transaction.
     pub fn gas_limit(&self) -> u64 {
         match self {
-            Transaction::Legacy(TxLegacy { gas_limit, .. }) |
-            Transaction::Eip2930(TxEip2930 { gas_limit, .. }) |
-            Transaction::Eip1559(TxEip1559 { gas_limit, .. }) |
-            Transaction::Eip4844(TxEip4844 { gas_limit, .. }) => *gas_limit,
+            Transaction::Legacy(TxLegacy { gas_limit, .. })
+            | Transaction::Eip2930(TxEip2930 { gas_limit, .. })
+            | Transaction::Eip1559(TxEip1559 { gas_limit, .. })
+            | Transaction::Eip4844(TxEip4844 { gas_limit, .. }) => *gas_limit,
             #[cfg(feature = "optimism")]
             Transaction::Deposit(TxDeposit { gas_limit, .. }) => *gas_limit,
         }
@@ -271,10 +271,10 @@ impl Transaction {
     /// This is also commonly referred to as the "Gas Fee Cap" (`GasFeeCap`).
     pub fn max_fee_per_gas(&self) -> u128 {
         match self {
-            Transaction::Legacy(TxLegacy { gas_price, .. }) |
-            Transaction::Eip2930(TxEip2930 { gas_price, .. }) => *gas_price,
-            Transaction::Eip1559(TxEip1559 { max_fee_per_gas, .. }) |
-            Transaction::Eip4844(TxEip4844 { max_fee_per_gas, .. }) => *max_fee_per_gas,
+            Transaction::Legacy(TxLegacy { gas_price, .. })
+            | Transaction::Eip2930(TxEip2930 { gas_price, .. }) => *gas_price,
+            Transaction::Eip1559(TxEip1559 { max_fee_per_gas, .. })
+            | Transaction::Eip4844(TxEip4844 { max_fee_per_gas, .. }) => *max_fee_per_gas,
             // Deposit transactions buy their L2 gas on L1 and, as such, the L2 gas is not
             // refundable.
             #[cfg(feature = "optimism")]
@@ -289,8 +289,8 @@ impl Transaction {
     pub fn max_priority_fee_per_gas(&self) -> Option<u128> {
         match self {
             Transaction::Legacy(_) | Transaction::Eip2930(_) => None,
-            Transaction::Eip1559(TxEip1559 { max_priority_fee_per_gas, .. }) |
-            Transaction::Eip4844(TxEip4844 { max_priority_fee_per_gas, .. }) => {
+            Transaction::Eip1559(TxEip1559 { max_priority_fee_per_gas, .. })
+            | Transaction::Eip4844(TxEip4844 { max_priority_fee_per_gas, .. }) => {
                 Some(*max_priority_fee_per_gas)
             }
             #[cfg(feature = "optimism")]
@@ -345,10 +345,10 @@ impl Transaction {
     /// non-EIP-1559 transactions.
     pub fn priority_fee_or_price(&self) -> u128 {
         match self {
-            Transaction::Legacy(TxLegacy { gas_price, .. }) |
-            Transaction::Eip2930(TxEip2930 { gas_price, .. }) => *gas_price,
-            Transaction::Eip1559(TxEip1559 { max_priority_fee_per_gas, .. }) |
-            Transaction::Eip4844(TxEip4844 { max_priority_fee_per_gas, .. }) => {
+            Transaction::Legacy(TxLegacy { gas_price, .. })
+            | Transaction::Eip2930(TxEip2930 { gas_price, .. }) => *gas_price,
+            Transaction::Eip1559(TxEip1559 { max_priority_fee_per_gas, .. })
+            | Transaction::Eip4844(TxEip4844 { max_priority_fee_per_gas, .. }) => {
                 *max_priority_fee_per_gas
             }
             #[cfg(feature = "optimism")]
@@ -387,7 +387,7 @@ impl Transaction {
 
         // Check if max_fee_per_gas is less than base_fee
         if max_fee_per_gas < base_fee {
-            return None
+            return None;
         }
 
         // Calculate the difference between max_fee_per_gas and base_fee
@@ -404,10 +404,10 @@ impl Transaction {
     /// Get the transaction's input field.
     pub fn input(&self) -> &Bytes {
         match self {
-            Transaction::Legacy(TxLegacy { input, .. }) |
-            Transaction::Eip2930(TxEip2930 { input, .. }) |
-            Transaction::Eip1559(TxEip1559 { input, .. }) |
-            Transaction::Eip4844(TxEip4844 { input, .. }) => input,
+            Transaction::Legacy(TxLegacy { input, .. })
+            | Transaction::Eip2930(TxEip2930 { input, .. })
+            | Transaction::Eip1559(TxEip1559 { input, .. })
+            | Transaction::Eip4844(TxEip4844 { input, .. }) => input,
             #[cfg(feature = "optimism")]
             Transaction::Deposit(TxDeposit { input, .. }) => input,
         }
@@ -860,7 +860,7 @@ impl TransactionSignedNoHash {
         // `from` address.
         #[cfg(feature = "optimism")]
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
-            return Some(from)
+            return Some(from);
         }
 
         let signature_hash = self.signature_hash();
@@ -883,7 +883,7 @@ impl TransactionSignedNoHash {
         // `from` address.
         #[cfg(feature = "optimism")]
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
-            return Some(from)
+            return Some(from);
         }
 
         self.signature.recover_signer_unchecked(keccak256(buffer))
@@ -1093,7 +1093,7 @@ impl TransactionSigned {
         // `from` address.
         #[cfg(feature = "optimism")]
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
-            return Some(from)
+            return Some(from);
         }
         let signature_hash = self.signature_hash();
         self.signature.recover_signer(signature_hash)
@@ -1109,7 +1109,7 @@ impl TransactionSigned {
         // `from` address.
         #[cfg(feature = "optimism")]
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
-            return Some(from)
+            return Some(from);
         }
         let signature_hash = self.signature_hash();
         self.signature.recover_signer_unchecked(signature_hash)
@@ -1283,7 +1283,7 @@ impl TransactionSigned {
         let transaction_payload_len = header.payload_length;
 
         if transaction_payload_len > remaining_len {
-            return Err(RlpError::InputTooShort)
+            return Err(RlpError::InputTooShort);
         }
 
         let mut transaction = TxLegacy {
@@ -1301,7 +1301,7 @@ impl TransactionSigned {
         // check the new length, compared to the original length and the header length
         let decoded = remaining_len - data.len();
         if decoded != transaction_payload_len {
-            return Err(RlpError::UnexpectedLength)
+            return Err(RlpError::UnexpectedLength);
         }
 
         let tx_length = header.payload_length + header.length();
@@ -1350,7 +1350,7 @@ impl TransactionSigned {
         // decode the list header for the rest of the transaction
         let header = Header::decode(data)?;
         if !header.list {
-            return Err(RlpError::Custom("typed tx fields must be encoded as a list"))
+            return Err(RlpError::Custom("typed tx fields must be encoded as a list"));
         }
 
         let remaining_len = data.len();
@@ -1360,7 +1360,7 @@ impl TransactionSigned {
 
         // decode common fields
         let Ok(tx_type) = TxType::try_from(tx_type) else {
-            return Err(RlpError::Custom("unsupported typed transaction type"))
+            return Err(RlpError::Custom("unsupported typed transaction type"));
         };
 
         let transaction = match tx_type {
@@ -1384,7 +1384,7 @@ impl TransactionSigned {
 
         let bytes_consumed = remaining_len - data.len();
         if bytes_consumed != header.payload_length {
-            return Err(RlpError::UnexpectedLength)
+            return Err(RlpError::UnexpectedLength);
         }
 
         let hash = keccak256(&original_encoding_without_header[..tx_length]);
@@ -1411,7 +1411,7 @@ impl TransactionSigned {
     /// [PooledTransactionsElement::decode_enveloped].
     pub fn decode_enveloped(data: &mut &[u8]) -> alloy_rlp::Result<Self> {
         if data.is_empty() {
-            return Err(RlpError::InputTooShort)
+            return Err(RlpError::InputTooShort);
         }
 
         // Check if the tx is a list
@@ -1513,7 +1513,7 @@ impl Decodable for TransactionSigned {
             // string Header with payload_length of 1, we need to make sure this check is only
             // performed for transactions with a string header
             if bytes_consumed != header.payload_length && original_encoding[0] > EMPTY_STRING_CODE {
-                return Err(RlpError::UnexpectedLength)
+                return Err(RlpError::UnexpectedLength);
             }
 
             Ok(tx)

@@ -88,7 +88,7 @@ where
             return TransactionValidationOutcome::Invalid(
                 transaction,
                 InvalidTransactionError::TxTypeNotSupported.into(),
-            )
+            );
         }
 
         let outcome = self.inner.validate_one(origin, transaction);
@@ -105,7 +105,7 @@ where
                 return TransactionValidationOutcome::Error(
                     *valid_tx.hash(),
                     "L1BlockInfoError".into(),
-                )
+                );
             };
 
             let mut encoded = Vec::new();
@@ -132,7 +132,7 @@ where
                         GotExpected { got: balance, expected: cost }.into(),
                     )
                     .into(),
-                )
+                );
             }
 
             return TransactionValidationOutcome::Valid {
@@ -140,7 +140,7 @@ where
                 state_nonce,
                 transaction: valid_tx,
                 propagate,
-            }
+            };
         }
 
         outcome

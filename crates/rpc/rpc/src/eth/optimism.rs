@@ -32,9 +32,9 @@ impl ToRpcError for OptimismEthApiError {
         match self {
             OptimismEthApiError::HyperError(err) => internal_rpc_err(err.to_string()),
             OptimismEthApiError::HttpError(err) => internal_rpc_err(err.to_string()),
-            OptimismEthApiError::InvalidSequencerTransaction |
-            OptimismEthApiError::L1BlockFeeError |
-            OptimismEthApiError::L1BlockGasError => internal_rpc_err(self.to_string()),
+            OptimismEthApiError::InvalidSequencerTransaction
+            | OptimismEthApiError::L1BlockFeeError
+            | OptimismEthApiError::L1BlockGasError => internal_rpc_err(self.to_string()),
         }
     }
 }

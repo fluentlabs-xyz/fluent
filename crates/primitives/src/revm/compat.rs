@@ -2,17 +2,15 @@ use crate::{
     revm_primitives::{AccountInfo, Log},
     Account, Address, Log as RethLog, TransactionKind, KECCAK_EMPTY, U256,
 };
-use revm::{
-    primitives::{MergeSpec, ShanghaiSpec},
-};
 use revm::gas::validate_initial_tx_gas;
+use revm::primitives::{MergeSpec, ShanghaiSpec};
 use revm_primitives::POSEIDON_EMPTY;
 
 /// Check equality between Revm and Reth `Log`s.
 pub fn is_log_equal(revm_log: &Log, reth_log: &RethLog) -> bool {
-    revm_log.address == reth_log.address &&
-        revm_log.data.data == reth_log.data &&
-        revm_log.topics() == reth_log.topics
+    revm_log.address == reth_log.address
+        && revm_log.data.data == reth_log.data
+        && revm_log.topics() == reth_log.topics
 }
 
 /// Converts a Revm [`AccountInfo`] into a Reth [`Account`].

@@ -93,7 +93,7 @@ impl<S> MuxDemuxStream<S> {
         S: DisconnectP2P,
     {
         if !self.can_drop() {
-            return Err(StreamInUse)
+            return Err(StreamInUse);
         }
 
         self.inner.start_disconnect(reason).map_err(|e| e.into())
@@ -138,7 +138,7 @@ impl<S> MuxDemuxStream<S> {
     ) -> Result<mpsc::UnboundedReceiver<BytesMut>, MuxDemuxError> {
         if let Some(tx) = self.demux.get(cap) {
             if !tx.is_closed() {
-                return Err(StreamAlreadyExists)
+                return Err(StreamAlreadyExists);
             }
         }
         let (ingress_tx, ingress) = mpsc::unbounded_channel();
@@ -153,7 +153,7 @@ impl<S> MuxDemuxStream<S> {
             let next_offset = offset + cap.num_messages();
             if *id < next_offset {
                 *id -= offset;
-                return Ok(cap)
+                return Ok(cap);
             }
         }
 
@@ -174,7 +174,7 @@ impl<S> MuxDemuxStream<S> {
     fn can_drop(&mut self) -> bool {
         for tx in self.demux.values() {
             if !tx.is_closed() {
-                return false
+                return false;
             }
         }
 
@@ -201,7 +201,7 @@ where
                     self.inner.start_send_unpin(item)?;
                     if send_count < self.demux.len() {
                         send_count += 1;
-                        continue
+                        continue;
                     }
                 } else {
                     mux_exhausted = true;
@@ -215,7 +215,7 @@ where
                 // no message is received. continue to send messages from stream clones as long as
                 // there are messages left to send.
                 if !mux_exhausted && self.inner.poll_ready_unpin(cx).is_ready() {
-                    continue
+                    continue;
                 }
                 // flush before returning pending
                 _ = self.inner.poll_flush_unpin(cx)?;
@@ -224,11 +224,11 @@ where
                 Some(Ok(bytes)) => bytes,
                 Some(Err(err)) => {
                     _ = self.inner.poll_flush_unpin(cx)?;
-                    return Poll::Ready(Some(Err(err.into())))
+                    return Poll::Ready(Some(Err(err.into())));
                 }
                 None => {
                     _ = self.inner.poll_flush_unpin(cx)?;
-                    return Poll::Ready(None)
+                    return Poll::Ready(None);
                 }
             };
 
@@ -238,7 +238,7 @@ where
             // yield message for main stream
             if *cap == self.owner {
                 _ = self.inner.poll_flush_unpin(cx)?;
-                return Poll::Ready(Some(Ok(bytes)))
+                return Poll::Ready(Some(Ok(bytes)));
             }
 
             // delegate message for stream clone
@@ -285,7 +285,7 @@ where
 {
     async fn disconnect(&mut self, reason: DisconnectReason) -> Result<(), MuxDemuxError> {
         if self.can_drop() {
-            return self.inner.disconnect(reason).await.map_err(Into::into)
+            return self.inner.disconnect(reason).await.map_err(Into::into);
         }
         Err(StreamInUse)
     }

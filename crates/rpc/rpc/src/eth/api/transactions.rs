@@ -586,7 +586,7 @@ where
         if let Some(tx) =
             self.pool().get_pooled_transaction_element(hash).map(|tx| tx.envelope_encoded())
         {
-            return Ok(Some(tx))
+            return Ok(Some(tx));
         }
 
         self.on_blocking_task(|this| async move {
@@ -1097,7 +1097,7 @@ where
 
         if block.body.is_empty() {
             // nothing to trace
-            return Ok(Some(Vec::new()))
+            return Ok(Some(Vec::new()));
         }
 
         // replay all transactions of the block
@@ -1389,7 +1389,7 @@ where
                 return match signer.sign_transaction(request, from) {
                     Ok(tx) => Ok(tx),
                     Err(e) => Err(e.into()),
-                }
+                };
             }
         }
         Err(EthApiError::InvalidTransactionSignature)
@@ -1414,7 +1414,7 @@ where
                     block_number,
                     base_fee_per_gas,
                     index.into(),
-                )))
+                )));
             }
         }
 
@@ -1428,7 +1428,7 @@ where
     ) -> EthResult<Option<Bytes>> {
         if let Some(block) = self.block_with_senders(block_id.into()).await? {
             if let Some(tx) = block.transactions().nth(index.into()) {
-                return Ok(Some(tx.envelope_encoded()))
+                return Ok(Some(tx.envelope_encoded()));
             }
         }
 

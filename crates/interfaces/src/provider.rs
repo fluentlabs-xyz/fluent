@@ -1,9 +1,9 @@
+use fluentbase_types::ExitCode;
 use reth_primitives::{
     Address, BlockHash, BlockHashOrNumber, BlockNumber, GotExpected, StaticFileSegment,
     TxHashOrNumber, TxNumber, B256, U256,
 };
 use std::path::PathBuf;
-use fluentbase_types::ExitCode;
 use thiserror::Error;
 
 /// Provider result type.

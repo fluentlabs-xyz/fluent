@@ -244,7 +244,7 @@ impl StaticFileProviderRW {
                 segment,
                 expected_block_number,
                 next_static_file_block,
-            ))
+            ));
         }
         Ok(())
     }
@@ -298,7 +298,7 @@ impl StaticFileProviderRW {
                     self.writer
                         .prune_rows(len as usize)
                         .map_err(|e| ProviderError::NippyJar(e.to_string()))?;
-                    break
+                    break;
                 }
 
                 num_rows -= len;

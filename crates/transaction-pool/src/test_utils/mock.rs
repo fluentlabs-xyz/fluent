@@ -42,10 +42,10 @@ macro_rules! set_value {
     ($this:ident => $field:ident) => {
         let new_value = $field;
         match $this {
-            MockTransaction::Legacy { ref mut $field, .. } |
-            MockTransaction::Eip1559 { ref mut $field, .. } |
-            MockTransaction::Eip4844 { ref mut $field, .. } |
-            MockTransaction::Eip2930 { ref mut $field, .. } => {
+            MockTransaction::Legacy { ref mut $field, .. }
+            | MockTransaction::Eip1559 { ref mut $field, .. }
+            | MockTransaction::Eip4844 { ref mut $field, .. }
+            | MockTransaction::Eip2930 { ref mut $field, .. } => {
                 *$field = new_value;
             }
         }
@@ -56,10 +56,10 @@ macro_rules! set_value {
 macro_rules! get_value {
     ($this:tt => $field:ident) => {
         match $this {
-            MockTransaction::Legacy { $field, .. } |
-            MockTransaction::Eip1559 { $field, .. } |
-            MockTransaction::Eip4844 { $field, .. } |
-            MockTransaction::Eip2930 { $field, .. } => $field.clone(),
+            MockTransaction::Legacy { $field, .. }
+            | MockTransaction::Eip1559 { $field, .. }
+            | MockTransaction::Eip4844 { $field, .. }
+            | MockTransaction::Eip2930 { $field, .. } => $field.clone(),
         }
     };
 }
@@ -317,8 +317,8 @@ impl MockTransaction {
 
     /// Sets the priority fee for dynamic fee transactions (EIP-1559 and EIP-4844)
     pub fn set_priority_fee(&mut self, val: u128) -> &mut Self {
-        if let MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } |
-        MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } = self
+        if let MockTransaction::Eip1559 { max_priority_fee_per_gas, .. }
+        | MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } = self
         {
             *max_priority_fee_per_gas = val;
         }
@@ -334,8 +334,8 @@ impl MockTransaction {
     /// Gets the priority fee for dynamic fee transactions (EIP-1559 and EIP-4844)
     pub const fn get_priority_fee(&self) -> Option<u128> {
         match self {
-            MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } |
-            MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } => {
+            MockTransaction::Eip1559 { max_priority_fee_per_gas, .. }
+            | MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } => {
                 Some(*max_priority_fee_per_gas)
             }
             _ => None,
@@ -344,8 +344,8 @@ impl MockTransaction {
 
     /// Sets the max fee for dynamic fee transactions (EIP-1559 and EIP-4844)
     pub fn set_max_fee(&mut self, val: u128) -> &mut Self {
-        if let MockTransaction::Eip1559 { max_fee_per_gas, .. } |
-        MockTransaction::Eip4844 { max_fee_per_gas, .. } = self
+        if let MockTransaction::Eip1559 { max_fee_per_gas, .. }
+        | MockTransaction::Eip4844 { max_fee_per_gas, .. } = self
         {
             *max_fee_per_gas = val;
         }
@@ -361,8 +361,8 @@ impl MockTransaction {
     /// Gets the max fee for dynamic fee transactions (EIP-1559 and EIP-4844)
     pub const fn get_max_fee(&self) -> Option<u128> {
         match self {
-            MockTransaction::Eip1559 { max_fee_per_gas, .. } |
-            MockTransaction::Eip4844 { max_fee_per_gas, .. } => Some(*max_fee_per_gas),
+            MockTransaction::Eip1559 { max_fee_per_gas, .. }
+            | MockTransaction::Eip4844 { max_fee_per_gas, .. } => Some(*max_fee_per_gas),
             _ => None,
         }
     }
@@ -371,9 +371,9 @@ impl MockTransaction {
     pub fn set_accesslist(&mut self, list: AccessList) -> &mut Self {
         match self {
             MockTransaction::Legacy { .. } => {}
-            MockTransaction::Eip1559 { accesslist, .. } |
-            MockTransaction::Eip4844 { accesslist, .. } |
-            MockTransaction::Eip2930 { accesslist, .. } => {
+            MockTransaction::Eip1559 { accesslist, .. }
+            | MockTransaction::Eip4844 { accesslist, .. }
+            | MockTransaction::Eip2930 { accesslist, .. } => {
                 *accesslist = list;
             }
         }
@@ -383,12 +383,12 @@ impl MockTransaction {
     /// Sets the gas price for the transaction.
     pub fn set_gas_price(&mut self, val: u128) -> &mut Self {
         match self {
-            MockTransaction::Legacy { gas_price, .. } |
-            MockTransaction::Eip2930 { gas_price, .. } => {
+            MockTransaction::Legacy { gas_price, .. }
+            | MockTransaction::Eip2930 { gas_price, .. } => {
                 *gas_price = val;
             }
-            MockTransaction::Eip1559 { max_fee_per_gas, max_priority_fee_per_gas, .. } |
-            MockTransaction::Eip4844 { max_fee_per_gas, max_priority_fee_per_gas, .. } => {
+            MockTransaction::Eip1559 { max_fee_per_gas, max_priority_fee_per_gas, .. }
+            | MockTransaction::Eip4844 { max_fee_per_gas, max_priority_fee_per_gas, .. } => {
                 *max_fee_per_gas = val;
                 *max_priority_fee_per_gas = val;
             }
@@ -399,16 +399,16 @@ impl MockTransaction {
     /// Sets the gas price for the transaction.
     pub fn with_gas_price(mut self, val: u128) -> Self {
         match self {
-            MockTransaction::Legacy { ref mut gas_price, .. } |
-            MockTransaction::Eip2930 { ref mut gas_price, .. } => {
+            MockTransaction::Legacy { ref mut gas_price, .. }
+            | MockTransaction::Eip2930 { ref mut gas_price, .. } => {
                 *gas_price = val;
             }
             MockTransaction::Eip1559 {
                 ref mut max_fee_per_gas,
                 ref mut max_priority_fee_per_gas,
                 ..
-            } |
-            MockTransaction::Eip4844 {
+            }
+            | MockTransaction::Eip4844 {
                 ref mut max_fee_per_gas,
                 ref mut max_priority_fee_per_gas,
                 ..
@@ -423,10 +423,10 @@ impl MockTransaction {
     /// Gets the gas price for the transaction.
     pub const fn get_gas_price(&self) -> u128 {
         match self {
-            MockTransaction::Legacy { gas_price, .. } |
-            MockTransaction::Eip2930 { gas_price, .. } => *gas_price,
-            MockTransaction::Eip1559 { max_fee_per_gas, .. } |
-            MockTransaction::Eip4844 { max_fee_per_gas, .. } => *max_fee_per_gas,
+            MockTransaction::Legacy { gas_price, .. }
+            | MockTransaction::Eip2930 { gas_price, .. } => *gas_price,
+            MockTransaction::Eip1559 { max_fee_per_gas, .. }
+            | MockTransaction::Eip4844 { max_fee_per_gas, .. } => *max_fee_per_gas,
         }
     }
 
@@ -556,39 +556,39 @@ impl MockTransaction {
 impl PoolTransaction for MockTransaction {
     fn hash(&self) -> &TxHash {
         match self {
-            MockTransaction::Legacy { hash, .. } |
-            MockTransaction::Eip1559 { hash, .. } |
-            MockTransaction::Eip4844 { hash, .. } |
-            MockTransaction::Eip2930 { hash, .. } => hash,
+            MockTransaction::Legacy { hash, .. }
+            | MockTransaction::Eip1559 { hash, .. }
+            | MockTransaction::Eip4844 { hash, .. }
+            | MockTransaction::Eip2930 { hash, .. } => hash,
         }
     }
 
     fn sender(&self) -> Address {
         match self {
-            MockTransaction::Legacy { sender, .. } |
-            MockTransaction::Eip1559 { sender, .. } |
-            MockTransaction::Eip4844 { sender, .. } |
-            MockTransaction::Eip2930 { sender, .. } => *sender,
+            MockTransaction::Legacy { sender, .. }
+            | MockTransaction::Eip1559 { sender, .. }
+            | MockTransaction::Eip4844 { sender, .. }
+            | MockTransaction::Eip2930 { sender, .. } => *sender,
         }
     }
 
     fn nonce(&self) -> u64 {
         match self {
-            MockTransaction::Legacy { nonce, .. } |
-            MockTransaction::Eip1559 { nonce, .. } |
-            MockTransaction::Eip4844 { nonce, .. } |
-            MockTransaction::Eip2930 { nonce, .. } => *nonce,
+            MockTransaction::Legacy { nonce, .. }
+            | MockTransaction::Eip1559 { nonce, .. }
+            | MockTransaction::Eip4844 { nonce, .. }
+            | MockTransaction::Eip2930 { nonce, .. } => *nonce,
         }
     }
 
     fn cost(&self) -> U256 {
         match self {
-            MockTransaction::Legacy { gas_price, value, gas_limit, .. } |
-            MockTransaction::Eip2930 { gas_limit, gas_price, value, .. } => {
+            MockTransaction::Legacy { gas_price, value, gas_limit, .. }
+            | MockTransaction::Eip2930 { gas_limit, gas_price, value, .. } => {
                 U256::from(*gas_limit) * U256::from(*gas_price) + *value
             }
-            MockTransaction::Eip1559 { max_fee_per_gas, value, gas_limit, .. } |
-            MockTransaction::Eip4844 { max_fee_per_gas, value, gas_limit, .. } => {
+            MockTransaction::Eip1559 { max_fee_per_gas, value, gas_limit, .. }
+            | MockTransaction::Eip4844 { max_fee_per_gas, value, gas_limit, .. } => {
                 U256::from(*gas_limit) * U256::from(*max_fee_per_gas) + *value
             }
         }
@@ -600,27 +600,27 @@ impl PoolTransaction for MockTransaction {
 
     fn max_fee_per_gas(&self) -> u128 {
         match self {
-            MockTransaction::Legacy { gas_price, .. } |
-            MockTransaction::Eip2930 { gas_price, .. } => *gas_price,
-            MockTransaction::Eip1559 { max_fee_per_gas, .. } |
-            MockTransaction::Eip4844 { max_fee_per_gas, .. } => *max_fee_per_gas,
+            MockTransaction::Legacy { gas_price, .. }
+            | MockTransaction::Eip2930 { gas_price, .. } => *gas_price,
+            MockTransaction::Eip1559 { max_fee_per_gas, .. }
+            | MockTransaction::Eip4844 { max_fee_per_gas, .. } => *max_fee_per_gas,
         }
     }
 
     fn access_list(&self) -> Option<&AccessList> {
         match self {
             MockTransaction::Legacy { .. } => None,
-            MockTransaction::Eip1559 { accesslist, .. } |
-            MockTransaction::Eip4844 { accesslist, .. } |
-            MockTransaction::Eip2930 { accesslist, .. } => Some(accesslist),
+            MockTransaction::Eip1559 { accesslist, .. }
+            | MockTransaction::Eip4844 { accesslist, .. }
+            | MockTransaction::Eip2930 { accesslist, .. } => Some(accesslist),
         }
     }
 
     fn max_priority_fee_per_gas(&self) -> Option<u128> {
         match self {
             MockTransaction::Legacy { .. } | MockTransaction::Eip2930 { .. } => None,
-            MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } |
-            MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } => {
+            MockTransaction::Eip1559 { max_priority_fee_per_gas, .. }
+            | MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } => {
                 Some(*max_priority_fee_per_gas)
             }
         }
@@ -643,7 +643,7 @@ impl PoolTransaction for MockTransaction {
 
         // If the maximum fee per gas is less than the base fee, return None
         if max_fee_per_gas < base_fee {
-            return None
+            return None;
         }
 
         // Calculate the fee by subtracting the base fee from the maximum fee per gas
@@ -652,7 +652,7 @@ impl PoolTransaction for MockTransaction {
         // If the maximum priority fee per gas is available, return the minimum of fee and priority
         // fee
         if let Some(priority_fee) = self.max_priority_fee_per_gas() {
-            return Some(fee.min(priority_fee))
+            return Some(fee.min(priority_fee));
         }
 
         // Otherwise, return the calculated fee
@@ -662,20 +662,22 @@ impl PoolTransaction for MockTransaction {
     /// Returns the priority fee or gas price based on the transaction type.
     fn priority_fee_or_price(&self) -> u128 {
         match self {
-            MockTransaction::Legacy { gas_price, .. } |
-            MockTransaction::Eip2930 { gas_price, .. } => *gas_price,
-            MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } |
-            MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } => *max_priority_fee_per_gas,
+            MockTransaction::Legacy { gas_price, .. }
+            | MockTransaction::Eip2930 { gas_price, .. } => *gas_price,
+            MockTransaction::Eip1559 { max_priority_fee_per_gas, .. }
+            | MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } => {
+                *max_priority_fee_per_gas
+            }
         }
     }
 
     /// Returns the transaction kind associated with the transaction.
     fn kind(&self) -> &TransactionKind {
         match self {
-            MockTransaction::Legacy { to, .. } |
-            MockTransaction::Eip1559 { to, .. } |
-            MockTransaction::Eip4844 { to, .. } |
-            MockTransaction::Eip2930 { to, .. } => to,
+            MockTransaction::Legacy { to, .. }
+            | MockTransaction::Eip1559 { to, .. }
+            | MockTransaction::Eip4844 { to, .. }
+            | MockTransaction::Eip2930 { to, .. } => to,
         }
     }
 
@@ -683,19 +685,19 @@ impl PoolTransaction for MockTransaction {
     fn input(&self) -> &[u8] {
         match self {
             MockTransaction::Legacy { .. } => &[],
-            MockTransaction::Eip1559 { input, .. } |
-            MockTransaction::Eip4844 { input, .. } |
-            MockTransaction::Eip2930 { input, .. } => input,
+            MockTransaction::Eip1559 { input, .. }
+            | MockTransaction::Eip4844 { input, .. }
+            | MockTransaction::Eip2930 { input, .. } => input,
         }
     }
 
     /// Returns the size of the transaction.
     fn size(&self) -> usize {
         match self {
-            MockTransaction::Legacy { size, .. } |
-            MockTransaction::Eip1559 { size, .. } |
-            MockTransaction::Eip4844 { size, .. } |
-            MockTransaction::Eip2930 { size, .. } => *size,
+            MockTransaction::Legacy { size, .. }
+            | MockTransaction::Eip1559 { size, .. }
+            | MockTransaction::Eip4844 { size, .. }
+            | MockTransaction::Eip2930 { size, .. } => *size,
         }
     }
 
@@ -957,8 +959,8 @@ impl proptest::arbitrary::Arbitrary for MockTransaction {
                     value,
                     input,
                     ..
-                }) |
-                Transaction::Eip2930(TxEip2930 {
+                })
+                | Transaction::Eip2930(TxEip2930 {
                     nonce,
                     gas_price,
                     gas_limit,

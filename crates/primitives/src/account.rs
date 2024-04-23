@@ -5,12 +5,12 @@ use crate::{
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Buf;
-use reth_codecs::{main_codec, Compact};
-use serde::{Deserialize, Serialize};
-use std::ops::Deref;
 use fluentbase_genesis::devnet::{KECCAK_HASH_KEY, POSEIDON_HASH_KEY};
 use fluentbase_poseidon::poseidon_hash;
+use reth_codecs::{main_codec, Compact};
 use revm_primitives::POSEIDON_EMPTY;
+use serde::{Deserialize, Serialize};
+use std::ops::Deref;
 
 /// An Ethereum account.
 #[main_codec]
@@ -35,26 +35,22 @@ impl Account {
     /// After SpuriousDragon empty account is defined as account with nonce == 0 && balance == 0 &&
     /// bytecode = None (or hash is [`KECCAK_EMPTY`]).
     pub fn is_empty(&self) -> bool {
-        self.nonce == 0 &&
-            self.balance.is_zero() &&
-            self.bytecode_hash.map_or(true, |hash| hash == KECCAK_EMPTY) &&
-            self.rwasm_hash.map_or(true, |hash| hash == POSEIDON_EMPTY)
+        self.nonce == 0
+            && self.balance.is_zero()
+            && self.bytecode_hash.map_or(true, |hash| hash == KECCAK_EMPTY)
+            && self.rwasm_hash.map_or(true, |hash| hash == POSEIDON_EMPTY)
     }
 
     /// Converts [GenesisAccount] to [Account] type
     pub fn from_genesis_account(value: GenesisAccount) -> Self {
-        let bytecode_hash = value.storage
+        let bytecode_hash = value
+            .storage
             .as_ref()
             .and_then(|s| s.get(&KECCAK_HASH_KEY))
             .cloned()
-            .or_else(|| {
-                value.code.as_ref().map(|bytes| keccak256(bytes.as_ref()))
-            });
-        let rwasm_hash = value.storage
-            .as_ref()
-            .and_then(|s| s.get(&POSEIDON_HASH_KEY))
-            .cloned()
-            .or_else(|| {
+            .or_else(|| value.code.as_ref().map(|bytes| keccak256(bytes.as_ref())));
+        let rwasm_hash =
+            value.storage.as_ref().and_then(|s| s.get(&POSEIDON_HASH_KEY)).cloned().or_else(|| {
                 value.code.as_ref().map(|bytes| B256::from(poseidon_hash(bytes.as_ref())))
             });
         Account {
@@ -169,7 +165,8 @@ mod tests {
 
     #[test]
     fn test_empty_account() {
-        let mut acc = Account { nonce: 0, balance: U256::ZERO, bytecode_hash: None, rwasm_hash: None };
+        let mut acc =
+            Account { nonce: 0, balance: U256::ZERO, bytecode_hash: None, rwasm_hash: None };
         // Nonce 0, balance 0, and bytecode hash set to None is considered empty.
         assert!(acc.is_empty());
 

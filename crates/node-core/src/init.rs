@@ -1,5 +1,7 @@
 //! Reth genesis initialization utility functions.
 
+use fluentbase_genesis::devnet::POSEIDON_HASH_KEY;
+use fluentbase_poseidon::poseidon_hash;
 use reth_db::{
     database::Database,
     tables,
@@ -20,8 +22,6 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
-use fluentbase_genesis::devnet::POSEIDON_HASH_KEY;
-use fluentbase_poseidon::poseidon_hash;
 use tracing::debug;
 
 /// Database initialization error type.
@@ -61,13 +61,13 @@ pub fn init_genesis<DB: Database>(factory: ProviderFactory<DB>) -> Result<B256, 
         Ok(Some(block_hash)) => {
             if block_hash == hash {
                 debug!("Genesis already written, skipping.");
-                return Ok(hash)
+                return Ok(hash);
             }
 
             return Err(InitDatabaseError::GenesisHashMismatch {
                 chainspec_hash: hash,
                 database_hash: block_hash,
-            })
+            });
         }
         Err(e) => return Err(dbg!(e).into()),
     }
@@ -111,13 +111,12 @@ pub fn insert_genesis_state<DB: Database>(
         let bytecode_hash = if let Some(code) = &account.code {
             let bytecode = Bytecode::new_raw(code.clone());
             let hash = bytecode.hash_slow();
-            let rwasm_hash = account.storage
+            let rwasm_hash = account
+                .storage
                 .as_ref()
                 .and_then(|s| s.get(&POSEIDON_HASH_KEY))
                 .cloned()
-                .unwrap_or_else(|| {
-                    poseidon_hash(bytecode.original_bytes().as_ref()).into()
-                });
+                .unwrap_or_else(|| poseidon_hash(bytecode.original_bytes().as_ref()).into());
             contracts.insert(hash, bytecode.clone());
             contracts.insert(rwasm_hash, bytecode);
             Some((hash, rwasm_hash))

@@ -1,3 +1,4 @@
+use fluentbase_types::POSEIDON_EMPTY;
 use reth_interfaces::RethError;
 use reth_primitives::{Address, B256, KECCAK_EMPTY, U256};
 use reth_provider::{ProviderError, StateProvider};
@@ -7,7 +8,6 @@ use revm::{
     Database, StateDBBox,
 };
 use std::ops::{Deref, DerefMut};
-use fluentbase_types::POSEIDON_EMPTY;
 
 /// SubState of database. Uses revm internal cache with binding to reth StateProvider trait.
 pub type SubState<DB> = CacheDB<StateProviderDatabase<DB>>;

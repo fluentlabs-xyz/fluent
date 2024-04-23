@@ -302,9 +302,9 @@ mod test {
         for node in config.bootstrap_nodes {
             let BootNode::Enr(node) = node else { panic!() };
             assert!(
-                socket_1 == node.udp4_socket().unwrap() && socket_1 == node.tcp4_socket().unwrap() ||
-                    socket_2 == node.udp4_socket().unwrap() &&
-                        socket_2 == node.tcp4_socket().unwrap()
+                socket_1 == node.udp4_socket().unwrap() && socket_1 == node.tcp4_socket().unwrap()
+                    || socket_2 == node.udp4_socket().unwrap()
+                        && socket_2 == node.tcp4_socket().unwrap()
             );
             assert_eq!("84b4940500", hex::encode(node.get_raw_rlp("opstack").unwrap()));
         }

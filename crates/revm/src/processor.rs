@@ -4,6 +4,7 @@ use crate::{
     stack::{InspectorStack, InspectorStackConfig},
     state_change::{apply_beacon_root_contract_call, post_block_balance_increments},
 };
+use fluentbase_types::ExitCode;
 use reth_interfaces::executor::{BlockExecutionError, BlockValidationError};
 use reth_node_api::ConfigureEvm;
 use reth_primitives::{
@@ -21,21 +22,20 @@ use revm::{
     Evm, State, StateBuilder,
 };
 use std::{sync::Arc, time::Instant};
-use fluentbase_types::ExitCode;
 
 #[cfg(feature = "optimism")]
 use reth_primitives::revm::env::fill_op_tx_env;
 #[cfg(not(feature = "optimism"))]
 use reth_primitives::revm::env::fill_tx_env;
 
+use crate::primitives::EVMError;
+use reth_primitives::revm_primitives::RWASM_MAX_INITCODE_SIZE;
 #[cfg(not(feature = "optimism"))]
 use reth_provider::BundleStateWithReceipts;
 #[cfg(not(feature = "optimism"))]
 use revm::DatabaseCommit;
 #[cfg(not(feature = "optimism"))]
 use tracing::{debug, trace};
-use reth_primitives::revm_primitives::RWASM_MAX_INITCODE_SIZE;
-use crate::primitives::EVMError;
 
 /// EVMProcessor is a block executor that uses revm to execute blocks or multiple blocks.
 ///
@@ -266,7 +266,8 @@ where
         }
 
         let hash = transaction.hash_ref();
-        let should_inspect = self.evm.context.external.should_inspect(&self.evm.context.evm.env, hash);
+        let should_inspect =
+            self.evm.context.external.should_inspect(&self.evm.context.evm.env, hash);
         let out = if should_inspect {
             // push inspector handle register.
             self.evm.handler.append_handler_register_plain(inspector_handle_register);
@@ -286,8 +287,14 @@ where
 
         out.map_err(move |e| {
             // Ensure hash is calculated for error log, if not already done
-            BlockValidationError::EVM { hash: transaction.recalculate_hash(), error: EVMError::<ProviderError>::Database(ProviderError::ExitCode(ExitCode::TransactError)).into() }
-                .into()
+            BlockValidationError::EVM {
+                hash: transaction.recalculate_hash(),
+                error: EVMError::<ProviderError>::Database(ProviderError::ExitCode(
+                    ExitCode::TransactError,
+                ))
+                .into(),
+            }
+            .into()
         })
     }
 
@@ -308,7 +315,7 @@ where
                 gas: GotExpected { got: cumulative_gas_used, expected: block.gas_used },
                 gas_spent_by_tx: receipts.gas_spent_by_tx()?,
             }
-            .into())
+            .into());
         }
         let time = Instant::now();
         self.apply_post_execution_state_change(block, total_difficulty)?;
@@ -319,8 +326,8 @@ where
             !self
                 .prune_modes
                 .account_history
-                .map_or(false, |mode| mode.should_prune(block.number, tip)) &&
-                !self
+                .map_or(false, |mode| mode.should_prune(block.number, tip))
+                && !self
                     .prune_modes
                     .storage_history
                     .map_or(false, |mode| mode.should_prune(block.number, tip))
@@ -367,7 +374,7 @@ where
             self.prune_modes.receipts.map_or(false, |mode| mode.should_prune(block_number, tip))
         {
             receipts.clear();
-            return Ok(())
+            return Ok(());
         }
 
         // All receipts from the last 128 blocks are required for blockchain tree, even with
@@ -375,7 +382,7 @@ where
         let prunable_receipts =
             PruneMode::Distance(MINIMUM_PRUNING_DISTANCE).should_prune(block_number, tip);
         if !prunable_receipts {
-            return Ok(())
+            return Ok(());
         }
 
         let contract_log_pruner = self.prune_modes.receipts_log_filter.group_by_block(tip, None)?;
@@ -438,7 +445,7 @@ where
                 verify_receipt(block.header.receipts_root, block.header.logs_bloom, receipts.iter())
             {
                 debug!(target: "evm", %error, ?receipts, "receipts verification failed");
-                return Err(error)
+                return Err(error);
             };
             self.stats.receipt_root_duration += time.elapsed();
         }
@@ -455,7 +462,7 @@ where
 
         // perf: do not execute empty blocks
         if block.body.is_empty() {
-            return Ok((Vec::new(), 0))
+            return Ok((Vec::new(), 0));
         }
 
         let mut cumulative_gas_used = 0;
@@ -470,7 +477,7 @@ where
                     transaction_gas_limit: transaction.gas_limit(),
                     block_available_gas,
                 }
-                .into())
+                .into());
             }
             // Execute transaction.
             let ResultAndState { result, state } = self.transact(transaction, *sender)?;
@@ -568,14 +575,14 @@ pub fn compare_receipts_root_and_logs_bloom(
         return Err(BlockValidationError::ReceiptRootDiff(
             GotExpected { got: calculated_receipts_root, expected: expected_receipts_root }.into(),
         )
-        .into())
+        .into());
     }
 
     if calculated_logs_bloom != expected_logs_bloom {
         return Err(BlockValidationError::BloomLogDiff(
             GotExpected { got: calculated_logs_bloom, expected: expected_logs_bloom }.into(),
         )
-        .into())
+        .into());
     }
 
     Ok(())

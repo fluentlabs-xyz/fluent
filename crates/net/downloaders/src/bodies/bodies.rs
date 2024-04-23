@@ -108,9 +108,9 @@ where
         let mut collected = 0;
         let mut non_empty_headers = 0;
         let headers = self.provider.sealed_headers_while(range.clone(), |header| {
-            let should_take = range.contains(&header.number) &&
-                non_empty_headers < max_non_empty &&
-                collected < self.stream_batch_size;
+            let should_take = range.contains(&header.number)
+                && non_empty_headers < max_non_empty
+                && collected < self.stream_batch_size;
 
             if should_take {
                 collected += 1;
@@ -167,10 +167,10 @@ where
                 .map(|last| last == *self.download_range.end())
                 .unwrap_or_default();
 
-        nothing_to_request &&
-            self.in_progress_queue.is_empty() &&
-            self.buffered_responses.is_empty() &&
-            self.queued_bodies.is_empty()
+        nothing_to_request
+            && self.in_progress_queue.is_empty()
+            && self.buffered_responses.is_empty()
+            && self.queued_bodies.is_empty()
     }
 
     /// Clear all download related data.
@@ -212,8 +212,8 @@ where
     /// Adds a new response to the internal buffer
     fn buffer_bodies_response(&mut self, response: Vec<BlockResponse>) {
         // take into account capacity
-        let size = response.iter().map(BlockResponse::size).sum::<usize>() +
-            response.capacity() * mem::size_of::<BlockResponse>();
+        let size = response.iter().map(BlockResponse::size).sum::<usize>()
+            + response.capacity() * mem::size_of::<BlockResponse>();
 
         let response = OrderedBodiesResponse { resp: response, size };
         let response_len = response.len();
@@ -272,9 +272,9 @@ where
         // requests are issued in order but not necessarily finished in order, so the queued bodies
         // can grow large if a certain request is slow, so we limit the followup requests if the
         // queued bodies grew too large
-        self.queued_bodies.len() < 4 * self.stream_batch_size &&
-            self.has_buffer_capacity() &&
-            self.in_progress_queue.len() < self.concurrent_request_limit()
+        self.queued_bodies.len() < 4 * self.stream_batch_size
+            && self.has_buffer_capacity()
+            && self.in_progress_queue.len() < self.concurrent_request_limit()
     }
 }
 
@@ -313,16 +313,16 @@ where
         // Check if the range is valid.
         if range.is_empty() {
             tracing::error!(target: "downloaders::bodies", ?range, "Bodies download range is invalid (empty)");
-            return Err(DownloadError::InvalidBodyRange { range })
+            return Err(DownloadError::InvalidBodyRange { range });
         }
 
         // Check if the provided range is the subset of the existing range.
-        let is_current_range_subset = self.download_range.contains(range.start()) &&
-            *range.end() == *self.download_range.end();
+        let is_current_range_subset = self.download_range.contains(range.start())
+            && *range.end() == *self.download_range.end();
         if is_current_range_subset {
             tracing::trace!(target: "downloaders::bodies", ?range, "Download range already in progress");
             // The current range already includes requested.
-            return Ok(())
+            return Ok(());
         }
 
         // Check if the provided range is the next expected range.
@@ -333,7 +333,7 @@ where
             tracing::trace!(target: "downloaders::bodies", ?range, "New download range set");
             info!(target: "downloaders::bodies", count, ?range, "Downloading bodies");
             self.download_range = range;
-            return Ok(())
+            return Ok(());
         }
 
         // The block range is reset. This can happen either after unwind or after the bodies were
@@ -512,8 +512,8 @@ impl BodiesDownloaderBuilder {
             .with_request_limit(config.downloader_request_limit)
             .with_max_buffered_blocks_size_bytes(config.downloader_max_buffered_blocks_size_bytes)
             .with_concurrent_requests_range(
-                config.downloader_min_concurrent_requests..=
-                    config.downloader_max_concurrent_requests,
+                config.downloader_min_concurrent_requests
+                    ..=config.downloader_max_concurrent_requests,
             )
     }
 }

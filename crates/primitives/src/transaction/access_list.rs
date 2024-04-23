@@ -88,8 +88,8 @@ impl AccessList {
     #[inline]
     pub fn size(&self) -> usize {
         // take into account capacity
-        self.iter().map(AccessListItem::size).sum::<usize>() +
-            self.capacity() * mem::size_of::<AccessListItem>()
+        self.iter().map(AccessListItem::size).sum::<usize>()
+            + self.capacity() * mem::size_of::<AccessListItem>()
     }
 
     /// Returns the position of the given address in the access list, if present.

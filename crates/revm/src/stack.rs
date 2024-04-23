@@ -1,4 +1,9 @@
-use revm::{inspectors::CustomPrintTracer, primitives::{Address, Env, Log, B256, U256}, Database, EvmContext, Inspector, interpreter::{Interpreter, CallInputs, CallOutcome, CreateInputs, CreateOutcome}};
+use revm::{
+    inspectors::CustomPrintTracer,
+    interpreter::{CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter},
+    primitives::{Address, Env, Log, B256, U256},
+    Database, EvmContext, Inspector,
+};
 use std::fmt::Debug;
 
 /// A hook to inspect the execution of the EVM.
@@ -59,8 +64,8 @@ impl InspectorStack {
     /// Returns `true` if this inspector should be used.
     #[inline]
     pub fn should_inspect(&self, env: &Env, tx_hash: &B256) -> bool {
-        self.custom_print_tracer.is_some() &&
-            self.hook.is_enabled(env.block.number.saturating_to(), tx_hash)
+        self.custom_print_tracer.is_some()
+            && self.hook.is_enabled(env.block.number.saturating_to(), tx_hash)
     }
 }
 
@@ -126,7 +131,7 @@ where
     ) -> Option<CallOutcome> {
         call_inspectors!([&mut self.custom_print_tracer], |inspector| {
             if let Some(outcome) = inspector.call(context, inputs) {
-                return Some(outcome)
+                return Some(outcome);
             }
         });
 
@@ -146,7 +151,7 @@ where
             // If the inspector returns a different ret or a revert with a non-empty message,
             // we assume it wants to tell us something
             if new_ret != outcome {
-                return new_ret
+                return new_ret;
             }
         });
 
@@ -161,7 +166,7 @@ where
     ) -> Option<CreateOutcome> {
         call_inspectors!([&mut self.custom_print_tracer], |inspector| {
             if let Some(out) = inspector.create(context, inputs) {
-                return Some(out)
+                return Some(out);
             }
         });
 
@@ -181,7 +186,7 @@ where
             // If the inspector returns a different ret or a revert with a non-empty message,
             // we assume it wants to tell us something
             if new_ret != outcome {
-                return new_ret
+                return new_ret;
             }
         });
 

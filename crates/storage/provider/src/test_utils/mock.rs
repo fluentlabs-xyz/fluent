@@ -248,7 +248,7 @@ impl TransactionsProvider for MockEthProvider {
                         base_fee: block.header.base_fee_per_gas,
                         excess_blob_gas: block.header.excess_blob_gas,
                     };
-                    return Ok(Some((tx.clone(), meta)))
+                    return Ok(Some((tx.clone(), meta)));
                 }
             }
         }
@@ -260,7 +260,7 @@ impl TransactionsProvider for MockEthProvider {
         let mut current_tx_number: TxNumber = 0;
         for block in lock.values() {
             if current_tx_number + (block.body.len() as TxNumber) > id {
-                return Ok(Some(block.header.number))
+                return Ok(Some(block.header.number));
             }
             current_tx_number += block.body.len() as TxNumber;
         }

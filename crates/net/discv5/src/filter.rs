@@ -35,7 +35,7 @@ impl MustIncludeKey {
     /// Returns [`FilterOutcome::Ok`] if [`Enr`](discv5::Enr) contains the configured kv-pair key.
     pub fn filter(&self, enr: &discv5::Enr) -> FilterOutcome {
         if enr.get_raw_rlp(self.key).is_none() {
-            return FilterOutcome::Ignore { reason: self.ignore_reason() }
+            return FilterOutcome::Ignore { reason: self.ignore_reason() };
         }
         FilterOutcome::Ok
     }
@@ -69,7 +69,7 @@ impl MustNotIncludeKeys {
     pub fn filter(&self, enr: &discv5::Enr) -> FilterOutcome {
         for key in self.keys.iter() {
             if matches!(key.filter(enr), FilterOutcome::Ok) {
-                return FilterOutcome::Ignore { reason: self.ignore_reason() }
+                return FilterOutcome::Ignore { reason: self.ignore_reason() };
             }
         }
 
