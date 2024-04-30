@@ -414,11 +414,11 @@ pr:
 fluent_build:
 	cargo build -p reth
 
-DATADIR:=./datadir
+DATADIR:=datadir
 .PHONY: fluent_run
 fluent_run:
-	cargo run --package reth --bin reth -- --chain=dev node --datadir=$(DATADIR) --dev --full --http --port=30305
+	cargo run --package reth --bin reth -- --chain=dev node --datadir=./$(DATADIR) --dev --full --http --port=30305
 
 .PHONY: clean_datadir
 fluent_clean_datadir:
-	rm -rf $(DATADIR)
+	rm -rf ./$(DATADIR)
