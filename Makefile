@@ -419,6 +419,11 @@ DATADIR:=datadir
 fluent_run:
 	cargo run --package reth --bin reth -- --chain=dev node --datadir=./$(DATADIR) --dev --full --http --port=30305
 
-.PHONY: clean_datadir
+.PHONY: fluent_clean_datadir
 fluent_clean_datadir:
 	rm -rf ./$(DATADIR)
+
+.PHONY: fluent_run_clean
+fluent_run_clean:
+	$(MAKE) fluent_clean_datadir
+	$(MAKE) fluent_run
