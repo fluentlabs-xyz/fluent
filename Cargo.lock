@@ -821,9 +821,9 @@ checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "base64"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "base64ct"
@@ -2809,7 +2809,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -2823,7 +2823,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec-derive"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "convert_case 0.6.0",
  "crypto-hashes",
@@ -2835,7 +2835,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-core"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "alloy-rlp",
  "byteorder",
@@ -2852,7 +2852,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-genesis"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "alloy-genesis",
  "byteorder",
@@ -2871,7 +2871,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-poseidon"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "bitvec",
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
@@ -2883,7 +2883,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-revm"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "auto_impl",
  "cfg-if",
@@ -2905,7 +2905,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-runtime"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "byteorder",
  "eth_trie",
@@ -2924,7 +2924,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "byteorder",
  "fluentbase-codec",
@@ -2938,7 +2938,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-types"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "alloy-primitives",
  "auto_impl",
@@ -2951,7 +2951,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-zktrie"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#aadd1ea4312d61a4b597ab063ad48d2ec279869f"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "byteorder",
  "fluentbase-poseidon",
@@ -4308,7 +4308,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.5",
 ]
 
 [[package]]
@@ -8217,7 +8217,7 @@ version = "3.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ad483d2ab0149d5a5ebcd9972a3852711e0153d863bf5a5d0391d28883c4a20"
 dependencies = [
- "base64 0.22.0",
+ "base64 0.22.1",
  "chrono",
  "hex",
  "indexmap 1.9.3",
