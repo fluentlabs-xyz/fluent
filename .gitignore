@@ -53,3 +53,5 @@ rustc-ice-*
 
 datadir
 libzktrie.so
+
+/tmp

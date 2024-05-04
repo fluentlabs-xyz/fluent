@@ -417,7 +417,7 @@ fluent_build:
 DATADIR:=datadir
 .PHONY: fluent_run
 fluent_run:
-	cargo run --package reth --bin reth -- --chain=dev node --datadir=./$(DATADIR) --dev --full --http --port=30305
+	cargo run --package reth --bin reth -- --color=never --chain=dev node --datadir=./$(DATADIR) --dev --full --http --port=30305
 
 .PHONY: fluent_clean_datadir
 fluent_clean_datadir:
@@ -426,4 +426,6 @@ fluent_clean_datadir:
 .PHONY: fluent_run_clean
 fluent_run_clean:
 	$(MAKE) fluent_clean_datadir
+	$(MAKE) fluent_build
+	notify-send "fluent" "build finished" || true
 	$(MAKE) fluent_run

@@ -2809,7 +2809,6 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -2823,7 +2822,6 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec-derive"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "convert_case 0.6.0",
  "crypto-hashes",
@@ -2835,7 +2833,6 @@ dependencies = [
 [[package]]
 name = "fluentbase-core"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "alloy-rlp",
  "byteorder",
@@ -2852,7 +2849,6 @@ dependencies = [
 [[package]]
 name = "fluentbase-genesis"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "alloy-genesis",
  "byteorder",
@@ -2871,7 +2867,6 @@ dependencies = [
 [[package]]
 name = "fluentbase-poseidon"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "bitvec",
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
@@ -2883,7 +2878,6 @@ dependencies = [
 [[package]]
 name = "fluentbase-revm"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "auto_impl",
  "cfg-if",
@@ -2905,9 +2899,9 @@ dependencies = [
 [[package]]
 name = "fluentbase-runtime"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "byteorder",
+ "chrono",
  "eth_trie",
  "fluentbase-poseidon",
  "fluentbase-types",
@@ -2924,7 +2918,6 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "byteorder",
  "fluentbase-codec",
@@ -2938,7 +2931,6 @@ dependencies = [
 [[package]]
 name = "fluentbase-types"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "alloy-primitives",
  "auto_impl",
@@ -2951,7 +2943,6 @@ dependencies = [
 [[package]]
 name = "fluentbase-zktrie"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7248294348b3d67b44d38368f769fa490e1ebf95"
 dependencies = [
  "byteorder",
  "fluentbase-poseidon",
@@ -7569,7 +7560,6 @@ dependencies = [
 [[package]]
 name = "revm-inspectors"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-inspectors?branch=devel#976dc27475837ebf4d7fb30234897f4655e4652d"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-trace-types",
@@ -7588,7 +7578,6 @@ dependencies = [
 [[package]]
 name = "revm-interpreter"
 version = "3.4.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#bb377e7906676bb409a41c4a3a8d574c6b422ad7"
 dependencies = [
  "revm-primitives",
 ]
@@ -7596,7 +7585,6 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "5.1.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#bb377e7906676bb409a41c4a3a8d574c6b422ad7"
 dependencies = [
  "aurora-engine-modexp",
  "c-kzg",
@@ -7612,7 +7600,6 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "3.1.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-rwasm?branch=devel#bb377e7906676bb409a41c4a3a8d574c6b422ad7"
 dependencies = [
  "alloy-primitives",
  "auto_impl",
@@ -7912,7 +7899,6 @@ dependencies = [
 [[package]]
 name = "rwasm"
 version = "0.30.0"
-source = "git+https://github.com/fluentlabs-xyz/rwasm?branch=devel#446044c3e946da5d9f9f0ffa93dc695952c79aab"
 dependencies = [
  "byteorder",
  "downcast-rs",
