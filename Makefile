@@ -425,7 +425,7 @@ fluent_clean_datadir:
 
 .PHONY: fluent_run_clean
 fluent_run_clean:
-	$(MAKE) fluent_clean_datadir
 	$(MAKE) fluent_build
+	$(MAKE) fluent_clean_datadir
 	notify-send "fluent" "build finished" || true
 	$(MAKE) fluent_run
