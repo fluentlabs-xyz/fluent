@@ -250,37 +250,37 @@ reth-trie = { path = "crates/trie" }
 reth-trie-parallel = { path = "crates/trie-parallel" }
 
 # revm
-#revm = { package = "fluentbase-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", features = [
-#    "std",
-#    "secp256k1",
-#    "optional_block_gas_limit",
-#    "optional_eip3607",
-#    "optional_no_base_fee",
-#], default-features = false }
-revm = { package = "fluentbase-revm", path = "../fluentbase/crates/revm", features = [
+revm = { package = "fluentbase-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "dev2", features = [
     "std",
     "secp256k1",
     "optional_block_gas_limit",
     "optional_eip3607",
     "optional_no_base_fee",
 ], default-features = false }
-#fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-#fluentbase-core = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-#fluentbase-runtime = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-#fluentbase-sdk = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-#fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-#fluentbase-types = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-runtime = { path = "../fluentbase/crates/runtime", default-features = false }
-fluentbase-poseidon = { path = "../fluentbase/crates/poseidon", default-features = false }
-fluentbase-core = { path = "../fluentbase/crates/core", default-features = false }
-fluentbase-sdk = { path = "../fluentbase/crates/sdk", default-features = false }
-fluentbase-genesis = { path = "../fluentbase/crates/genesis", default-features = false }
-fluentbase-types = { path = "../fluentbase/crates/types", default-features = false }
+#revm = { package = "fluentbase-revm", path = "../fluentbase/crates/revm", features = [
+#    "std",
+#    "secp256k1",
+#    "optional_block_gas_limit",
+#    "optional_eip3607",
+#    "optional_no_base_fee",
+#], default-features = false }
+fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "dev2", default-features = false }
+fluentbase-core = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "dev2", default-features = false }
+fluentbase-runtime = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "dev2", default-features = false }
+fluentbase-sdk = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "dev2", default-features = false }
+fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "dev2", default-features = false }
+fluentbase-types = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "dev2", default-features = false }
+#fluentbase-runtime = { path = "../fluentbase/crates/runtime", default-features = false }
+#fluentbase-poseidon = { path = "../fluentbase/crates/poseidon", default-features = false }
+#fluentbase-core = { path = "../fluentbase/crates/core", default-features = false }
+#fluentbase-sdk = { path = "../fluentbase/crates/sdk", default-features = false }
+#fluentbase-genesis = { path = "../fluentbase/crates/genesis", default-features = false }
+#fluentbase-types = { path = "../fluentbase/crates/types", default-features = false }
 
-#revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
-revm-primitives = { path = "../revm-rwasm/crates/primitives" }
-#revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors", branch = "devel" }
-revm-inspectors = { path = "../revm-inspectors" }
+revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "dev2" }
+#revm-primitives = { path = "../revm-rwasm/crates/primitives" }
+revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors", branch = "dev2" }
+#revm-inspectors = { path = "../revm-inspectors" }
 
 # eth
 alloy-chains = { version = "0.1", feature = ["serde", "rlp", "arbitrary"] }
