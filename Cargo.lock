@@ -2810,7 +2810,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -2824,7 +2824,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec-derive"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "convert_case 0.6.0",
  "crypto-hashes",
@@ -2836,7 +2836,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-core"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "alloy-rlp",
  "byteorder",
@@ -2854,7 +2854,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-genesis"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "alloy-genesis",
  "byteorder",
@@ -2873,7 +2873,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-poseidon"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "bitvec",
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
@@ -2885,7 +2885,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-revm"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "auto_impl",
  "cfg-if",
@@ -2904,7 +2904,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-runtime"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "byteorder",
  "chrono",
@@ -2924,7 +2924,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "alloy-rlp",
  "byteorder",
@@ -2940,7 +2940,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-types"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -2953,7 +2953,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-zktrie"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#3b1d4e7b3e65251c9848f232e71e853dc30659aa"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=dev2#fcdfb8f129a8d5f1310d201c462a9c44382efdd5"
 dependencies = [
  "byteorder",
  "fluentbase-poseidon",
