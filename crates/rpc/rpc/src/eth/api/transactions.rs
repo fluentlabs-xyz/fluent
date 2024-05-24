@@ -59,6 +59,7 @@ use reth_revm::optimism::RethL1BlockInfo;
 use reth_rpc_types::OptimismTransactionReceiptFields;
 #[cfg(feature = "optimism")]
 use revm::L1BlockInfo;
+use revm_primitives::WASM_MAX_CODE_SIZE;
 
 /// Helper alias type for the state's [CacheDB]
 pub(crate) type StateCacheDB = CacheDB<StateProviderDatabase<StateProviderBox>>;
@@ -922,7 +923,8 @@ where
         F: FnOnce(StateCacheDB, EnvWithHandlerCfg) -> EthResult<R> + Send + 'static,
         R: Send + 'static,
     {
-        let (cfg, block_env, at) = self.evm_env_at(at).await?;
+        let (mut cfg, block_env, at) = self.evm_env_at(at).await?;
+        cfg.limit_contract_code_size = Some(WASM_MAX_CODE_SIZE);
         let this = self.clone();
         self.inner
             .blocking_task_pool

@@ -34,7 +34,7 @@ use reth_provider::BundleStateWithReceipts;
 use revm::DatabaseCommit;
 #[cfg(not(feature = "optimism"))]
 use tracing::{debug, trace};
-use reth_primitives::revm_primitives::RWASM_MAX_INITCODE_SIZE;
+use reth_primitives::revm_primitives::WASM_MAX_CODE_SIZE;
 use crate::primitives::EVMError;
 
 /// EVMProcessor is a block executor that uses revm to execute blocks or multiple blocks.
@@ -181,7 +181,7 @@ where
             header,
             total_difficulty,
         );
-        cfg.cfg_env.limit_contract_code_size = Some(RWASM_MAX_INITCODE_SIZE);
+        cfg.cfg_env.limit_contract_code_size = Some(WASM_MAX_CODE_SIZE);
         *self.evm.cfg_mut() = cfg.cfg_env;
 
         // This will update the spec in case it changed
