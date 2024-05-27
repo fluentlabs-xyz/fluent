@@ -2,8 +2,8 @@ use crate::{
     constants::{BEACON_ROOTS_ADDRESS, SYSTEM_ADDRESS},
     recover_signer_unchecked,
     revm_primitives::{BlockEnv, Env, TransactTo, TxEnv},
-    Address, Bytes, Chain, ChainSpec, Header, Transaction, TransactionKind,
-    TransactionSignedEcRecovered, B256, U256,
+    Address, Bytes, Chain, ChainSpec, Header, Transaction, TransactionSignedEcRecovered, TxKind,
+    B256, U256,
 };
 
 #[cfg(feature = "optimism")]
@@ -162,6 +162,8 @@ pub fn fill_tx_env_with_beacon_root_contract_call(env: &mut Env, parent_beacon_b
         // blob fields can be None for this tx
         blob_hashes: Vec::new(),
         max_fee_per_blob_gas: None,
+        eof_initcodes: Default::default(),
+        eof_initcodes_hashed: Default::default(),
         #[cfg(feature = "optimism")]
         optimism: OptimismFields {
             source_hash: None,
@@ -208,8 +210,8 @@ where
             tx_env.gas_price = U256::from(tx.gas_price);
             tx_env.gas_priority_fee = None;
             tx_env.transact_to = match tx.to {
-                TransactionKind::Call(to) => TransactTo::Call(to),
-                TransactionKind::Create => TransactTo::create(),
+                TxKind::Call(to) => TransactTo::Call(to),
+                TxKind::Create => TransactTo::create(),
             };
             tx_env.value = tx.value;
             tx_env.data = tx.input.clone();
@@ -224,8 +226,8 @@ where
             tx_env.gas_price = U256::from(tx.gas_price);
             tx_env.gas_priority_fee = None;
             tx_env.transact_to = match tx.to {
-                TransactionKind::Call(to) => TransactTo::Call(to),
-                TransactionKind::Create => TransactTo::create(),
+                TxKind::Call(to) => TransactTo::Call(to),
+                TxKind::Create => TransactTo::create(),
             };
             tx_env.value = tx.value;
             tx_env.data = tx.input.clone();
@@ -247,8 +249,8 @@ where
             tx_env.gas_price = U256::from(tx.max_fee_per_gas);
             tx_env.gas_priority_fee = Some(U256::from(tx.max_priority_fee_per_gas));
             tx_env.transact_to = match tx.to {
-                TransactionKind::Call(to) => TransactTo::Call(to),
-                TransactionKind::Create => TransactTo::create(),
+                TxKind::Call(to) => TransactTo::Call(to),
+                TxKind::Create => TransactTo::create(),
             };
             tx_env.value = tx.value;
             tx_env.data = tx.input.clone();
@@ -270,8 +272,8 @@ where
             tx_env.gas_price = U256::from(tx.max_fee_per_gas);
             tx_env.gas_priority_fee = Some(U256::from(tx.max_priority_fee_per_gas));
             tx_env.transact_to = match tx.to {
-                TransactionKind::Call(to) => TransactTo::Call(to),
-                TransactionKind::Create => TransactTo::create(),
+                TxKind::Call(to) => TransactTo::Call(to),
+                TxKind::Create => TransactTo::create(),
             };
             tx_env.value = tx.value;
             tx_env.data = tx.input.clone();
@@ -295,8 +297,8 @@ where
             tx_env.gas_price = U256::ZERO;
             tx_env.gas_priority_fee = None;
             match tx.to {
-                TransactionKind::Call(to) => tx_env.transact_to = TransactTo::Call(to),
-                TransactionKind::Create => tx_env.transact_to = TransactTo::create(),
+                TxKind::Call(to) => tx_env.transact_to = TransactTo::Call(to),
+                TxKind::Create => tx_env.transact_to = TransactTo::create(),
             }
             tx_env.value = tx.value;
             tx_env.data = tx.input.clone();

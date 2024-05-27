@@ -1,8 +1,9 @@
 //! Interface between node identification on protocol version 5 and 4. Specifically, between types
 //! [`discv5::enr::NodeId`] and [`PeerId`].
 
-use discv5::enr::{CombinedPublicKey, Enr, EnrPublicKey, NodeId};
-use reth_primitives::{id2pk, pk2id, PeerId};
+use discv5::enr::{CombinedPublicKey, EnrPublicKey, NodeId};
+use enr::Enr;
+use reth_network_types::{id2pk, pk2id, PeerId};
 use secp256k1::{PublicKey, SecretKey};
 
 /// Extracts a [`CombinedPublicKey::Secp256k1`] from a [`discv5::Enr`] and converts it to a
@@ -40,29 +41,24 @@ pub struct EnrCombinedKeyWrapper(pub discv5::Enr);
 
 impl From<Enr<SecretKey>> for EnrCombinedKeyWrapper {
     fn from(value: Enr<SecretKey>) -> Self {
-        let encoded_enr = rlp::encode(&value);
-        let enr = rlp::decode::<discv5::Enr>(&encoded_enr).unwrap();
-
-        Self(enr)
+        let encoded_enr = alloy_rlp::encode(&value);
+        Self(alloy_rlp::Decodable::decode(&mut &encoded_enr[..]).unwrap())
     }
 }
 
 impl From<EnrCombinedKeyWrapper> for Enr<SecretKey> {
     fn from(val: EnrCombinedKeyWrapper) -> Self {
-        let EnrCombinedKeyWrapper(enr) = val;
-        let encoded_enr = rlp::encode(&enr);
-
-        rlp::decode::<Enr<SecretKey>>(&encoded_enr).unwrap()
+        let encoded_enr = alloy_rlp::encode(&val.0);
+        alloy_rlp::Decodable::decode(&mut &encoded_enr[..]).unwrap()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use alloy_rlp::Encodable;
     use discv5::enr::{CombinedKey, EnrKey};
     use reth_primitives::{Hardfork, NodeRecord, MAINNET};
-
-    use super::*;
 
     #[test]
     fn discv5_discv4_id_conversion() {

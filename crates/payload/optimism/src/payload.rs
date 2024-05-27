@@ -3,7 +3,7 @@
 //! Optimism builder support
 
 use alloy_rlp::Encodable;
-use reth_node_api::{BuiltPayload, PayloadBuilderAttributes};
+use reth_engine_primitives::{BuiltPayload, PayloadBuilderAttributes};
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{
     revm::config::revm_spec_by_timestamp_after_merge,
@@ -16,8 +16,7 @@ use reth_rpc_types::engine::{
     OptimismPayloadAttributes, PayloadId,
 };
 use reth_rpc_types_compat::engine::payload::{
-    block_to_payload_v3, convert_block_to_payload_field_v2,
-    convert_standalone_withdraw_to_withdrawal, try_block_to_payload_v1,
+    block_to_payload_v1, block_to_payload_v3, convert_block_to_payload_field_v2,
 };
 use revm::primitives::HandlerCfg;
 use std::sync::Arc;
@@ -54,19 +53,13 @@ impl PayloadBuilderAttributes for OptimismPayloadBuilderAttributes {
             (payload_id_optimism(&parent, &attributes, &transactions), transactions)
         };
 
-        let withdraw = attributes.payload_attributes.withdrawals.map(|withdrawals| {
-            Withdrawals::new(
-                withdrawals.into_iter().map(convert_standalone_withdraw_to_withdrawal).collect(),
-            )
-        });
-
         let payload_attributes = EthPayloadBuilderAttributes {
             id,
             parent,
             timestamp: attributes.payload_attributes.timestamp,
             suggested_fee_recipient: attributes.payload_attributes.suggested_fee_recipient,
             prev_randao: attributes.payload_attributes.prev_randao,
-            withdrawals: withdraw.unwrap_or_default(),
+            withdrawals: attributes.payload_attributes.withdrawals.unwrap_or_default().into(),
             parent_beacon_block_root: attributes.payload_attributes.parent_beacon_block_root,
         };
 
@@ -142,7 +135,7 @@ impl PayloadBuilderAttributes for OptimismPayloadBuilderAttributes {
             // calculate basefee based on parent block's gas usage
             basefee: U256::from(
                 parent
-                    .next_block_base_fee(chain_spec.base_fee_params(self.timestamp()))
+                    .next_block_base_fee(chain_spec.base_fee_params_at_timestamp(self.timestamp()))
                     .unwrap_or_default(),
             ),
             // calculate excess gas based on parent block's blob gas usage
@@ -237,7 +230,7 @@ impl<'a> BuiltPayload for &'a OptimismBuiltPayload {
 // V1 engine_getPayloadV1 response
 impl From<OptimismBuiltPayload> for ExecutionPayloadV1 {
     fn from(value: OptimismBuiltPayload) -> Self {
-        try_block_to_payload_v1(value.block)
+        block_to_payload_v1(value.block)
     }
 }
 

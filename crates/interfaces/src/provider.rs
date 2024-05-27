@@ -3,7 +3,6 @@ use reth_primitives::{
     TxHashOrNumber, TxNumber, B256, U256,
 };
 use std::path::PathBuf;
-use fluentbase_types::ExitCode;
 use thiserror::Error;
 
 /// Provider result type.
@@ -24,9 +23,6 @@ pub enum ProviderError {
     /// Error when recovering the sender for a transaction
     #[error("failed to recover sender for transaction")]
     SenderRecoveryError,
-    /// Inconsistent header gap.
-    #[error("inconsistent header gap in the database")]
-    InconsistentHeaderGap,
     /// The header number was not found for the given block hash.
     #[error("block hash {0} does not exist in Headers table")]
     BlockHashNotFound(BlockHash),
@@ -66,9 +62,6 @@ pub enum ProviderError {
     /// The specific receipt is missing
     #[error("no receipt found for {0:?}")]
     ReceiptNotFound(TxHashOrNumber),
-    /// Unable to find a specific block.
-    #[error("block does not exist {0:?}")]
-    BlockNotFound(BlockHashOrNumber),
     /// Unable to find the best block.
     #[error("best block does not exist")]
     BestBlockNotFound,
@@ -135,9 +128,6 @@ pub enum ProviderError {
     /// Consistent view error.
     #[error("failed to initialize consistent view: {0}")]
     ConsistentView(Box<ConsistentViewError>),
-    /// WASM exit code.
-    #[error("transact exit code: {0}")]
-    ExitCode(ExitCode),
 }
 
 impl From<reth_primitives::fs::FsPathError> for ProviderError {

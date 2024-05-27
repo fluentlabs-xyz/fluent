@@ -1,27 +1,20 @@
-use reth_interfaces::RethError;
 use reth_primitives::{Address, B256, KECCAK_EMPTY, U256};
 use reth_provider::{ProviderError, StateProvider};
 use revm::{
-    db::{CacheDB, DatabaseRef},
+    db::DatabaseRef,
     primitives::{AccountInfo, Bytecode},
-    Database, StateDBBox,
+    Database,
 };
 use std::ops::{Deref, DerefMut};
 use fluentbase_types::POSEIDON_EMPTY;
 
-/// SubState of database. Uses revm internal cache with binding to reth StateProvider trait.
-pub type SubState<DB> = CacheDB<StateProviderDatabase<DB>>;
-
-/// State boxed database with reth Error.
-pub type RethStateDBBox<'a> = StateDBBox<'a, RethError>;
-
 /// Wrapper around StateProvider that implements revm database trait
 #[derive(Debug, Clone)]
-pub struct StateProviderDatabase<DB: StateProvider>(pub DB);
+pub struct StateProviderDatabase<DB>(pub DB);
 
-impl<DB: StateProvider> StateProviderDatabase<DB> {
+impl<DB> StateProviderDatabase<DB> {
     /// Create new State with generic StateProvider.
-    pub fn new(db: DB) -> Self {
+    pub const fn new(db: DB) -> Self {
         Self(db)
     }
 
@@ -31,7 +24,7 @@ impl<DB: StateProvider> StateProviderDatabase<DB> {
     }
 }
 
-impl<DB: StateProvider> Deref for StateProviderDatabase<DB> {
+impl<DB> Deref for StateProviderDatabase<DB> {
     type Target = DB;
 
     fn deref(&self) -> &Self::Target {
@@ -39,7 +32,7 @@ impl<DB: StateProvider> Deref for StateProviderDatabase<DB> {
     }
 }
 
-impl<DB: StateProvider> DerefMut for StateProviderDatabase<DB> {
+impl<DB> DerefMut for StateProviderDatabase<DB> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

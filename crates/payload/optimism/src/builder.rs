@@ -5,6 +5,7 @@ use crate::{
     payload::{OptimismBuiltPayload, OptimismPayloadBuilderAttributes},
 };
 use reth_basic_payload_builder::*;
+use reth_evm::ConfigureEvm;
 use reth_payload_builder::error::PayloadBuilderError;
 use reth_primitives::{
     constants::{BEACON_NONCE, EMPTY_RECEIPTS, EMPTY_TRANSACTIONS},
@@ -27,18 +28,20 @@ use tracing::{debug, trace, warn};
 
 /// Optimism's payload builder
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OptimismPayloadBuilder {
+pub struct OptimismPayloadBuilder<EvmConfig> {
     /// The rollup's compute pending block configuration option.
     // TODO(clabby): Implement this feature.
     compute_pending_block: bool,
     /// The rollup's chain spec.
     chain_spec: Arc<ChainSpec>,
+
+    evm_config: EvmConfig,
 }
 
-impl OptimismPayloadBuilder {
+impl<EvmConfig> OptimismPayloadBuilder<EvmConfig> {
     /// OptimismPayloadBuilder constructor.
-    pub fn new(chain_spec: Arc<ChainSpec>) -> Self {
-        Self { compute_pending_block: true, chain_spec }
+    pub fn new(chain_spec: Arc<ChainSpec>, evm_config: EvmConfig) -> Self {
+        Self { compute_pending_block: true, chain_spec, evm_config }
     }
 
     /// Sets the rollup's compute pending block configuration option.
@@ -65,10 +68,11 @@ impl OptimismPayloadBuilder {
 }
 
 /// Implementation of the [PayloadBuilder] trait for [OptimismPayloadBuilder].
-impl<Pool, Client> PayloadBuilder<Pool, Client> for OptimismPayloadBuilder
+impl<Pool, Client, EvmConfig> PayloadBuilder<Pool, Client> for OptimismPayloadBuilder<EvmConfig>
 where
     Client: StateProviderFactory,
     Pool: TransactionPool,
+    EvmConfig: ConfigureEvm,
 {
     type Attributes = OptimismPayloadBuilderAttributes;
     type BuiltPayload = OptimismBuiltPayload;
@@ -77,7 +81,7 @@ where
         &self,
         args: BuildArguments<Pool, Client, OptimismPayloadBuilderAttributes, OptimismBuiltPayload>,
     ) -> Result<BuildOutcome<OptimismBuiltPayload>, PayloadBuilderError> {
-        optimism_payload_builder(args, self.compute_pending_block)
+        optimism_payload_builder(self.evm_config.clone(), args, self.compute_pending_block)
     }
 
     fn on_missing_payload(
@@ -119,7 +123,7 @@ where
                 err
             })?;
         let mut db = State::builder()
-            .with_database_boxed(Box::new(StateProviderDatabase::new(&state)))
+            .with_database(StateProviderDatabase::new(state))
             .with_bundle_update()
             .build();
 
@@ -129,22 +133,36 @@ where
 
         // apply eip-4788 pre block contract call
         pre_block_beacon_root_contract_call(
-                &mut db,
-                &chain_spec,
-                block_number,
-                &initialized_cfg,
-                &initialized_block_env,
-                &attributes,
-            ).map_err(|err| {
-                warn!(target: "payload_builder", parent_hash=%parent_block.hash(), %err, "failed to apply beacon root contract call for empty payload");
-                err
-            })?;
+            &mut db,
+            &chain_spec,
+            block_number,
+            &initialized_cfg,
+            &initialized_block_env,
+            &attributes,
+        )
+        .map_err(|err| {
+            warn!(target: "payload_builder",
+                parent_hash=%parent_block.hash(),
+                %err,
+                "failed to apply beacon root contract call for empty payload"
+            );
+            err
+        })?;
 
-        let WithdrawalsOutcome { withdrawals_root, withdrawals } =
-                commit_withdrawals(&mut db, &chain_spec, attributes.payload_attributes.timestamp, attributes.payload_attributes.withdrawals.clone()).map_err(|err| {
-                    warn!(target: "payload_builder", parent_hash=%parent_block.hash(), %err, "failed to commit withdrawals for empty payload");
-                    err
-                })?;
+        let WithdrawalsOutcome { withdrawals_root, withdrawals } = commit_withdrawals(
+            &mut db,
+            &chain_spec,
+            attributes.payload_attributes.timestamp,
+            attributes.payload_attributes.withdrawals.clone(),
+        )
+        .map_err(|err| {
+            warn!(target: "payload_builder",
+                parent_hash=%parent_block.hash(),
+                %err,
+                "failed to commit withdrawals for empty payload"
+            );
+            err
+        })?;
 
         // merge all transitions into bundle state, this would apply the withdrawal balance
         // changes and 4788 contract call
@@ -152,10 +170,14 @@ where
 
         // calculate the state root
         let bundle_state = db.take_bundle();
-        let state_root = state.state_root(&bundle_state).map_err(|err| {
-                warn!(target: "payload_builder", parent_hash=%parent_block.hash(), %err, "failed to calculate state root for empty payload");
-                err
-            })?;
+        let state_root = db.database.state_root(&bundle_state).map_err(|err| {
+            warn!(target: "payload_builder",
+                parent_hash=%parent_block.hash(),
+                %err,
+                "failed to calculate state root for empty payload"
+            );
+            err
+        })?;
 
         let mut excess_blob_gas = None;
         let mut blob_gas_used = None;
@@ -219,20 +241,22 @@ where
 /// and configuration, this function creates a transaction payload. Returns
 /// a result indicating success with the payload or an error in case of failure.
 #[inline]
-pub(crate) fn optimism_payload_builder<Pool, Client>(
+pub(crate) fn optimism_payload_builder<EvmConfig, Pool, Client>(
+    evm_config: EvmConfig,
     args: BuildArguments<Pool, Client, OptimismPayloadBuilderAttributes, OptimismBuiltPayload>,
     _compute_pending_block: bool,
 ) -> Result<BuildOutcome<OptimismBuiltPayload>, PayloadBuilderError>
 where
+    EvmConfig: ConfigureEvm,
     Client: StateProviderFactory,
     Pool: TransactionPool,
 {
     let BuildArguments { client, pool, mut cached_reads, config, cancel, best_payload } = args;
 
     let state_provider = client.state_by_block_hash(config.parent_block.hash())?;
-    let state = StateProviderDatabase::new(&state_provider);
+    let state = StateProviderDatabase::new(state_provider);
     let mut db =
-        State::builder().with_database_ref(cached_reads.as_db(&state)).with_bundle_update().build();
+        State::builder().with_database_ref(cached_reads.as_db(state)).with_bundle_update().build();
     let extra_data = config.extra_data();
     let PayloadConfig {
         initialized_block_env,
@@ -244,13 +268,15 @@ where
     } = config;
 
     debug!(target: "payload_builder", id=%attributes.payload_attributes.payload_id(), parent_hash = ?parent_block.hash(), parent_number = parent_block.number, "building new payload");
+
     let mut cumulative_gas_used = 0;
     let block_gas_limit: u64 = attributes
         .gas_limit
         .unwrap_or_else(|| initialized_block_env.gas_limit.try_into().unwrap_or(u64::MAX));
     let base_fee = initialized_block_env.basefee.to::<u64>();
 
-    let mut executed_txs = Vec::new();
+    let mut executed_txs = Vec::with_capacity(attributes.transactions.len());
+
     let mut best_txs = pool.best_transactions_with_attributes(BestTransactionsAttributes::new(
         base_fee,
         initialized_block_env.get_blob_gasprice().map(|gasprice| gasprice as u64),
@@ -277,16 +303,17 @@ where
     // blocks will always have at least a single transaction in them (the L1 info transaction),
     // so we can safely assume that this will always be triggered upon the transition and that
     // the above check for empty blocks will never be hit on OP chains.
-    reth_revm::optimism::ensure_create2_deployer(
+    reth_evm_optimism::ensure_create2_deployer(
         chain_spec.clone(),
         attributes.payload_attributes.timestamp,
         &mut db,
     )
-    .map_err(|_| {
+    .map_err(|err| {
+        warn!(target: "payload_builder", %err, "missing create2 deployer, skipping block.");
         PayloadBuilderError::other(OptimismPayloadBuilderError::ForceCreate2DeployerFail)
     })?;
 
-    let mut receipts = Vec::new();
+    let mut receipts = Vec::with_capacity(attributes.transactions.len());
     for sequencer_tx in &attributes.transactions {
         // Check if the job was cancelled, if so we can exit early.
         if cancel.is_cancelled() {
@@ -294,7 +321,7 @@ where
         }
 
         // A sequencer's block should never contain blob transactions.
-        if matches!(sequencer_tx.tx_type(), TxType::Eip4844) {
+        if sequencer_tx.is_eip4844() {
             return Err(PayloadBuilderError::other(
                 OptimismPayloadBuilderError::BlobTransactionRejected,
             ))
@@ -325,14 +352,13 @@ where
                 ))
             })?;
 
-        let mut evm = revm::Evm::builder()
-            .with_db(&mut db)
-            .with_env_with_handler_cfg(EnvWithHandlerCfg::new_with_cfg_env(
-                initialized_cfg.clone(),
-                initialized_block_env.clone(),
-                tx_env_with_recovered(&sequencer_tx),
-            ))
-            .build();
+        let env = EnvWithHandlerCfg::new_with_cfg_env(
+            initialized_cfg.clone(),
+            initialized_block_env.clone(),
+            tx_env_with_recovered(&sequencer_tx),
+        );
+
+        let mut evm = evm_config.evm_with_env(&mut db, env);
 
         let ResultAndState { result, state } = match evm.transact() {
             Ok(res) => res,
@@ -393,11 +419,9 @@ where
                 continue
             }
 
-            // A sequencer's block should never contain blob transactions.
-            if pool_tx.tx_type() == TxType::Eip4844 as u8 {
-                return Err(PayloadBuilderError::other(
-                    OptimismPayloadBuilderError::BlobTransactionRejected,
-                ))
+            // A sequencer's block should never contain blob or deposit transactions from the pool.
+            if pool_tx.is_eip4844() || pool_tx.tx_type() == TxType::Deposit as u8 {
+                best_txs.mark_invalid(&pool_tx)
             }
 
             // check if the job was cancelled, if so we can exit early
@@ -407,16 +431,14 @@ where
 
             // convert tx to a signed transaction
             let tx = pool_tx.to_recovered_transaction();
+            let env = EnvWithHandlerCfg::new_with_cfg_env(
+                initialized_cfg.clone(),
+                initialized_block_env.clone(),
+                tx_env_with_recovered(&tx),
+            );
 
             // Configure the environment for the block.
-            let mut evm = revm::Evm::builder()
-                .with_db(&mut db)
-                .with_env_with_handler_cfg(EnvWithHandlerCfg::new_with_cfg_env(
-                    initialized_cfg.clone(),
-                    initialized_block_env.clone(),
-                    tx_env_with_recovered(&tx),
-                ))
-                .build();
+            let mut evm = evm_config.evm_with_env(&mut db, env);
 
             let ResultAndState { result, state } = match evm.transact() {
                 Ok(res) => res,
@@ -506,7 +528,10 @@ where
     let logs_bloom = bundle.block_logs_bloom(block_number).expect("Number is in range");
 
     // calculate the state root
-    let state_root = state_provider.state_root(bundle.state())?;
+    let state_root = {
+        let state_provider = db.database.0.inner.borrow_mut();
+        state_provider.db.state_root(bundle.state())?
+    };
 
     // create the block header
     let transactions_root = proofs::calculate_transaction_root(&executed_txs);

@@ -1,6 +1,6 @@
 use crate::{
     keccak256,
-    revm_primitives::{Bytecode as RevmBytecode, BytecodeState, Bytes, JumpMap},
+    revm_primitives::{Bytecode as RevmBytecode, BytecodeState, Bytes},
     GenesisAccount, B256, KECCAK_EMPTY, U256,
 };
 use byteorder::{BigEndian, ReadBytesExt};
@@ -101,8 +101,8 @@ impl Compact for Bytecode {
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
-        buf.put_u32(self.0.bytecode.len() as u32);
-        buf.put_slice(self.0.bytecode.as_ref());
+        buf.put_u32(self.0.bytecode().len() as u32);
+        buf.put_slice(self.0.bytecode().as_ref());
         let len = match self.0.state() {
             BytecodeState::Raw => {
                 buf.put_u8(0);
@@ -121,7 +121,7 @@ impl Compact for Bytecode {
                 9 + map.len()
             }
         };
-        len + self.0.bytecode.len() + 4
+        len + self.0.bytecode().len() + 4
     }
 
     fn from_compact(mut buf: &[u8], _: usize) -> (Self, &[u8]) {
