@@ -257,12 +257,13 @@ reth-trie-parallel = { path = "crates/trie-parallel" }
 #    "optional_eip3607",
 #    "optional_no_base_fee",
 #], default-features = false }
-revm = { package = "fluentbase-revm", path = "../fluentbase/crates/revm", features = [
+revm = { package = "revm-fluent", path = "../revm-rwasm/crates/revm_fluent", features = [
     "std",
     "secp256k1",
     "optional_block_gas_limit",
     "optional_eip3607",
     "optional_no_base_fee",
+    "fluent_revm",
 ], default-features = false }
 #fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
 #fluentbase-core = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
