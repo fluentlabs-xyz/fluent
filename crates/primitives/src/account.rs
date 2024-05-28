@@ -1,6 +1,6 @@
 use crate::{
     keccak256,
-    revm_primitives::{Bytecode as RevmBytecode, BytecodeState, Bytes},
+    revm_primitives::{Bytecode as RevmBytecode, Bytes},
     GenesisAccount, B256, KECCAK_EMPTY, U256,
 };
 use byteorder::{BigEndian, ReadBytesExt};
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use fluentbase_genesis::devnet::{KECCAK_HASH_KEY, POSEIDON_HASH_KEY};
 use fluentbase_poseidon::poseidon_hash;
-use revm_primitives::POSEIDON_EMPTY;
+use revm_primitives::{JumpTable, POSEIDON_EMPTY};
 
 /// An Ethereum account.
 #[main_codec]
@@ -130,17 +130,17 @@ impl Compact for Bytecode {
         let variant = buf.read_u8().expect("could not read bytecode variant");
         let decoded = match variant {
             0 => Bytecode(RevmBytecode::new_raw(bytes)),
-            1 => Bytecode(unsafe {
-                RevmBytecode::new_checked(bytes, buf.read_u64::<BigEndian>().unwrap() as usize)
+            1 => unreachable!("Junk data in database: checked Bytecode variant was removed"),
+            2 => Bytecode(unsafe {
+                RevmBytecode::new_analyzed(
+                    bytes,
+                    buf.read_u64::<BigEndian>().unwrap() as usize,
+                    JumpTable::from_slice(buf),
+                )
             }),
-            2 => Bytecode(RevmBytecode {
-                bytecode: bytes,
-                state: BytecodeState::Analysed {
-                    len: buf.read_u64::<BigEndian>().unwrap() as usize,
-                    jump_map: JumpMap::from_slice(buf),
-                },
-            }),
-            _ => unreachable!("Junk data in database: unknown BytecodeState variant"),
+            // TODO(EOF)
+            3 => todo!("EOF"),
+            _ => unreachable!("Junk data in database: unknown Bytecode variant"),
         };
         (decoded, &[])
     }

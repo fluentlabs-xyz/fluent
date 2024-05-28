@@ -3,7 +3,7 @@ use revm::{
     interpreter::gas::validate_initial_tx_gas,
     primitives::{MergeSpec, ShanghaiSpec},
 };
-use revm_primitives::POSEIDON_EMPTY;
+use revm_primitives::{POSEIDON_EMPTY, SpecId};
 
 /// Converts a Revm [`AccountInfo`] into a Reth [`Account`].
 ///
@@ -44,8 +44,8 @@ pub fn calculate_intrinsic_gas_after_merge(
     is_shanghai: bool,
 ) -> u64 {
     if is_shanghai {
-        validate_initial_tx_gas::<ShanghaiSpec>(input, kind.is_create(), access_list)
+        validate_initial_tx_gas(SpecId::SHANGHAI, input, kind.is_create(), access_list, &[])
     } else {
-        validate_initial_tx_gas::<MergeSpec>(input, kind.is_create(), access_list)
+        validate_initial_tx_gas(SpecId::MERGE, input, kind.is_create(), access_list, &[])
     }
 }
