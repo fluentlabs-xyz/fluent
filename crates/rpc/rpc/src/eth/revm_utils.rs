@@ -25,6 +25,7 @@ use revm::{
     Database,
 };
 use std::cmp::min;
+use std::iter;
 use tracing::trace;
 
 /// Helper type that bundles various overrides for EVM Execution.
@@ -116,8 +117,7 @@ impl FillableTransaction for TransactionSigned {
 /// Returns the addresses of the precompiles corresponding to the SpecId.
 #[inline]
 pub(crate) fn get_precompiles(spec_id: SpecId) -> impl IntoIterator<Item = Address> {
-    let spec = PrecompileSpecId::from_spec_id(spec_id);
-    Precompiles::new(spec).addresses().copied().map(Address::from)
+    iter::empty()
 }
 
 /// Prepares the [EnvWithHandlerCfg] for execution.
