@@ -6,11 +6,12 @@ use crate::{
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Buf;
 use reth_codecs::{main_codec, Compact};
+use revm_primitives::JumpTable;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use fluentbase_genesis::devnet::{KECCAK_HASH_KEY, POSEIDON_HASH_KEY};
 use fluentbase_poseidon::poseidon_hash;
-use revm_primitives::{JumpTable, POSEIDON_EMPTY};
+use revm_primitives::{POSEIDON_EMPTY};
 
 /// An Ethereum account.
 #[main_codec]
@@ -41,8 +42,8 @@ impl Account {
             self.rwasm_hash.map_or(true, |hash| hash == POSEIDON_EMPTY)
     }
 
-    /// Converts [GenesisAccount] to [Account] type
-    pub fn from_genesis_account(value: GenesisAccount) -> Self {
+    /// Makes an [Account] from [GenesisAccount] type
+    pub fn from_genesis_account(value: &GenesisAccount) -> Self {
         let bytecode_hash = value.storage
             .as_ref()
             .and_then(|s| s.get(&KECCAK_HASH_KEY))
@@ -101,29 +102,35 @@ impl Compact for Bytecode {
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
-        buf.put_u32(self.0.bytecode().len() as u32);
-        buf.put_slice(self.0.bytecode().as_ref());
-        let len = match self.0.state() {
-            BytecodeState::Raw => {
+        let bytecode = &self.0.bytecode()[..];
+        buf.put_u32(bytecode.len() as u32);
+        buf.put_slice(bytecode);
+        let len = match &self.0 {
+            RevmBytecode::LegacyRaw(_) => {
                 buf.put_u8(0);
                 1
             }
-            BytecodeState::Checked { len } => {
-                buf.put_u8(1);
-                buf.put_u64(*len as u64);
-                9
-            }
-            BytecodeState::Analysed { len, jump_map } => {
+            // `1` has been removed.
+            RevmBytecode::LegacyAnalyzed(analyzed) => {
                 buf.put_u8(2);
-                buf.put_u64(*len as u64);
-                let map = jump_map.as_slice();
+                buf.put_u64(analyzed.original_len() as u64);
+                let map = analyzed.jump_table().as_slice();
                 buf.put_slice(map);
-                9 + map.len()
+                1 + 8 + map.len()
+            }
+            RevmBytecode::Eof(_) => {
+                // buf.put_u8(3);
+                // TODO(EOF)
+                todo!("EOF")
             }
         };
-        len + self.0.bytecode().len() + 4
+        len + bytecode.len() + 4
     }
 
+    // # Panics
+    //
+    // A panic will be triggered if a bytecode variant of 1 or greater than 2 is passed from the
+    // database.
     fn from_compact(mut buf: &[u8], _: usize) -> (Self, &[u8]) {
         let len = buf.read_u32::<BigEndian>().expect("could not read bytecode length");
         let bytes = Bytes::from(buf.copy_to_bytes(len as usize));
@@ -150,6 +157,7 @@ impl Compact for Bytecode {
 mod tests {
     use super::*;
     use crate::hex_literal::hex;
+    use revm_primitives::LegacyAnalyzedBytecode;
 
     #[test]
     fn test_account() {
@@ -195,17 +203,21 @@ mod tests {
     #[test]
     fn test_bytecode() {
         let mut buf = vec![];
-        let mut bytecode = Bytecode(RevmBytecode::new_raw(Bytes::default()));
-        let len = bytecode.clone().to_compact(&mut buf);
+        let bytecode = Bytecode::new_raw(Bytes::default());
+        let len = bytecode.to_compact(&mut buf);
         assert_eq!(len, 5);
 
         let mut buf = vec![];
-        bytecode.0.bytecode = Bytes::from(hex!("ffff").as_ref());
-        let len = bytecode.clone().to_compact(&mut buf);
+        let bytecode = Bytecode::new_raw(Bytes::from(&hex!("ffff")));
+        let len = bytecode.to_compact(&mut buf);
         assert_eq!(len, 7);
 
         let mut buf = vec![];
-        bytecode.0.state = BytecodeState::Analysed { len: 2, jump_map: JumpMap::from_slice(&[0]) };
+        let bytecode = Bytecode(RevmBytecode::LegacyAnalyzed(LegacyAnalyzedBytecode::new(
+            Bytes::from(&hex!("ffff")),
+            2,
+            JumpTable::from_slice(&[0]),
+        )));
         let len = bytecode.clone().to_compact(&mut buf);
         assert_eq!(len, 16);
 
