@@ -9,10 +9,10 @@ pub const TX_SLOT_BYTE_SIZE: usize = 32 * 1024;
 /// more expensive to propagate; larger transactions also take more resources
 /// to validate whether they fit into the pool or not. Default is 4 times [`TX_SLOT_BYTE_SIZE`],
 /// which defaults to 32 KiB, so 128 KiB.
-pub const DEFAULT_MAX_TX_INPUT_BYTES: usize = 4 * TX_SLOT_BYTE_SIZE; // 128KB
+pub const DEFAULT_MAX_TX_INPUT_BYTES: usize = 4 * TX_SLOT_BYTE_SIZE * 8; // 1MB
 
 /// Maximum bytecode to permit for a contract.
-pub const MAX_CODE_BYTE_SIZE: usize = 24576;
+pub const MAX_CODE_BYTE_SIZE: usize = 0x100000; // 1MB
 
 /// Maximum initcode to permit in a creation transaction and create instructions.
 pub const MAX_INIT_CODE_BYTE_SIZE: usize = 2 * MAX_CODE_BYTE_SIZE;
