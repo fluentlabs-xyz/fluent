@@ -18,6 +18,10 @@ reth-trie.workspace = true
 reth-etl.workspace = true
 reth-codecs.workspace = true
 
+# fluent
+fluentbase-genesis = {workspace=true}
+fluentbase-poseidon = {workspace=true}
+
 # misc
 eyre.workspace = true
 thiserror.workspace = true

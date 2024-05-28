@@ -305,10 +305,8 @@ reth-trie-parallel = { path = "crates/trie-parallel" }
 revm = { package = "revm-fluent", path = "../revm-rwasm/crates/revm_fluent", features = [
     "std",
     "secp256k1",
-    "optional_block_gas_limit",
-    "optional_eip3607",
-    "optional_no_base_fee",
     "fluent_revm",
+#    "debug_print",
 ], default-features = false }
 #revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
 revm-primitives = { path = "../revm-rwasm/crates/primitives" }
