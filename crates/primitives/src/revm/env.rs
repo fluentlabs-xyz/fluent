@@ -147,7 +147,7 @@ pub fn fill_tx_env_with_beacon_root_contract_call(env: &mut Env, parent_beacon_b
         transact_to: TransactTo::Call(BEACON_ROOTS_ADDRESS),
         // Explicitly set nonce to None so revm does not do any nonce checks
         nonce: None,
-        gas_limit: 30_000_000,
+        gas_limit: 300_000_000,
         value: U256::ZERO,
         data: parent_beacon_block_root.0.into(),
         // Setting the gas price to zero enforces that no value is transferred as part of the call,

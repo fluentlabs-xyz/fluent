@@ -472,8 +472,10 @@ where
 
             for (idx, header) in headers.iter().enumerate() {
                 // only if filter matches
-                if FilteredParams::matches_address(header.logs_bloom, &address_filter) &&
-                    FilteredParams::matches_topics(header.logs_bloom, &topics_filter)
+                let matches_address = FilteredParams::matches_address(header.logs_bloom, &address_filter);
+                let matches_topics = FilteredParams::matches_topics(header.logs_bloom, &topics_filter);
+
+                if matches_address && matches_topics
                 {
                     // these are consecutive headers, so we can use the parent hash of the next
                     // block to get the current header's hash
