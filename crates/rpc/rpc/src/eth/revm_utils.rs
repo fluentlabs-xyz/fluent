@@ -43,17 +43,17 @@ pub struct EvmOverrides {
 
 impl EvmOverrides {
     /// Creates a new instance with the given overrides
-    pub fn new(state: Option<StateOverride>, block: Option<Box<BlockOverrides>>) -> Self {
+    pub const fn new(state: Option<StateOverride>, block: Option<Box<BlockOverrides>>) -> Self {
         Self { state, block }
     }
 
     /// Creates a new instance with the given state overrides.
-    pub fn state(state: Option<StateOverride>) -> Self {
+    pub const fn state(state: Option<StateOverride>) -> Self {
         Self { state, block: None }
     }
 
     /// Returns `true` if the overrides contain state overrides.
-    pub fn has_state(&self) -> bool {
+    pub const fn has_state(&self) -> bool {
         self.state.is_some()
     }
 }
@@ -118,6 +118,8 @@ impl FillableTransaction for TransactionSigned {
 #[inline]
 pub(crate) fn get_precompiles(spec_id: SpecId) -> impl IntoIterator<Item = Address> {
     iter::empty()
+    // let spec = PrecompileSpecId::from_spec_id(spec_id);
+    // Precompiles::new(spec).addresses().copied().map(Address::from)
 }
 
 /// Prepares the [EnvWithHandlerCfg] for execution.
@@ -272,9 +274,6 @@ pub(crate) fn create_txn_env(
         max_fee_per_blob_gas,
         #[cfg(feature = "optimism")]
         optimism: OptimismFields { enveloped_tx: Some(Bytes::new()), ..Default::default() },
-        // TODO(EOF)
-        eof_initcodes: Default::default(),
-        eof_initcodes_hashed: Default::default(),
     };
 
     Ok(env)
@@ -359,7 +358,7 @@ impl CallFees {
         blob_versioned_hashes: Option<&[B256]>,
         max_fee_per_blob_gas: Option<U256>,
         block_blob_fee: Option<U256>,
-    ) -> EthResult<CallFees> {
+    ) -> EthResult<Self> {
         /// Get the effective gas price of a transaction as specfified in EIP-1559 with relevant
         /// checks.
         fn get_effective_gas_price(
@@ -402,7 +401,7 @@ impl CallFees {
                 // either legacy transaction or no fee fields are specified
                 // when no fields are specified, set gas price to zero
                 let gas_price = gas_price.unwrap_or(U256::ZERO);
-                Ok(CallFees {
+                Ok(Self {
                     gas_price,
                     max_priority_fee_per_gas: None,
                     max_fee_per_blob_gas: has_blob_hashes.then_some(block_blob_fee).flatten(),
@@ -417,7 +416,7 @@ impl CallFees {
                 )?;
                 let max_fee_per_blob_gas = has_blob_hashes.then_some(block_blob_fee).flatten();
 
-                Ok(CallFees {
+                Ok(Self {
                     gas_price: effective_gas_price,
                     max_priority_fee_per_gas,
                     max_fee_per_blob_gas,
@@ -436,7 +435,7 @@ impl CallFees {
                     return Err(RpcInvalidTransactionError::BlobTransactionMissingBlobHashes.into())
                 }
 
-                Ok(CallFees {
+                Ok(Self {
                     gas_price: effective_gas_price,
                     max_priority_fee_per_gas,
                     max_fee_per_blob_gas: Some(max_fee_per_blob_gas),
@@ -540,13 +539,19 @@ where
                 account,
                 new_account_state
                     .into_iter()
-                    .map(|(slot, value)| (U256::from_be_bytes(slot.0), value))
+                    .map(|(slot, value)| {
+                        (U256::from_be_bytes(slot.0), U256::from_be_bytes(value.0))
+                    })
                     .collect(),
             )?;
         }
         (None, Some(account_state_diff)) => {
             for (slot, value) in account_state_diff {
-                db.insert_account_storage(account, U256::from_be_bytes(slot.0), value)?;
+                db.insert_account_storage(
+                    account,
+                    U256::from_be_bytes(slot.0),
+                    U256::from_be_bytes(value.0),
+                )?;
             }
         }
     };

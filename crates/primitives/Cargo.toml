@@ -26,6 +26,7 @@ fluentbase-genesis.workspace = true
 
 # ethereum
 alloy-chains = { workspace = true, features = ["serde", "rlp"] }
+alloy-consensus = { workspace = true, features = ["arbitrary", "serde"] }
 alloy-primitives = { workspace = true, features = ["rand", "rlp"] }
 alloy-rlp = { workspace = true, features = ["arrayvec"] }
 alloy-trie = { workspace = true, features = ["serde"] }
@@ -95,6 +96,7 @@ pprof = { workspace = true, features = [
     "frame-pointer",
     "criterion",
 ] }
+secp256k1.workspace = true
 
 [features]
 default = ["c-kzg", "zstd-codec"]

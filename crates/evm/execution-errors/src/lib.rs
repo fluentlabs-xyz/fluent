@@ -11,6 +11,7 @@
 use reth_consensus::ConsensusError;
 use reth_primitives::{revm_primitives::EVMError, BlockNumHash, PruneSegmentError, B256};
 use reth_storage_errors::provider::ProviderError;
+use std::fmt::Display;
 use thiserror::Error;
 
 pub mod trie;
@@ -118,7 +119,7 @@ pub enum BlockExecutionError {
     /// Error when fetching latest block state.
     #[error(transparent)]
     LatestBlock(#[from] ProviderError),
-    /// Optimism Block Executor Errors
+    /// Arbitrary Block Executor Errors
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),
 }
@@ -132,6 +133,11 @@ impl BlockExecutionError {
         Self::Other(Box::new(error))
     }
 
+    /// Create a new [BlockExecutionError::Other] from a given message.
+    pub fn msg(msg: impl Display) -> Self {
+        Self::Other(msg.to_string().into())
+    }
+
     /// Returns the inner `BlockValidationError` if the error is a validation error.
     pub const fn as_validation(&self) -> Option<&BlockValidationError> {
         match self {
@@ -143,12 +149,12 @@ impl BlockExecutionError {
     /// Returns `true` if the error is fatal.
     ///
     /// This represents an unrecoverable database related error.
-    pub fn is_fatal(&self) -> bool {
+    pub const fn is_fatal(&self) -> bool {
         matches!(self, Self::CanonicalCommit { .. } | Self::CanonicalRevert { .. })
     }
 
     /// Returns `true` if the error is a state root error.
-    pub fn is_state_root_error(&self) -> bool {
+    pub const fn is_state_root_error(&self) -> bool {
         matches!(self, Self::Validation(BlockValidationError::StateRoot(_)))
     }
 }

@@ -2,9 +2,8 @@
 
 use reth_codecs::Compact;
 use reth_config::config::EtlConfig;
-use reth_db::{database::Database, tables, transaction::DbTxMut};
+use reth_db::{database::Database, tables, transaction::DbTxMut, DatabaseError};
 use reth_etl::Collector;
-use reth_interfaces::{db::DatabaseError, provider::ProviderResult};
 use reth_primitives::{
     stage::{StageCheckpoint, StageId},
     Account, Address, Bytecode, ChainSpec, GenesisAccount, Receipts, StaticFileSegment,
@@ -12,6 +11,7 @@ use reth_primitives::{
 };
 use reth_provider::{
     bundle_state::{BundleStateInit, RevertsInit},
+    errors::provider::ProviderResult,
     providers::{StaticFileProvider, StaticFileWriter},
     BlockHashReader, BlockNumReader, BundleStateWithReceipts, ChainSpecProvider,
     DatabaseProviderRW, HashingWriter, HistoryWriter, OriginalValuesKnown, ProviderError,
@@ -194,8 +194,8 @@ pub fn insert_state<'a, 'b, DB: Database>(
                 Some(Account {
                     nonce: account.nonce.unwrap_or_default(),
                     balance: account.balance,
-                    bytecode_hash: bytecode_hash.map(|v| v.0),
                     rwasm_hash: bytecode_hash.map(|v| v.1),
+                    bytecode_hash: bytecode_hash.map(|v| v.0),
                 }),
                 storage,
             ),
