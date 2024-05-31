@@ -302,23 +302,24 @@ reth-trie = { path = "crates/trie/trie" }
 reth-trie-parallel = { path = "crates/trie/parallel" }
 
 # revm
-#revm = { package = "fluentbase-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", features = [
-#    "std",
-#    "secp256k1",
-#    "optional_block_gas_limit",
-#    "optional_eip3607",
-#    "optional_no_base_fee",
-#], default-features = false }
 revm = { package = "revm-fluent", path = "../revm-rwasm/crates/revm_fluent", features = [
     "std",
     "secp256k1",
     "fluent_revm",
 #    "debug_print",
 ], default-features = false }
-#revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm", branch = "devel" }
-revm-primitives = { path = "../revm-rwasm/crates/primitives" }
-#revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors", branch = "devel" }
+revm-primitives = { path = "../revm-rwasm/crates/primitives", features = ["rwasm"] }
 revm-inspectors = { path = "../revm-inspectors" }
+
+#revm = { version = "9.0.0", features = [
+#    "std",
+#    "secp256k1",
+#    "blst",
+#], default-features = false }
+#revm-primitives = { version = "4.0.0", features = [
+#    "std",
+#], default-features = false }
+#revm-inspectors = { git = "https://github.com/paradigmxyz/evm-inspectors", rev = "ed5450e" }
 
 #fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
 #fluentbase-core = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
@@ -456,8 +457,8 @@ serial_test = "3"
 similar-asserts = "1.5.0"
 test-fuzz = "5"
 
-#[patch.crates-io]
-#revm = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
-#revm-interpreter = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
-#revm-precompile = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
-#revm-primitives = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
+[patch.crates-io]
+revm = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
+revm-interpreter = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
+revm-precompile = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
+revm-primitives = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
