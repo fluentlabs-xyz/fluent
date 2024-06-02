@@ -308,8 +308,10 @@ revm = { package = "revm-fluent", path = "../revm-rwasm/crates/revm_fluent", fea
     "fluent_revm",
 #    "debug_print",
 ], default-features = false }
-revm-primitives = { path = "../revm-rwasm/crates/primitives", features = ["rwasm"] }
-revm-inspectors = { path = "../revm-inspectors" }
+revm-primitives = { path = "../revm-rwasm/crates/primitives" }
+revm-inspectors = { path = "../revm-inspectors", features = [
+    "fluent_revm",
+]}
 
 #revm = { version = "9.0.0", features = [
 #    "std",
@@ -457,8 +459,8 @@ serial_test = "3"
 similar-asserts = "1.5.0"
 test-fuzz = "5"
 
-[patch.crates-io]
-revm = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
-revm-interpreter = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
-revm-precompile = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
-revm-primitives = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
+#[patch.crates-io]
+#revm = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
+#revm-interpreter = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
+#revm-precompile = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
+#revm-primitives = { git = "https://github.com/bluealloy/revm", rev = "a28a543" }
