@@ -154,6 +154,7 @@ pub fn insert_state<'a, 'b, DB: Database>(
         let bytecode_hash = if let Some(code) = &account.code {
             let bytecode = Bytecode::new_raw(code.clone());
             let hash = bytecode.hash_slow();
+            contracts.insert(hash, bytecode.clone());
             let rwasm_hash = account.storage
                 .as_ref()
                 .and_then(|s| s.get(&POSEIDON_HASH_KEY))
@@ -161,7 +162,6 @@ pub fn insert_state<'a, 'b, DB: Database>(
                 .unwrap_or_else(|| {
                     poseidon_hash(bytecode.original_bytes().as_ref()).into()
                 });
-            contracts.insert(hash, bytecode.clone());
             contracts.insert(rwasm_hash, bytecode);
             Some((hash, rwasm_hash))
         } else {
@@ -194,8 +194,8 @@ pub fn insert_state<'a, 'b, DB: Database>(
                 Some(Account {
                     nonce: account.nonce.unwrap_or_default(),
                     balance: account.balance,
-                    rwasm_hash: bytecode_hash.map(|v| v.1),
                     bytecode_hash: bytecode_hash.map(|v| v.0),
+                    rwasm_hash: bytecode_hash.map(|v| v.1),
                 }),
                 storage,
             ),

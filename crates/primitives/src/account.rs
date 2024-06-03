@@ -38,19 +38,19 @@ impl Account {
     pub fn is_empty(&self) -> bool {
         self.nonce == 0 &&
             self.balance.is_zero() &&
-            self.bytecode_hash.map_or(true, |hash| hash == KECCAK_EMPTY) &&
-            self.rwasm_hash.map_or(true, |hash| hash == POSEIDON_EMPTY)
+            self.bytecode_hash.map_or(true, |hash| hash == KECCAK_EMPTY)
+            && self.rwasm_hash.map_or(true, |hash| hash == POSEIDON_EMPTY)
     }
 
     /// Makes an [Account] from [GenesisAccount] type
     pub fn from_genesis_account(value: &GenesisAccount) -> Self {
-        let bytecode_hash = value.storage
-            .as_ref()
-            .and_then(|s| s.get(&KECCAK_HASH_KEY))
-            .cloned()
-            .or_else(|| {
-                value.code.as_ref().map(|bytes| keccak256(bytes.as_ref()))
-            });
+        // let bytecode_hash = value.storage
+        //     .as_ref()
+        //     .and_then(|s| s.get(&KECCAK_HASH_KEY))
+        //     .cloned()
+        //     .or_else(|| {
+        //         value.code.as_ref().map(|bytes| keccak256(bytes.as_ref()))
+        //     });
         let rwasm_hash = value.storage
             .as_ref()
             .and_then(|s| s.get(&POSEIDON_HASH_KEY))
@@ -62,7 +62,8 @@ impl Account {
             // nonce must exist, so we default to zero when converting a genesis account
             nonce: value.nonce.unwrap_or_default(),
             balance: value.balance,
-            bytecode_hash,
+            bytecode_hash: value.code.as_ref().map(keccak256),
+            // bytecode_hash,
             rwasm_hash,
         }
     }

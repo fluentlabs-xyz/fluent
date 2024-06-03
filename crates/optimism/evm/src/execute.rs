@@ -455,9 +455,7 @@ mod tests {
         let mut db = StateProviderTest::default();
 
         let l1_block_contract_account =
-            Account { balance: U256::ZERO, bytecode_hash: None, nonce: 1,
-                rwasm_hash: None
-            };
+            Account { balance: U256::ZERO, bytecode_hash: None, nonce: 1, rwasm_hash: None };
 
         let mut l1_block_storage = HashMap::new();
         // base fee

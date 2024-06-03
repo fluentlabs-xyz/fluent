@@ -305,12 +305,12 @@ revm = { package = "revm-fluent", path = "../revm-rwasm/crates/revm_fluent", fea
     "std",
     "secp256k1",
     "blst",
-#    "fluent_revm",
+    "fluent_revm",
 #    "debug_print",
 ], default-features = false }
 revm-primitives = { path = "../revm-rwasm/crates/primitives" }
 revm-inspectors = { path = "../revm-inspectors", features = [
-#    "fluent_revm",
+    "fluent_revm",
 ]}
 
 #revm = { version = "9.0.0", features = [

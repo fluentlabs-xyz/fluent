@@ -140,7 +140,7 @@ dependencies = [
 [[package]]
 name = "alloy-consensus"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy#4ecb7d86882ece8a9a7a5a892b71a3c198030731"
+source = "git+https://github.com/alloy-rs/alloy#dc56a76dda6c10d9eea267e775c36130128f9e5b"
 dependencies = [
  "alloy-eips 0.1.0 (git+https://github.com/alloy-rs/alloy)",
  "alloy-primitives",
@@ -189,7 +189,7 @@ dependencies = [
 [[package]]
 name = "alloy-eips"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy#4ecb7d86882ece8a9a7a5a892b71a3c198030731"
+source = "git+https://github.com/alloy-rs/alloy#dc56a76dda6c10d9eea267e775c36130128f9e5b"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -214,7 +214,7 @@ dependencies = [
 [[package]]
 name = "alloy-genesis"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy#4ecb7d86882ece8a9a7a5a892b71a3c198030731"
+source = "git+https://github.com/alloy-rs/alloy#dc56a76dda6c10d9eea267e775c36130128f9e5b"
 dependencies = [
  "alloy-primitives",
  "alloy-serde 0.1.0 (git+https://github.com/alloy-rs/alloy)",
@@ -405,7 +405,7 @@ dependencies = [
 [[package]]
 name = "alloy-rpc-types"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy#4ecb7d86882ece8a9a7a5a892b71a3c198030731"
+source = "git+https://github.com/alloy-rs/alloy#dc56a76dda6c10d9eea267e775c36130128f9e5b"
 dependencies = [
  "alloy-consensus 0.1.0 (git+https://github.com/alloy-rs/alloy)",
  "alloy-eips 0.1.0 (git+https://github.com/alloy-rs/alloy)",
@@ -486,7 +486,7 @@ dependencies = [
 [[package]]
 name = "alloy-serde"
 version = "0.1.0"
-source = "git+https://github.com/alloy-rs/alloy#4ecb7d86882ece8a9a7a5a892b71a3c198030731"
+source = "git+https://github.com/alloy-rs/alloy#dc56a76dda6c10d9eea267e775c36130128f9e5b"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -6068,9 +6068,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.84"
+version = "1.0.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec96c6a92621310b51366f1e28d05ef11489516e93be030060e5fc12024a49d6"
+checksum = "22244ce15aa966053a896d1accb3a6e68469b97c7f33f284b99f0d576879fc23"
 dependencies = [
  "unicode-ident",
 ]
@@ -8366,7 +8366,6 @@ dependencies = [
  "boa_engine",
  "boa_gc",
  "colorchoice",
- "fluentbase-types",
  "revm-fluent",
  "serde_json",
  "thiserror",
