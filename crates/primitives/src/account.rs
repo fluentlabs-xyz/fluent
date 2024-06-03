@@ -62,7 +62,7 @@ impl Account {
             // nonce must exist, so we default to zero when converting a genesis account
             nonce: value.nonce.unwrap_or_default(),
             balance: value.balance,
-            bytecode_hash: value.code.as_ref().map(keccak256),
+            bytecode_hash,
             rwasm_hash,
         }
     }
