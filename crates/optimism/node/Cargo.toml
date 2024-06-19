@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 # reth
+reth-chainspec.workspace = true
 reth-primitives.workspace = true
 reth-payload-builder.workspace = true
 reth-basic-payload-builder.workspace = true
@@ -29,14 +30,13 @@ reth-evm.workspace = true
 reth-revm.workspace = true
 reth-evm-optimism.workspace = true
 reth-beacon-consensus.workspace = true
+reth-optimism-consensus.workspace = true
 revm-primitives.workspace = true
+reth-discv5.workspace = true
 
 # async
 async-trait.workspace = true
-hyper.workspace = true
-reqwest = { workspace = true, default-features = false, features = [
-    "rustls-tls-native-roots",
-] }
+reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 tracing.workspace = true
 
 # misc
@@ -58,6 +58,7 @@ alloy-primitives.workspace = true
 
 [features]
 optimism = [
+    "reth-chainspec/optimism",
     "reth-primitives/optimism",
     "reth-provider/optimism",
     "reth-rpc-types-compat/optimism",

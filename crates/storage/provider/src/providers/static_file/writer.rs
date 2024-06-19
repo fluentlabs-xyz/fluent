@@ -5,7 +5,7 @@ use super::{
 };
 use dashmap::mapref::one::RefMut;
 use reth_codecs::Compact;
-use reth_db::codecs::CompactU256;
+use reth_db_api::models::CompactU256;
 use reth_nippy_jar::{ConsistencyFailStrategy, NippyJar, NippyJarError, NippyJarWriter};
 use reth_primitives::{
     static_file::{find_fixed_range, SegmentHeader, SegmentRangeInclusive},
@@ -26,9 +26,9 @@ pub type StaticFileProviderRWRefMut<'a> = RefMut<'a, StaticFileSegment, StaticFi
 #[derive(Debug)]
 /// Extends `StaticFileProvider` with writing capabilities
 pub struct StaticFileProviderRW {
-    /// Reference back to the provider. We need [Weak] here because [StaticFileProviderRW] is
-    /// stored in a [dashmap::DashMap] inside the parent [StaticFileProvider].which is an [Arc].
-    /// If we were to use an [Arc] here, we would create a reference cycle.
+    /// Reference back to the provider. We need [Weak] here because [`StaticFileProviderRW`] is
+    /// stored in a [`dashmap::DashMap`] inside the parent [`StaticFileProvider`].which is an
+    /// [Arc]. If we were to use an [Arc] here, we would create a reference cycle.
     reader: Weak<StaticFileProviderInner>,
     /// A [`NippyJarWriter`] instance.
     writer: NippyJarWriter<SegmentHeader>,
@@ -120,10 +120,10 @@ impl StaticFileProviderRW {
     /// Checks the consistency of the file and heals it if necessary and `read_only` is set to
     /// false. If the check fails, it will return an error.
     ///
-    /// If healing does happen, it will update the end range on the [SegmentHeader]. However, for
+    /// If healing does happen, it will update the end range on the [`SegmentHeader`]. However, for
     /// transaction based segments, the block end range has to be found and healed externally.
     ///
-    /// Check [NippyJarWriter::ensure_file_consistency] for more on healing.
+    /// Check [`NippyJarWriter::ensure_file_consistency`] for more on healing.
     pub fn ensure_file_consistency(&mut self, read_only: bool) -> ProviderResult<()> {
         let inconsistent_error = || {
             ProviderError::NippyJar(
@@ -181,26 +181,28 @@ impl StaticFileProviderRW {
             }
         }
 
-        // Commits offsets and new user_header to disk
-        self.writer.commit().map_err(|e| ProviderError::NippyJar(e.to_string()))?;
+        if self.writer.is_dirty() {
+            // Commits offsets and new user_header to disk
+            self.writer.commit().map_err(|e| ProviderError::NippyJar(e.to_string()))?;
 
-        if let Some(metrics) = &self.metrics {
-            metrics.record_segment_operation(
-                self.writer.user_header().segment(),
-                StaticFileProviderOperation::CommitWriter,
-                Some(start.elapsed()),
+            if let Some(metrics) = &self.metrics {
+                metrics.record_segment_operation(
+                    self.writer.user_header().segment(),
+                    StaticFileProviderOperation::CommitWriter,
+                    Some(start.elapsed()),
+                );
+            }
+
+            debug!(
+                target: "provider::static_file",
+                segment = ?self.writer.user_header().segment(),
+                path = ?self.data_path,
+                duration = ?start.elapsed(),
+                "Commit"
             );
+
+            self.update_index()?;
         }
-
-        debug!(
-            target: "provider::static_file",
-            segment = ?self.writer.user_header().segment(),
-            path = ?self.data_path,
-            duration = ?start.elapsed(),
-            "Commit"
-        );
-
-        self.update_index()?;
 
         Ok(())
     }
@@ -333,7 +335,7 @@ impl StaticFileProviderRW {
     /// Truncates a number of rows from disk. It deletes and loads an older static file if block
     /// goes beyond the start of the current block range.
     ///
-    /// **last_block** should be passed only with transaction based segments.
+    /// **`last_block`** should be passed only with transaction based segments.
     ///
     /// # Note
     /// Commits to the configuration file at the end.
@@ -545,6 +547,44 @@ impl StaticFileProviderRW {
         Ok(result)
     }
 
+    /// Appends multiple receipts to the static file.
+    ///
+    /// Returns the current [`TxNumber`] as seen in the static file, if any.
+    pub fn append_receipts<I>(&mut self, receipts: I) -> ProviderResult<Option<TxNumber>>
+    where
+        I: IntoIterator<Item = Result<(TxNumber, Receipt), ProviderError>>,
+    {
+        let mut receipts_iter = receipts.into_iter().peekable();
+        // If receipts are empty, we can simply return None
+        if receipts_iter.peek().is_none() {
+            return Ok(None);
+        }
+
+        let start = Instant::now();
+        self.ensure_no_queued_prune()?;
+
+        // At this point receipts contains at least one receipt, so this would be overwritten.
+        let mut tx_number = 0;
+        let mut count: u64 = 0;
+
+        for receipt_result in receipts_iter {
+            let (tx_num, receipt) = receipt_result?;
+            tx_number = self.append_with_tx_number(StaticFileSegment::Receipts, tx_num, receipt)?;
+            count += 1;
+        }
+
+        if let Some(metrics) = &self.metrics {
+            metrics.record_segment_operations(
+                StaticFileSegment::Receipts,
+                StaticFileProviderOperation::Append,
+                count,
+                Some(start.elapsed()),
+            );
+        }
+
+        Ok(Some(tx_number))
+    }
+
     /// Adds an instruction to prune `to_delete`transactions during commit.
     ///
     /// Note: `last_block` refers to the block the unwinds ends at.
@@ -593,7 +633,7 @@ impl StaticFileProviderRW {
     fn ensure_no_queued_prune(&self) -> ProviderResult<()> {
         if self.prune_on_commit.is_some() {
             return Err(ProviderError::NippyJar(
-                "Pruning should be comitted before appending or pruning more data".to_string(),
+                "Pruning should be committed before appending or pruning more data".to_string(),
             ))
         }
         Ok(())

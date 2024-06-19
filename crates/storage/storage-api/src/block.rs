@@ -2,7 +2,7 @@ use crate::{
     BlockIdReader, BlockNumReader, HeaderProvider, ReceiptProvider, ReceiptProviderIdExt,
     RequestsProvider, TransactionVariant, TransactionsProvider, WithdrawalsProvider,
 };
-use reth_db::models::StoredBlockBodyIndices;
+use reth_db_api::models::StoredBlockBodyIndices;
 use reth_primitives::{
     Block, BlockHashOrNumber, BlockId, BlockNumber, BlockNumberOrTag, BlockWithSenders, Header,
     Receipt, SealedBlock, SealedBlockWithSenders, SealedHeader, B256,
@@ -123,14 +123,19 @@ pub trait BlockReader:
     /// Note: returns only available blocks
     fn block_range(&self, range: RangeInclusive<BlockNumber>) -> ProviderResult<Vec<Block>>;
 
-    /// retrieves a range of blocks from the database, along with the senders of each
+    /// Returns a range of blocks from the database, along with the senders of each
     /// transaction in the blocks.
-    ///
-    /// The `transaction_kind` parameter determines whether to return its hash
     fn block_with_senders_range(
         &self,
         range: RangeInclusive<BlockNumber>,
     ) -> ProviderResult<Vec<BlockWithSenders>>;
+
+    /// Returns a range of sealed blocks from the database, along with the senders of each
+    /// transaction in the blocks.
+    fn sealed_block_with_senders_range(
+        &self,
+        range: RangeInclusive<BlockNumber>,
+    ) -> ProviderResult<Vec<SealedBlockWithSenders>>;
 }
 
 /// Trait extension for `BlockReader`, for types that implement `BlockId` conversion.
@@ -154,7 +159,7 @@ pub trait BlockReaderIdExt: BlockReader + BlockIdReader + ReceiptProviderIdExt {
 
     /// Returns the pending block header if available
     ///
-    /// Note: This returns a [SealedHeader] because it's expected that this is sealed by the
+    /// Note: This returns a [`SealedHeader`] because it's expected that this is sealed by the
     /// provider and the caller does not know the hash.
     fn pending_header(&self) -> ProviderResult<Option<SealedHeader>> {
         self.sealed_header_by_id(BlockNumberOrTag::Pending.into())
@@ -162,7 +167,7 @@ pub trait BlockReaderIdExt: BlockReader + BlockIdReader + ReceiptProviderIdExt {
 
     /// Returns the latest block header if available
     ///
-    /// Note: This returns a [SealedHeader] because it's expected that this is sealed by the
+    /// Note: This returns a [`SealedHeader`] because it's expected that this is sealed by the
     /// provider and the caller does not know the hash.
     fn latest_header(&self) -> ProviderResult<Option<SealedHeader>> {
         self.sealed_header_by_id(BlockNumberOrTag::Latest.into())
@@ -170,7 +175,7 @@ pub trait BlockReaderIdExt: BlockReader + BlockIdReader + ReceiptProviderIdExt {
 
     /// Returns the safe block header if available
     ///
-    /// Note: This returns a [SealedHeader] because it's expected that this is sealed by the
+    /// Note: This returns a [`SealedHeader`] because it's expected that this is sealed by the
     /// provider and the caller does not know the hash.
     fn safe_header(&self) -> ProviderResult<Option<SealedHeader>> {
         self.sealed_header_by_id(BlockNumberOrTag::Safe.into())
@@ -178,7 +183,7 @@ pub trait BlockReaderIdExt: BlockReader + BlockIdReader + ReceiptProviderIdExt {
 
     /// Returns the finalized block header if available
     ///
-    /// Note: This returns a [SealedHeader] because it's expected that this is sealed by the
+    /// Note: This returns a [`SealedHeader`] because it's expected that this is sealed by the
     /// provider and the caller does not know the hash.
     fn finalized_header(&self) -> ProviderResult<Option<SealedHeader>> {
         self.sealed_header_by_id(BlockNumberOrTag::Finalized.into())

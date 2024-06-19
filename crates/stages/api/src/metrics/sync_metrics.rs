@@ -1,8 +1,8 @@
+use crate::StageId;
 use reth_metrics::{
     metrics::{Counter, Gauge},
     Metrics,
 };
-use reth_primitives::stage::StageId;
 use std::collections::HashMap;
 
 #[derive(Debug, Default)]
@@ -12,7 +12,8 @@ pub(crate) struct SyncMetrics {
 }
 
 impl SyncMetrics {
-    /// Returns existing or initializes a new instance of [StageMetrics] for the provided [StageId].
+    /// Returns existing or initializes a new instance of [`StageMetrics`] for the provided
+    /// [`StageId`].
     pub(crate) fn get_stage_metrics(&mut self, stage_id: StageId) -> &mut StageMetrics {
         self.stages
             .entry(stage_id)

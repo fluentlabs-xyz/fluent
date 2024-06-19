@@ -4,17 +4,14 @@ use crate::{
     prefix_set::PrefixSetMut,
     trie_cursor::{DatabaseAccountTrieCursor, DatabaseStorageTrieCursor},
     walker::TrieWalker,
+    HashBuilder, Nibbles,
 };
 use alloy_rlp::{BufMut, Encodable};
-use reth_db::{tables, transaction::DbTx};
+use reth_db::tables;
+use reth_db_api::transaction::DbTx;
 use reth_execution_errors::{StateRootError, StorageRootError};
-use reth_primitives::{
-    constants::EMPTY_ROOT_HASH,
-    keccak256,
-    trie::{proof::ProofRetainer, AccountProof, HashBuilder, Nibbles, StorageProof, TrieAccount},
-    Address, B256,
-};
-
+use reth_primitives::{constants::EMPTY_ROOT_HASH, keccak256, Address, B256};
+use reth_trie_common::{proof::ProofRetainer, AccountProof, StorageProof, TrieAccount};
 /// A struct for generating merkle proofs.
 ///
 /// Proof generator adds the target address and slots to the prefix set, enables the proof retainer
@@ -148,7 +145,7 @@ where
         let root = hash_builder.root();
 
         let all_proof_nodes = hash_builder.take_proofs();
-        for proof in proofs.iter_mut() {
+        for proof in &mut proofs {
             // Iterate over all proof nodes and find the matching ones.
             // The filtered results are guaranteed to be in order.
             let matching_proof_nodes = all_proof_nodes
@@ -167,8 +164,9 @@ mod tests {
     use super::*;
     use crate::StateRoot;
     use once_cell::sync::Lazy;
-    use reth_db::database::Database;
-    use reth_primitives::{Account, Bytes, Chain, ChainSpec, StorageEntry, HOLESKY, MAINNET, U256};
+    use reth_chainspec::{Chain, ChainSpec, HOLESKY, MAINNET};
+    use reth_db_api::database::Database;
+    use reth_primitives::{Account, Bytes, StorageEntry, U256};
     use reth_provider::{test_utils::create_test_provider_factory, HashingWriter, ProviderFactory};
     use reth_storage_errors::provider::ProviderResult;
     use std::{str::FromStr, sync::Arc};

@@ -1,14 +1,13 @@
 #![allow(missing_docs)]
 
-use crate::{ExecInput, ExecOutput, Stage, StageError, UnwindInput, UnwindOutput};
-use reth_db::database::Database;
-use reth_primitives::stage::StageId;
+use crate::{ExecInput, ExecOutput, Stage, StageError, StageId, UnwindInput, UnwindOutput};
+use reth_db_api::database::Database;
 use reth_provider::DatabaseProviderRW;
 use std::collections::VecDeque;
 
 /// A test stage that can be used for testing.
 ///
-/// This can be used to mock expected outputs of [Stage::execute] and [Stage::unwind]
+/// This can be used to mock expected outputs of [`Stage::execute`] and [`Stage::unwind`]
 #[derive(Debug)]
 pub struct TestStage {
     id: StageId,
@@ -17,7 +16,7 @@ pub struct TestStage {
 }
 
 impl TestStage {
-    pub fn new(id: StageId) -> Self {
+    pub const fn new(id: StageId) -> Self {
         Self { id, exec_outputs: VecDeque::new(), unwind_outputs: VecDeque::new() }
     }
 

@@ -2,6 +2,7 @@
 //! blocks from the network.
 
 use eyre::Result;
+use reth_chainspec::ChainSpec;
 use reth_consensus_common::validation::validate_block_pre_execution;
 use reth_fs_util as fs;
 use reth_network::NetworkManager;
@@ -10,7 +11,7 @@ use reth_network_p2p::{
     headers::client::{HeadersClient, HeadersRequest},
     priority::Priority,
 };
-use reth_primitives::{BlockHashOrNumber, ChainSpec, HeadersDirection, SealedBlock, SealedHeader};
+use reth_primitives::{BlockHashOrNumber, HeadersDirection, SealedBlock, SealedHeader};
 use reth_provider::BlockReader;
 use reth_rpc_types::engine::{JwtError, JwtSecret};
 use std::{
@@ -37,8 +38,8 @@ pub fn get_or_create_jwt_secret_from_path(path: &Path) -> Result<JwtSecret, JwtE
     }
 }
 
-/// Collect the peers from the [NetworkManager] and write them to the given `persistent_peers_file`,
-/// if configured.
+/// Collect the peers from the [`NetworkManager`] and write them to the given
+/// `persistent_peers_file`, if configured.
 pub fn write_peers_to_file<C>(network: &NetworkManager<C>, persistent_peers_file: Option<PathBuf>)
 where
     C: BlockReader + Unpin,

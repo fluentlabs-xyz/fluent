@@ -8,9 +8,9 @@ use crate::{
 };
 use ffi::{mdbx_txn_renew, MDBX_txn_flags_t, MDBX_TXN_RDONLY, MDBX_TXN_READWRITE};
 use indexmap::IndexSet;
-use libc::{c_uint, c_void};
 use parking_lot::{Mutex, MutexGuard};
 use std::{
+    ffi::{c_uint, c_void},
     fmt::{self, Debug},
     mem::size_of,
     ptr, slice,
@@ -133,7 +133,7 @@ where
     ///
     /// This function retrieves the data associated with the given key in the
     /// database. If the database supports duplicate keys
-    /// ([DatabaseFlags::DUP_SORT]) then the first data item for the key will be
+    /// ([`DatabaseFlags::DUP_SORT`]) then the first data item for the key will be
     /// returned. Retrieval of other items requires the use of
     /// [Cursor]. If the item is not in the database, then
     /// [None] will be returned.
@@ -210,7 +210,7 @@ where
     ///
     /// If `name` is not [None], then the returned handle will be for a named database. In this
     /// case the environment must be configured to allow named databases through
-    /// [EnvironmentBuilder::set_max_dbs()](crate::EnvironmentBuilder::set_max_dbs).
+    /// [`EnvironmentBuilder::set_max_dbs()`](crate::EnvironmentBuilder::set_max_dbs).
     ///
     /// The returned database handle may be shared among any transaction in the environment.
     ///
@@ -366,9 +366,9 @@ impl Transaction<RW> {
     ///
     /// If `name` is not [None], then the returned handle will be for a named database. In this
     /// case the environment must be configured to allow named databases through
-    /// [EnvironmentBuilder::set_max_dbs()](crate::EnvironmentBuilder::set_max_dbs).
+    /// [`EnvironmentBuilder::set_max_dbs()`](crate::EnvironmentBuilder::set_max_dbs).
     ///
-    /// This function will fail with [Error::BadRslot] if called by a thread with an open
+    /// This function will fail with [`Error::BadRslot`] if called by a thread with an open
     /// transaction.
     pub fn create_db(&self, name: Option<&str>, flags: DatabaseFlags) -> Result<Database> {
         self.open_db_with_flags(name, flags | DatabaseFlags::CREATE)
@@ -379,7 +379,7 @@ impl Transaction<RW> {
     /// This function stores key/data pairs in the database. The default
     /// behavior is to enter the new key/data pair, replacing any previously
     /// existing key if duplicates are disallowed, or adding a duplicate data
-    /// item if duplicates are allowed ([DatabaseFlags::DUP_SORT]).
+    /// item if duplicates are allowed ([`DatabaseFlags::DUP_SORT`]).
     pub fn put(
         &self,
         dbi: ffi::MDBX_dbi,
@@ -523,27 +523,35 @@ impl Transaction<RW> {
 #[derive(Debug, Clone)]
 pub(crate) struct TransactionPtr {
     txn: *mut ffi::MDBX_txn,
+    #[cfg(feature = "read-tx-timeouts")]
     timed_out: Arc<AtomicBool>,
     lock: Arc<Mutex<()>>,
 }
 
 impl TransactionPtr {
     fn new(txn: *mut ffi::MDBX_txn) -> Self {
-        Self { txn, timed_out: Arc::new(AtomicBool::new(false)), lock: Arc::new(Mutex::new(())) }
+        Self {
+            txn,
+            #[cfg(feature = "read-tx-timeouts")]
+            timed_out: Arc::new(AtomicBool::new(false)),
+            lock: Arc::new(Mutex::new(())),
+        }
     }
 
-    // Returns `true` if the transaction is timed out.
-    //
-    // When transaction is timed out via `TxnManager`, it's actually reset using
-    // `mdbx_txn_reset`. It makes the transaction unusable (MDBX fails on any usages of such
-    // transactions).
-    //
-    // Importantly, we can't rely on `MDBX_TXN_FINISHED` flag to check if the transaction is timed
-    // out using `mdbx_txn_reset`, because MDBX uses it in other cases too.
+    /// Returns `true` if the transaction is timed out.
+    ///
+    /// When transaction is timed out via `TxnManager`, it's actually reset using
+    /// `mdbx_txn_reset`. It makes the transaction unusable (MDBX fails on any usages of such
+    /// transactions).
+    ///
+    /// Importantly, we can't rely on `MDBX_TXN_FINISHED` flag to check if the transaction is timed
+    /// out using `mdbx_txn_reset`, because MDBX uses it in other cases too.
+    #[cfg(feature = "read-tx-timeouts")]
     fn is_timed_out(&self) -> bool {
         self.timed_out.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    #[cfg(feature = "read-tx-timeouts")]
     pub(crate) fn set_timed_out(&self) {
         self.timed_out.store(true, std::sync::atomic::Ordering::SeqCst);
     }
@@ -575,6 +583,7 @@ impl TransactionPtr {
         // No race condition with the `TxnManager` timing out the transaction is possible here,
         // because we're taking a lock for any actions on the transaction pointer, including a call
         // to the `mdbx_txn_reset`.
+        #[cfg(feature = "read-tx-timeouts")]
         if self.is_timed_out() {
             return Err(Error::ReadTransactionTimeout)
         }
@@ -594,6 +603,7 @@ impl TransactionPtr {
         let _lck = self.lock();
 
         // To be able to do any operations on the transaction, we need to renew it first.
+        #[cfg(feature = "read-tx-timeouts")]
         if self.is_timed_out() {
             mdbx_result(unsafe { mdbx_txn_renew(self.txn) })?;
         }
@@ -611,7 +621,7 @@ impl TransactionPtr {
 pub struct CommitLatency(ffi::MDBX_commit_latency);
 
 impl CommitLatency {
-    /// Create a new CommitLatency with zero'd inner struct `ffi::MDBX_commit_latency`.
+    /// Create a new `CommitLatency` with zero'd inner struct `ffi::MDBX_commit_latency`.
     pub(crate) const fn new() -> Self {
         unsafe { Self(std::mem::zeroed()) }
     }

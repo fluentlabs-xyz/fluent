@@ -3,6 +3,7 @@ use alloy_eips::{
     eip7002::WithdrawalRequest,
 };
 use alloy_rlp::Buf;
+use reth_chainspec::ChainSpec;
 use reth_consensus_common::calc;
 use reth_execution_errors::{BlockExecutionError, BlockValidationError};
 use reth_primitives::{
@@ -10,7 +11,7 @@ use reth_primitives::{
         fill_tx_env_with_beacon_root_contract_call,
         fill_tx_env_with_withdrawal_requests_contract_call,
     },
-    Address, ChainSpec, Header, Request, Withdrawal, B256, U256,
+    Address, Header, Request, Withdrawal, B256, U256,
 };
 use reth_storage_errors::provider::ProviderError;
 use revm::{
@@ -139,7 +140,7 @@ fn eip2935_block_hash_slot<DB: Database<Error = ProviderError>>(
 }
 
 /// Applies the pre-block call to the [EIP-4788] beacon block root contract, using the given block,
-/// [ChainSpec], EVM.
+/// [`ChainSpec`], EVM.
 ///
 /// If Cancun is not activated or the block is the genesis block, then this is a no-op, and no
 /// state changes are made.
@@ -238,7 +239,7 @@ pub fn insert_post_block_withdrawals_balance_increments(
     // Process withdrawals
     if chain_spec.is_shanghai_active_at_timestamp(block_timestamp) {
         if let Some(withdrawals) = withdrawals {
-            for withdrawal in withdrawals.iter() {
+            for withdrawal in withdrawals {
                 if withdrawal.amount > 0 {
                     *balance_increments.entry(withdrawal.address).or_default() +=
                         withdrawal.amount_wei().to::<u128>();
@@ -319,14 +320,14 @@ where
         let mut source_address = Address::ZERO;
         data.copy_to_slice(source_address.as_mut_slice());
 
-        let mut validator_public_key = FixedBytes::<48>::ZERO;
-        data.copy_to_slice(validator_public_key.as_mut_slice());
+        let mut validator_pubkey = FixedBytes::<48>::ZERO;
+        data.copy_to_slice(validator_pubkey.as_mut_slice());
 
         let amount = data.get_u64();
 
         withdrawal_requests.push(Request::WithdrawalRequest(WithdrawalRequest {
             source_address,
-            validator_public_key,
+            validator_pubkey,
             amount,
         }));
     }

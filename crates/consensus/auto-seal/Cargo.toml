@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 # reth
+reth-chainspec.workspace = true
 reth-beacon-consensus.workspace = true
 reth-primitives.workspace = true
 reth-execution-errors.workspace = true
@@ -25,7 +26,7 @@ reth-evm.workspace = true
 reth-engine-primitives.workspace = true
 reth-consensus.workspace = true
 reth-rpc-types.workspace = true
-reth-network-types.workspace = true
+reth-network-peers.workspace = true
 reth-tokio-util.workspace = true
 
 # async

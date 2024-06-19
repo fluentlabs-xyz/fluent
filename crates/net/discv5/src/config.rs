@@ -6,10 +6,12 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
 
+use alloy_primitives::Bytes;
 use derive_more::Display;
 use discv5::ListenConfig;
 use multiaddr::{Multiaddr, Protocol};
-use reth_primitives::{Bytes, EnrForkIdEntry, ForkId, NodeRecord};
+use reth_ethereum_forks::{EnrForkIdEntry, ForkId};
+use reth_network_peers::NodeRecord;
 use tracing::warn;
 
 use crate::{enr::discv4_id_to_multiaddr_id, filter::MustNotIncludeKeys, NetworkStackId};
@@ -57,9 +59,9 @@ pub struct ConfigBuilder {
     ///
     /// Defaults to L1 mainnet if not set.
     fork: Option<(&'static [u8], ForkId)>,
-    /// RLPx TCP socket to advertise.
+    /// `RLPx` TCP socket to advertise.
     ///
-    /// NOTE: IP address of RLPx socket overwrites IP address of same IP version in
+    /// NOTE: IP address of `RLPx` socket overwrites IP address of same IP version in
     /// [`discv5::ListenConfig`].
     tcp_socket: SocketAddr,
     /// List of `(key, rlp-encoded-value)` tuples that should be advertised in local node record
@@ -188,7 +190,7 @@ impl ConfigBuilder {
         self
     }
 
-    /// Sets the the number of times at which to run boost lookup queries to bootstrap the node.
+    /// Sets the number of times at which to run boost lookup queries to bootstrap the node.
     pub const fn bootstrap_lookup_countdown(mut self, counts: u64) -> Self {
         self.bootstrap_lookup_countdown = Some(counts);
         self
@@ -260,9 +262,9 @@ pub struct Config {
     /// Fork kv-pair to set in local node record. Identifies which network/chain/fork the node
     /// belongs, e.g. `(b"opstack", ChainId)` or `(b"eth", [ForkId])`.
     pub(super) fork: Option<(&'static [u8], EnrForkIdEntry)>,
-    /// RLPx TCP socket to advertise.
+    /// `RLPx` TCP socket to advertise.
     ///
-    /// NOTE: IP address of RLPx socket overwrites IP address of same IP version in
+    /// NOTE: IP address of `RLPx` socket overwrites IP address of same IP version in
     /// [`discv5::ListenConfig`].
     pub(super) tcp_socket: SocketAddr,
     /// Additional kv-pairs (besides tcp port, udp port and fork) that should be advertised to
@@ -281,7 +283,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Returns a new [`ConfigBuilder`], with the RLPx TCP port and IP version configured w.r.t.
+    /// Returns a new [`ConfigBuilder`], with the `RLPx` TCP port and IP version configured w.r.t.
     /// the given socket.
     pub fn builder(rlpx_tcp_socket: SocketAddr) -> ConfigBuilder {
         ConfigBuilder {
@@ -308,7 +310,7 @@ impl Config {
         }
     }
 
-    /// Returns the RLPx (TCP) socket contained in the [`discv5::Config`]. This socket will be
+    /// Returns the `RLPx` (TCP) socket contained in the [`discv5::Config`]. This socket will be
     /// advertised to peers in the local [`Enr`](discv5::enr::Enr).
     pub const fn rlpx_socket(&self) -> &SocketAddr {
         &self.tcp_socket
@@ -337,9 +339,9 @@ pub const fn ipv6(listen_config: &ListenConfig) -> Option<SocketAddrV6> {
     }
 }
 
-/// Returns the amended [`discv5::ListenConfig`] based on the RLPx IP address. The ENR is limited
+/// Returns the amended [`discv5::ListenConfig`] based on the `RLPx` IP address. The ENR is limited
 /// to one IP address per IP version (atm, may become spec'd how to advertise different addresses).
-/// The RLPx address overwrites the discv5 address w.r.t. IP version.
+/// The `RLPx` address overwrites the discv5 address w.r.t. IP version.
 pub fn amend_listen_config_wrt_rlpx(
     listen_config: &ListenConfig,
     rlpx_addr: IpAddr,
@@ -365,8 +367,8 @@ pub fn amend_listen_config_wrt_rlpx(
     ListenConfig::from_two_sockets(discv5_socket_ipv4, discv5_socket_ipv6)
 }
 
-/// Returns the sockets that can be used for discv5 with respect to the RLPx address. ENR specs only
-/// acknowledge one address per IP version.
+/// Returns the sockets that can be used for discv5 with respect to the `RLPx` address. ENR specs
+/// only acknowledge one address per IP version.
 pub fn discv5_sockets_wrt_rlpx_addr(
     rlpx_addr: IpAddr,
     discv5_addr_ipv4: Option<Ipv4Addr>,
@@ -447,7 +449,7 @@ impl BootNode {
 mod test {
     use std::net::SocketAddrV4;
 
-    use reth_primitives::hex;
+    use alloy_primitives::hex;
 
     use super::*;
 

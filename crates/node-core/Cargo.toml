@@ -12,15 +12,17 @@ workspace = true
 
 [dependencies]
 # reth
+reth-chainspec.workspace = true
 reth-primitives.workspace = true
 reth-fs-util.workspace = true
 reth-db = { workspace = true, features = ["mdbx"] }
-reth-storage-errors = { workspace = true, features = ["clap"] }
+reth-db-api.workspace = true
+reth-storage-errors.workspace = true
 reth-provider.workspace = true
 reth-network = { workspace = true, features = ["serde"] }
 reth-network-p2p.workspace = true
-reth-rpc-builder.workspace = true
 reth-rpc.workspace = true
+reth-rpc-server-types.workspace = true
 reth-rpc-types.workspace = true
 reth-rpc-types-compat.workspace = true
 reth-rpc-api = { workspace = true, features = ["client"] }
@@ -30,10 +32,13 @@ reth-config.workspace = true
 reth-discv4.workspace = true
 reth-discv5.workspace = true
 reth-net-nat.workspace = true
+reth-network-peers.workspace = true
 reth-engine-primitives.workspace = true
 reth-tasks.workspace = true
 reth-consensus-common.workspace = true
 reth-beacon-consensus.workspace = true
+reth-prune-types.workspace = true
+reth-stages-types.workspace = true
 
 # ethereum
 alloy-rpc-types-engine.workspace = true
@@ -41,9 +46,6 @@ alloy-rpc-types-engine.workspace = true
 # fluent
 fluentbase-poseidon.workspace = true
 fluentbase-genesis.workspace = true
-
-# ethereum
-discv5.workspace = true
 
 # async
 tokio.workspace = true
@@ -74,7 +76,9 @@ serde.workspace = true
 serde_json.workspace = true
 
 # http/rpc
-hyper.workspace = true
+http.workspace = true
+jsonrpsee.workspace = true
+tower.workspace = true
 
 # tracing
 tracing.workspace = true

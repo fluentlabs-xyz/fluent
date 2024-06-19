@@ -16,7 +16,7 @@ use tokio::sync::oneshot;
 
 /// Represents the outcome of forkchoice update.
 ///
-/// This is a future that resolves to [ForkChoiceUpdateResult]
+/// This is a future that resolves to [`ForkChoiceUpdateResult`]
 #[must_use = "futures do nothing unless you `.await` or poll them"]
 #[derive(Debug)]
 pub struct OnForkChoiceUpdated {
@@ -32,7 +32,7 @@ pub struct OnForkChoiceUpdated {
 // === impl OnForkChoiceUpdated ===
 
 impl OnForkChoiceUpdated {
-    /// Returns the determined status of the received ForkchoiceState.
+    /// Returns the determined status of the received `ForkchoiceState`.
     pub const fn forkchoice_status(&self) -> ForkchoiceStatus {
         self.forkchoice_status
     }
@@ -86,7 +86,7 @@ impl OnForkChoiceUpdated {
     }
 
     /// If the forkchoice update was successful and no payload attributes were provided, this method
-    pub(crate) fn updated_with_pending_payload_id(
+    pub(crate) const fn updated_with_pending_payload_id(
         payload_status: PayloadStatus,
         pending_payload_id: oneshot::Receiver<Result<PayloadId, PayloadBuilderError>>,
     ) -> Self {

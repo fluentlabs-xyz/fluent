@@ -1,9 +1,8 @@
 use crate::EthVersion;
 use alloy_rlp::{RlpDecodable, RlpEncodable};
+use reth_chainspec::{Chain, ChainSpec, NamedChain, MAINNET};
 use reth_codecs_derive::derive_arbitrary;
-use reth_primitives::{
-    hex, Chain, ChainSpec, ForkId, Genesis, Hardfork, Head, NamedChain, B256, MAINNET, U256,
-};
+use reth_primitives::{hex, ForkId, Genesis, Hardfork, Head, B256, U256};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
@@ -65,7 +64,7 @@ impl Status {
         Default::default()
     }
 
-    /// Sets the [EthVersion] for the status.
+    /// Sets the [`EthVersion`] for the status.
     pub fn set_eth_version(&mut self, version: EthVersion) {
         self.version = version as u8;
     }
@@ -152,8 +151,9 @@ impl Default for Status {
 ///
 /// # Example
 /// ```
+/// use reth_chainspec::{Chain, Hardfork, MAINNET};
 /// use reth_eth_wire_types::{EthVersion, Status};
-/// use reth_primitives::{Chain, Hardfork, B256, MAINNET, MAINNET_GENESIS_HASH, U256};
+/// use reth_primitives::{B256, MAINNET_GENESIS_HASH, U256};
 ///
 /// // this is just an example status message!
 /// let status = Status::builder()
@@ -230,10 +230,8 @@ mod tests {
     use crate::{EthVersion, Status};
     use alloy_rlp::{Decodable, Encodable};
     use rand::Rng;
-    use reth_primitives::{
-        hex, Chain, ChainSpec, ForkCondition, ForkHash, ForkId, Genesis, Hardfork, Head,
-        NamedChain, B256, U256,
-    };
+    use reth_chainspec::{Chain, ChainSpec, ForkCondition, NamedChain};
+    use reth_primitives::{hex, ForkHash, ForkId, Genesis, Hardfork, Head, B256, U256};
     use std::str::FromStr;
 
     #[test]
@@ -389,8 +387,7 @@ mod tests {
         let mut forkhash = ForkHash::from(genesis_hash);
         for (_, condition) in hardforks {
             forkhash += match condition {
-                ForkCondition::Block(n) => n,
-                ForkCondition::Timestamp(n) => n,
+                ForkCondition::Block(n) | ForkCondition::Timestamp(n) => n,
                 _ => unreachable!("only block and timestamp forks are used in this test"),
             }
         }

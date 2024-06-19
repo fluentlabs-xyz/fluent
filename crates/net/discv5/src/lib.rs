@@ -17,13 +17,14 @@ use std::{
 };
 
 use ::enr::Enr;
+use alloy_primitives::bytes::Bytes;
 use discv5::ListenConfig;
 use enr::{discv4_id_to_discv5_id, EnrCombinedKeyWrapper};
 use futures::future::join_all;
 use itertools::Itertools;
 use rand::{Rng, RngCore};
-use reth_network_types::PeerId;
-use reth_primitives::{bytes::Bytes, EnrForkIdEntry, ForkId, NodeRecord};
+use reth_ethereum_forks::{EnrForkIdEntry, ForkId};
+use reth_network_peers::{NodeRecord, PeerId};
 use secp256k1::SecretKey;
 use tokio::{sync::mpsc, task};
 use tracing::{debug, error, trace};
@@ -66,7 +67,7 @@ pub const DEFAULT_MIN_TARGET_KBUCKET_INDEX: usize = 0;
 pub struct Discv5 {
     /// sigp/discv5 node.
     discv5: Arc<discv5::Discv5>,
-    /// [`IpMode`] of the the RLPx network.
+    /// [`IpMode`] of the `RLPx` network.
     rlpx_ip_mode: IpMode,
     /// Key used in kv-pair to ID chain, e.g. 'opstack' or 'eth'.
     fork_key: Option<&'static [u8]>,
@@ -222,6 +223,7 @@ impl Discv5 {
 
     /// Process an event from the underlying [`discv5::Discv5`] node.
     pub fn on_discv5_update(&self, update: discv5::Event) -> Option<DiscoveredPeer> {
+        #[allow(clippy::match_same_arms)]
         match update {
             discv5::Event::SocketUpdated(_) | discv5::Event::TalkRequest(_) |
             // `Discovered` not unique discovered peers
@@ -330,7 +332,7 @@ impl Discv5 {
     }
 
     /// Tries to convert an [`Enr`](discv5::Enr) into the backwards compatible type [`NodeRecord`],
-    /// w.r.t. local RLPx [`IpMode`]. Uses source socket as udp socket.
+    /// w.r.t. local `RLPx` [`IpMode`]. Uses source socket as udp socket.
     pub fn try_into_reachable(
         &self,
         enr: &discv5::Enr,
@@ -389,7 +391,7 @@ impl Discv5 {
     // Complementary
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Returns the RLPx [`IpMode`] of the local node.
+    /// Returns the `RLPx` [`IpMode`] of the local node.
     pub const fn ip_mode(&self) -> IpMode {
         self.rlpx_ip_mode
     }
@@ -651,7 +653,7 @@ pub async fn lookup(
 mod test {
     use super::*;
     use ::enr::{CombinedKey, EnrKey};
-    use reth_primitives::MAINNET;
+    use reth_chainspec::MAINNET;
     use secp256k1::rand::thread_rng;
     use tracing::trace;
 
@@ -776,11 +778,11 @@ mod test {
     #[allow(unused)]
     #[allow(clippy::assign_op_pattern)]
     mod sigp {
+        use alloy_primitives::U256;
         use enr::{
             k256::sha2::digest::generic_array::{typenum::U32, GenericArray},
             NodeId,
         };
-        use reth_primitives::U256;
 
         /// A `Key` is a cryptographic hash, identifying both the nodes participating in
         /// the Kademlia DHT, as well as records stored in the DHT.

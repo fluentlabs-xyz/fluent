@@ -6,7 +6,6 @@ use crate::{
         revm_utils::{
             apply_state_overrides, build_call_evm_env, caller_gas_allowance,
             cap_tx_gas_limit_with_caller_allowance, get_precompiles, prepare_call_env,
-            EvmOverrides,
         },
         EthTransactions,
     },
@@ -20,8 +19,8 @@ use reth_provider::{
 };
 use reth_revm::database::StateProviderDatabase;
 use reth_rpc_types::{
-    state::StateOverride, AccessListWithGasUsed, Bundle, EthCallResponse, StateContext,
-    TransactionRequest,
+    state::{EvmOverrides, StateOverride},
+    AccessListWithGasUsed, Bundle, EthCallResponse, StateContext, TransactionRequest,
 };
 use reth_transaction_pool::TransactionPool;
 use revm::{
@@ -49,7 +48,7 @@ where
     Network: NetworkInfo + Send + Sync + 'static,
     EvmConfig: ConfigureEvm + 'static,
 {
-    /// Estimate gas needed for execution of the `request` at the [BlockId].
+    /// Estimate gas needed for execution of the `request` at the [`BlockId`].
     pub async fn estimate_gas_at(
         &self,
         request: TransactionRequest,
@@ -177,7 +176,7 @@ where
 
     /// Estimates the gas usage of the `request` with the state.
     ///
-    /// This will execute the [TransactionRequest] and find the best gas limit via binary search
+    /// This will execute the [`TransactionRequest`] and find the best gas limit via binary search
     pub fn estimate_gas_with<S>(
         &self,
         mut cfg: CfgEnvWithHandlerCfg,
@@ -266,7 +265,7 @@ where
             Err(EthApiError::InvalidTransaction(RpcInvalidTransactionError::GasTooHigh))
                 if tx_request_gas_limit.is_some() || tx_request_gas_price.is_some() =>
             {
-                return Err(self.map_out_of_gas_err(block_env_gas_limit, env, &mut db));
+                return Err(self.map_out_of_gas_err(block_env_gas_limit, env, &mut db))
             }
             // Propagate other results (successful or other errors).
             ethres => ethres?,
@@ -374,7 +373,7 @@ where
         Ok(U256::from(highest_gas_limit))
     }
 
-    /// Creates the AccessList for the `request` at the [BlockId] or latest.
+    /// Creates the `AccessList` for the `request` at the [`BlockId`] or latest.
     pub(crate) async fn create_access_list_at(
         &self,
         request: TransactionRequest,

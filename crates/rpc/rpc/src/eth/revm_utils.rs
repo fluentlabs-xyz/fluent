@@ -10,7 +10,7 @@ use reth_primitives::{
     TransactionSignedEcRecovered, TxHash, TxKind, B256, U256,
 };
 use reth_rpc_types::{
-    state::{AccountOverride, StateOverride},
+    state::{AccountOverride, EvmOverrides, StateOverride},
     BlockOverrides, TransactionRequest,
 };
 #[cfg(feature = "optimism")]
@@ -27,42 +27,6 @@ use revm::{
 use std::cmp::min;
 use std::iter;
 use tracing::trace;
-
-/// Helper type that bundles various overrides for EVM Execution.
-///
-/// By `Default`, no overrides are included.
-#[derive(Debug, Clone, Default)]
-pub struct EvmOverrides {
-    /// Applies overrides to the state before execution.
-    pub state: Option<StateOverride>,
-    /// Applies overrides to the block before execution.
-    ///
-    /// This is a `Box` because less common and only available in debug trace endpoints.
-    pub block: Option<Box<BlockOverrides>>,
-}
-
-impl EvmOverrides {
-    /// Creates a new instance with the given overrides
-    pub const fn new(state: Option<StateOverride>, block: Option<Box<BlockOverrides>>) -> Self {
-        Self { state, block }
-    }
-
-    /// Creates a new instance with the given state overrides.
-    pub const fn state(state: Option<StateOverride>) -> Self {
-        Self { state, block: None }
-    }
-
-    /// Returns `true` if the overrides contain state overrides.
-    pub const fn has_state(&self) -> bool {
-        self.state.is_some()
-    }
-}
-
-impl From<Option<StateOverride>> for EvmOverrides {
-    fn from(state: Option<StateOverride>) -> Self {
-        Self::state(state)
-    }
-}
 
 /// Helper type to work with different transaction types when configuring the EVM env.
 ///
@@ -114,15 +78,15 @@ impl FillableTransaction for TransactionSigned {
     }
 }
 
-/// Returns the addresses of the precompiles corresponding to the SpecId.
+/// Returns the addresses of the precompiles corresponding to the `SpecId`.
 #[inline]
-pub(crate) fn get_precompiles(spec_id: SpecId) -> impl IntoIterator<Item = Address> {
+pub fn get_precompiles(_spec_id: SpecId) -> impl IntoIterator<Item = Address> {
     iter::empty()
     // let spec = PrecompileSpecId::from_spec_id(spec_id);
     // Precompiles::new(spec).addresses().copied().map(Address::from)
 }
 
-/// Prepares the [EnvWithHandlerCfg] for execution.
+/// Prepares the [`EnvWithHandlerCfg`] for execution.
 ///
 /// Does not commit any changes to the underlying database.
 ///
@@ -131,7 +95,7 @@ pub(crate) fn get_precompiles(spec_id: SpecId) -> impl IntoIterator<Item = Addre
 ///  - `disable_eip3607` is set to `true`
 ///  - `disable_base_fee` is set to `true`
 ///  - `nonce` is set to `None`
-pub(crate) fn prepare_call_env<DB>(
+pub fn prepare_call_env<DB>(
     mut cfg: CfgEnvWithHandlerCfg,
     mut block: BlockEnv,
     request: TransactionRequest,
@@ -197,11 +161,11 @@ where
     Ok(env)
 }
 
-/// Creates a new [EnvWithHandlerCfg] to be used for executing the [TransactionRequest] in
+/// Creates a new [`EnvWithHandlerCfg`] to be used for executing the [`TransactionRequest`] in
 /// `eth_call`.
 ///
 /// Note: this does _not_ access the Database to check the sender.
-pub(crate) fn build_call_evm_env(
+pub fn build_call_evm_env(
     cfg: CfgEnvWithHandlerCfg,
     block: BlockEnv,
     request: TransactionRequest,
@@ -210,14 +174,11 @@ pub(crate) fn build_call_evm_env(
     Ok(EnvWithHandlerCfg::new_with_cfg_env(cfg, block, tx))
 }
 
-/// Configures a new [TxEnv]  for the [TransactionRequest]
+/// Configures a new [`TxEnv`]  for the [`TransactionRequest`]
 ///
-/// All [TxEnv] fields are derived from the given [TransactionRequest], if fields are `None`, they
-/// fall back to the [BlockEnv]'s settings.
-pub(crate) fn create_txn_env(
-    block_env: &BlockEnv,
-    request: TransactionRequest,
-) -> EthResult<TxEnv> {
+/// All [`TxEnv`] fields are derived from the given [`TransactionRequest`], if fields are `None`,
+/// they fall back to the [`BlockEnv`]'s settings.
+pub fn create_txn_env(block_env: &BlockEnv, request: TransactionRequest) -> EthResult<TxEnv> {
     // Ensure that if versioned hashes are set, they're not empty
     if request.blob_versioned_hashes.as_ref().map_or(false, |hashes| hashes.is_empty()) {
         return Err(RpcInvalidTransactionError::BlobTransactionMissingBlobHashes.into())
@@ -279,11 +240,8 @@ pub(crate) fn create_txn_env(
     Ok(env)
 }
 
-/// Caps the configured [TxEnv] `gas_limit` with the allowance of the caller.
-pub(crate) fn cap_tx_gas_limit_with_caller_allowance<DB>(
-    db: &mut DB,
-    env: &mut TxEnv,
-) -> EthResult<()>
+/// Caps the configured [`TxEnv`] `gas_limit` with the allowance of the caller.
+pub fn cap_tx_gas_limit_with_caller_allowance<DB>(db: &mut DB, env: &mut TxEnv) -> EthResult<()>
 where
     DB: Database,
     EthApiError: From<<DB as Database>::Error>,
@@ -301,7 +259,7 @@ where
 ///
 /// Returns an error if the caller has insufficient funds.
 /// Caution: This assumes non-zero `env.gas_price`. Otherwise, zero allowance will be returned.
-pub(crate) fn caller_gas_allowance<DB>(db: &mut DB, env: &TxEnv) -> EthResult<U256>
+pub fn caller_gas_allowance<DB>(db: &mut DB, env: &TxEnv) -> EthResult<U256>
 where
     DB: Database,
     EthApiError: From<<DB as Database>::Error>,
@@ -322,8 +280,9 @@ where
         .unwrap_or_default())
 }
 
-/// Helper type for representing the fees of a [TransactionRequest]
-pub(crate) struct CallFees {
+/// Helper type for representing the fees of a [`TransactionRequest`]
+#[derive(Debug)]
+pub struct CallFees {
     /// EIP-1559 priority fee
     max_priority_fee_per_gas: Option<U256>,
     /// Unified gas price setting
@@ -340,7 +299,7 @@ pub(crate) struct CallFees {
 // === impl CallFees ===
 
 impl CallFees {
-    /// Ensures the fields of a [TransactionRequest] are not conflicting.
+    /// Ensures the fields of a [`TransactionRequest`] are not conflicting.
     ///
     /// # EIP-4844 transactions
     ///
@@ -348,8 +307,8 @@ impl CallFees {
     /// If the `maxFeePerBlobGas` or `blobVersionedHashes` are set we treat it as an EIP-4844
     /// transaction.
     ///
-    /// Note: Due to the `Default` impl of [BlockEnv] (Some(0)) this assumes the `block_blob_fee` is
-    /// always `Some`
+    /// Note: Due to the `Default` impl of [`BlockEnv`] (Some(0)) this assumes the `block_blob_fee`
+    /// is always `Some`
     fn ensure_fees(
         call_gas_price: Option<U256>,
         call_max_fee: Option<U256>,
@@ -485,11 +444,8 @@ fn apply_block_overrides(overrides: BlockOverrides, env: &mut BlockEnv) {
     }
 }
 
-/// Applies the given state overrides (a set of [AccountOverride]) to the [CacheDB].
-pub(crate) fn apply_state_overrides<DB>(
-    overrides: StateOverride,
-    db: &mut CacheDB<DB>,
-) -> EthResult<()>
+/// Applies the given state overrides (a set of [`AccountOverride`]) to the [`CacheDB`].
+pub fn apply_state_overrides<DB>(overrides: StateOverride, db: &mut CacheDB<DB>) -> EthResult<()>
 where
     DB: DatabaseRef,
     EthApiError: From<<DB as DatabaseRef>::Error>,
@@ -500,7 +456,7 @@ where
     Ok(())
 }
 
-/// Applies a single [AccountOverride] to the [CacheDB].
+/// Applies a single [`AccountOverride`] to the [`CacheDB`].
 fn apply_account_override<DB>(
     account: Address,
     account_override: AccountOverride,
@@ -561,9 +517,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use reth_primitives::constants::GWEI_TO_WEI;
-
     use super::*;
+    use reth_primitives::constants::GWEI_TO_WEI;
 
     #[test]
     fn test_ensure_0_fallback() {

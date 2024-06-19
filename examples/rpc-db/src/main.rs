@@ -13,14 +13,16 @@
 //! ```
 
 use reth::{
-    primitives::ChainSpecBuilder,
     providers::{
         providers::{BlockchainProvider, StaticFileProvider},
         ProviderFactory,
     },
     utils::db::open_db_read_only,
 };
-use reth_db::{mdbx::DatabaseArguments, models::client_version::ClientVersion};
+use reth_chainspec::ChainSpecBuilder;
+use reth_db::mdbx::DatabaseArguments;
+use reth_db_api::models::ClientVersion;
+
 // Bringing up the RPC
 use reth::rpc::builder::{
     RethRpcModule, RpcModuleBuilder, RpcServerConfig, TransportRpcModuleConfig,

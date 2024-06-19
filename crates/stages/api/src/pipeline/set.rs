@@ -1,6 +1,5 @@
-use crate::Stage;
-use reth_db::database::Database;
-use reth_primitives::stage::StageId;
+use crate::{Stage, StageId};
+use reth_db_api::database::Database;
 use std::{
     collections::HashMap,
     fmt::{Debug, Formatter},
@@ -201,7 +200,7 @@ where
 
     /// Disables the given stage if the given closure returns true.
     ///
-    /// See [Self::disable]
+    /// See [`Self::disable`]
     pub fn disable_if<F>(self, stage_id: StageId, f: F) -> Self
     where
         F: FnOnce() -> bool,
@@ -214,7 +213,7 @@ where
 
     /// Disables all given stages if the given closure returns true.
     ///
-    /// See [Self::disable]
+    /// See [`Self::disable`]
     pub fn disable_all_if<F>(self, stages: &[StageId], f: F) -> Self
     where
         F: FnOnce() -> bool,

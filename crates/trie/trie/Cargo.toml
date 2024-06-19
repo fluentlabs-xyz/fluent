@@ -16,6 +16,9 @@ workspace = true
 reth-primitives.workspace = true
 reth-execution-errors.workspace = true
 reth-db.workspace = true
+reth-db-api.workspace = true
+reth-stages-types.workspace = true
+reth-trie-common.workspace = true
 
 revm.workspace = true
 
@@ -26,6 +29,7 @@ alloy-rlp.workspace = true
 tracing.workspace = true
 
 # misc
+rayon.workspace = true
 derive_more.workspace = true
 auto_impl.workspace = true
 
@@ -38,17 +42,23 @@ triehash = { version = "0.8", optional = true }
 
 [dev-dependencies]
 # reth
+reth-chainspec.workspace = true
 reth-primitives = { workspace = true, features = ["test-utils", "arbitrary"] }
 reth-db = { workspace = true, features = ["test-utils"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-storage-errors.workspace = true
+reth-trie-common = { workspace = true, features = ["test-utils", "arbitrary"] }
 
 # trie
 triehash = "0.8"
 
 # misc
 proptest.workspace = true
-tokio = { workspace = true, default-features = false, features = ["sync", "rt", "macros"] }
+tokio = { workspace = true, default-features = false, features = [
+    "sync",
+    "rt",
+    "macros",
+] }
 tokio-stream.workspace = true
 once_cell.workspace = true
 serde_json.workspace = true
@@ -57,8 +67,17 @@ criterion.workspace = true
 
 [features]
 metrics = ["reth-metrics", "dep:metrics"]
-test-utils = ["triehash"]
+test-utils = ["triehash", "reth-trie-common/test-utils"]
 
 [[bench]]
 name = "prefix_set"
+harness = false
+
+[[bench]]
+name = "hash_post_state"
+harness = false
+
+[[bench]]
+name = "trie_root"
+required-features = ["test-utils"]
 harness = false

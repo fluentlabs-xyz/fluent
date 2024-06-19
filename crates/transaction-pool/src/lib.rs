@@ -71,7 +71,7 @@
 //!
 //! Blob transaction can be quite large hence they are stored in a separate blobstore. The pool is
 //! responsible for inserting blob data for new transactions into the blobstore.
-//! See also [ValidTransaction](validate::ValidTransaction)
+//! See also [`ValidTransaction`](validate::ValidTransaction)
 //!
 //!
 //! ## Examples
@@ -79,7 +79,7 @@
 //! Listen for new transactions and print them:
 //!
 //! ```
-//! use reth_primitives::MAINNET;
+//! use reth_chainspec::MAINNET;
 //! use reth_provider::{BlockReaderIdExt, ChainSpecProvider, StateProviderFactory};
 //! use reth_tasks::TokioTaskExecutor;
 //! use reth_transaction_pool::{TransactionValidationTaskExecutor, Pool, TransactionPool};
@@ -107,7 +107,7 @@
 //!
 //! ```
 //! use futures_util::Stream;
-//! use reth_primitives::MAINNET;
+//! use reth_chainspec::MAINNET;
 //! use reth_provider::{BlockReaderIdExt, CanonStateNotification, ChainSpecProvider, StateProviderFactory};
 //! use reth_tasks::TokioTaskExecutor;
 //! use reth_tasks::TaskSpawner;
@@ -279,13 +279,13 @@ where
     Client: StateProviderFactory + reth_provider::BlockReaderIdExt + Clone + 'static,
     S: BlobStore,
 {
-    /// Returns a new [Pool] that uses the default [TransactionValidationTaskExecutor] when
-    /// validating [EthPooledTransaction]s and ords via [CoinbaseTipOrdering]
+    /// Returns a new [Pool] that uses the default [`TransactionValidationTaskExecutor`] when
+    /// validating [`EthPooledTransaction`]s and ords via [`CoinbaseTipOrdering`]
     ///
     /// # Example
     ///
     /// ```
-    /// use reth_primitives::MAINNET;
+    /// use reth_chainspec::MAINNET;
     /// use reth_provider::{BlockReaderIdExt, StateProviderFactory};
     /// use reth_tasks::TokioTaskExecutor;
     /// use reth_transaction_pool::{

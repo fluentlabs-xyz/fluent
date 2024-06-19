@@ -13,12 +13,13 @@ use crate::{
     version::{LONG_VERSION, SHORT_VERSION},
 };
 use clap::{value_parser, Parser, Subcommand};
+use reth_chainspec::ChainSpec;
 use reth_cli_runner::CliRunner;
 use reth_db::DatabaseEnv;
 use reth_node_builder::{NodeBuilder, WithLaunchContext};
-use reth_primitives::ChainSpec;
 use reth_tracing::FileWorkerGuard;
 use std::{ffi::OsString, fmt, future::Future, sync::Arc};
+use tracing::info;
 
 /// Re-export of the `reth_node_core` types specifically in the `cli` module.
 ///
@@ -59,10 +60,10 @@ pub struct Cli<Ext: clap::Args + fmt::Debug = NoArgs> {
     /// port numbers that conflict with each other.
     ///
     /// Changes to the following port numbers:
-    /// - DISCOVERY_PORT: default + `instance` - 1
-    /// - AUTH_PORT: default + `instance` * 100 - 100
-    /// - HTTP_RPC_PORT: default - `instance` + 1
-    /// - WS_RPC_PORT: default + `instance` * 2 - 2
+    /// - `DISCOVERY_PORT`: default + `instance` - 1
+    /// - `AUTH_PORT`: default + `instance` * 100 - 100
+    /// - `HTTP_RPC_PORT`: default - `instance` + 1
+    /// - `WS_RPC_PORT`: default + `instance` * 2 - 2
     #[arg(long, value_name = "INSTANCE", global = true, default_value_t = 1, value_parser = value_parser!(u16).range(..=200))]
     instance: u16,
 
@@ -90,7 +91,7 @@ impl<Ext: clap::Args + fmt::Debug> Cli<Ext> {
     /// Execute the configured cli command.
     ///
     /// This accepts a closure that is used to launch the node via the
-    /// [NodeCommand](node::NodeCommand).
+    /// [`NodeCommand`](node::NodeCommand).
     ///
     ///
     /// # Example
@@ -139,6 +140,7 @@ impl<Ext: clap::Args + fmt::Debug> Cli<Ext> {
             self.logs.log_file_directory.join(self.chain.chain.to_string());
 
         let _guard = self.init_tracing()?;
+        info!(target: "reth::cli", "Initialized tracing, debug log directory: {}", self.logs.log_file_directory);
 
         let runner = CliRunner::default();
         match self.command {

@@ -1,8 +1,8 @@
 //! Implementation of a tree-like structure for blockchains.
 //!
-//! The [BlockchainTree] can validate, execute, and revert blocks in multiple competing sidechains.
-//! This structure is used for Reth's sync mode at the tip instead of the pipeline, and is the
-//! primary executor and validator of payloads sent from the consensus layer.
+//! The [`BlockchainTree`] can validate, execute, and revert blocks in multiple competing
+//! sidechains. This structure is used for Reth's sync mode at the tip instead of the pipeline, and
+//! is the primary executor and validator of payloads sent from the consensus layer.
 //!
 //! Blocks and their resulting state transitions are kept in-memory until they are persisted.
 //!
@@ -40,7 +40,7 @@ pub mod shareable;
 pub use shareable::ShareableBlockchainTree;
 
 mod bundle;
-pub use bundle::{BundleStateData, BundleStateDataRef};
+pub use bundle::{BundleStateDataRef, ExecutionData};
 
 /// Buffer of not executed blocks.
 pub mod block_buffer;

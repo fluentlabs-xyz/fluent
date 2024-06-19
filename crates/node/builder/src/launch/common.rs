@@ -1,34 +1,32 @@
 //! Helper types that can be used by launchers.
 
+use backon::{ConstantBuilder, Retryable};
 use eyre::Context;
 use rayon::ThreadPoolBuilder;
 use reth_auto_seal_consensus::MiningMode;
 use reth_beacon_consensus::EthBeaconConsensus;
+use reth_chainspec::{Chain, ChainSpec};
 use reth_config::{config::EtlConfig, PruneConfig};
-use reth_db::{database::Database, database_metrics::DatabaseMetrics};
+use reth_db_api::{database::Database, database_metrics::DatabaseMetrics};
 use reth_db_common::init::{init_genesis, InitDatabaseError};
 use reth_downloaders::{bodies::noop::NoopBodiesDownloader, headers::noop::NoopHeaderDownloader};
 use reth_evm::noop::NoopBlockExecutorProvider;
 use reth_network_p2p::headers::client::HeadersClient;
 use reth_node_core::{
-    cli::config::RethRpcConfig,
     dirs::{ChainPath, DataDirPath},
     node_config::NodeConfig,
 };
-use reth_primitives::{
-    stage::PipelineTarget, BlockNumber, Chain, ChainSpec, Head, PruneModes, B256,
-};
-use reth_provider::{
-    providers::StaticFileProvider, HeaderSyncMode, ProviderFactory, StaticFileProviderFactory,
-};
-use reth_prune::PrunerBuilder;
+use reth_primitives::{BlockNumber, Head, B256};
+use reth_provider::{providers::StaticFileProvider, ProviderFactory, StaticFileProviderFactory};
+use reth_prune::{PruneModes, PrunerBuilder};
+use reth_rpc_builder::config::RethRpcServerConfig;
 use reth_rpc_layer::JwtSecret;
-use reth_stages::{sets::DefaultStages, Pipeline};
+use reth_stages::{sets::DefaultStages, Pipeline, PipelineTarget};
 use reth_static_file::StaticFileProducer;
 use reth_tasks::TaskExecutor;
 use reth_tracing::tracing::{debug, error, info, warn};
 use std::{sync::Arc, thread::available_parallelism};
-use tokio::sync::{mpsc::Receiver, oneshot};
+use tokio::sync::{mpsc::Receiver, oneshot, watch};
 
 /// Reusable setup for launching a node.
 ///
@@ -56,17 +54,19 @@ impl LaunchContext {
     /// `config`.
     ///
     /// Attaches both the `NodeConfig` and the loaded `reth.toml` config to the launch context.
-    pub fn with_loaded_toml_config(
+    pub async fn with_loaded_toml_config(
         self,
         config: NodeConfig,
     ) -> eyre::Result<LaunchContextWith<WithConfigs>> {
-        let toml_config = self.load_toml_config(&config)?;
+        let toml_config = self.load_toml_config(&config).await?;
         Ok(self.with(WithConfigs { config, toml_config }))
     }
 
     /// Loads the reth config with the configured `data_dir` and overrides settings according to the
     /// `config`.
-    pub fn load_toml_config(&self, config: &NodeConfig) -> eyre::Result<reth_config::Config> {
+    ///
+    /// This is async because the trusted peers may have to be resolved.
+    pub async fn load_toml_config(&self, config: &NodeConfig) -> eyre::Result<reth_config::Config> {
         let config_path = config.config.clone().unwrap_or_else(|| self.data_dir.config());
 
         let mut toml_config = confy::load_path::<reth_config::Config>(&config_path)
@@ -78,13 +78,6 @@ impl LaunchContext {
 
         // Update the config with the command line arguments
         toml_config.peers.trusted_nodes_only = config.network.trusted_only;
-
-        if !config.network.trusted_peers.is_empty() {
-            info!(target: "reth::cli", "Adding trusted nodes");
-            config.network.trusted_peers.iter().for_each(|peer| {
-                toml_config.peers.trusted_nodes.insert(*peer);
-            });
-        }
 
         Ok(toml_config)
     }
@@ -107,7 +100,7 @@ impl LaunchContext {
         Ok(())
     }
 
-    /// Convenience function to [Self::configure_globals]
+    /// Convenience function to [`Self::configure_globals`]
     pub fn with_configured_globals(self) -> Self {
         self.configure_globals();
         self
@@ -141,7 +134,7 @@ impl LaunchContext {
     }
 }
 
-/// A [LaunchContext] along with an additional value.
+/// A [`LaunchContext`] along with an additional value.
 ///
 /// This can be used to sequentially attach additional values to the type during the launch process.
 ///
@@ -192,6 +185,27 @@ impl<T> LaunchContextWith<T> {
     }
 }
 
+impl LaunchContextWith<WithConfigs> {
+    /// Resolves the trusted peers and adds them to the toml config.
+    pub async fn with_resolved_peers(mut self) -> eyre::Result<Self> {
+        if !self.attachment.config.network.trusted_peers.is_empty() {
+            info!(target: "reth::cli", "Adding trusted nodes");
+
+            // resolve trusted peers if they use a domain instead of dns
+            for peer in &self.attachment.config.network.trusted_peers {
+                let backoff = ConstantBuilder::default()
+                    .with_max_times(self.attachment.config.network.dns_retries);
+                let resolved = (move || { peer.resolve() })
+                .retry(&backoff)
+                .notify(|err, _| warn!(target: "reth::cli", "Error resolving peer domain: {err}. Retrying..."))
+                .await?;
+                self.attachment.toml_config.peers.trusted_nodes.insert(resolved);
+            }
+        }
+        Ok(self)
+    }
+}
+
 impl<L, R> LaunchContextWith<Attached<L, R>> {
     /// Get a reference to the left value.
     pub const fn left(&self) -> &L {
@@ -239,22 +253,27 @@ impl<R> LaunchContextWith<Attached<WithConfigs, R>> {
         self
     }
 
-    /// Returns the attached [NodeConfig].
+    /// Returns the container for all config types
+    pub const fn configs(&self) -> &WithConfigs {
+        self.attachment.left()
+    }
+
+    /// Returns the attached [`NodeConfig`].
     pub const fn node_config(&self) -> &NodeConfig {
         &self.left().config
     }
 
-    /// Returns the attached [NodeConfig].
+    /// Returns the attached [`NodeConfig`].
     pub fn node_config_mut(&mut self) -> &mut NodeConfig {
         &mut self.left_mut().config
     }
 
-    /// Returns the attached toml config [reth_config::Config].
+    /// Returns the attached toml config [`reth_config::Config`].
     pub const fn toml_config(&self) -> &reth_config::Config {
         &self.left().toml_config
     }
 
-    /// Returns the attached toml config [reth_config::Config].
+    /// Returns the attached toml config [`reth_config::Config`].
     pub fn toml_config_mut(&mut self) -> &mut reth_config::Config {
         &mut self.left_mut().toml_config
     }
@@ -279,31 +298,21 @@ impl<R> LaunchContextWith<Attached<WithConfigs, R>> {
         self.node_config().dev.dev
     }
 
-    /// Returns the configured [PruneConfig]
+    /// Returns the configured [`PruneConfig`]
     pub fn prune_config(&self) -> Option<PruneConfig> {
         self.toml_config().prune.clone().or_else(|| self.node_config().prune_config())
     }
 
-    /// Returns the configured [PruneModes]
+    /// Returns the configured [`PruneModes`]
     pub fn prune_modes(&self) -> Option<PruneModes> {
         self.prune_config().map(|config| config.segments)
     }
 
-    /// Returns an initialized [PrunerBuilder] based on the configured [PruneConfig]
+    /// Returns an initialized [`PrunerBuilder`] based on the configured [`PruneConfig`]
     pub fn pruner_builder(&self) -> PrunerBuilder {
         PrunerBuilder::new(self.prune_config().unwrap_or_default())
             .prune_delete_limit(self.chain_spec().prune_delete_limit)
             .timeout(PrunerBuilder::DEFAULT_TIMEOUT)
-    }
-
-    /// Returns the initial pipeline target, based on whether or not the node is running in
-    /// `debug.tip` mode, `debug.continuous` mode, or neither.
-    ///
-    /// If running in `debug.tip` mode, the configured tip is returned.
-    /// Otherwise, if running in `debug.continuous` mode, the genesis hash is returned.
-    /// Otherwise, `None` is returned. This is what the node will do by default.
-    pub fn initial_pipeline_target(&self) -> Option<B256> {
-        self.node_config().initial_pipeline_target(self.genesis_hash())
     }
 
     /// Loads the JWT secret for the engine API
@@ -313,7 +322,7 @@ impl<R> LaunchContextWith<Attached<WithConfigs, R>> {
         Ok(secret)
     }
 
-    /// Returns the [MiningMode] intended for --dev mode.
+    /// Returns the [`MiningMode`] intended for --dev mode.
     pub fn dev_mining_mode(&self, pending_transactions_listener: Receiver<B256>) -> MiningMode {
         if let Some(interval) = self.node_config().dev.block_time {
             MiningMode::interval(interval)
@@ -329,7 +338,7 @@ impl<DB> LaunchContextWith<Attached<WithConfigs, DB>>
 where
     DB: Database + Clone + 'static,
 {
-    /// Returns the [ProviderFactory] for the attached storage after executing a consistent check
+    /// Returns the [`ProviderFactory`] for the attached storage after executing a consistent check
     /// between the database and static files. **It may execute a pipeline unwind if it fails this
     /// check.**
     pub async fn create_provider_factory(&self) -> eyre::Result<ProviderFactory<DB>> {
@@ -353,17 +362,17 @@ where
         {
             // Highly unlikely to happen, and given its destructive nature, it's better to panic
             // instead.
-            if PipelineTarget::Unwind(0) == unwind_target {
-                panic!("A static file <> database inconsistency was found that would trigger an unwind to block 0.")
-            }
+            assert_ne!(unwind_target, PipelineTarget::Unwind(0), "A static file <> database inconsistency was found that would trigger an unwind to block 0");
 
             info!(target: "reth::cli", unwind_target = %unwind_target, "Executing an unwind after a failed storage consistency check.");
+
+            let (_tip_tx, tip_rx) = watch::channel(B256::ZERO);
 
             // Builds an unwind-only pipeline
             let pipeline = Pipeline::builder()
                 .add_stages(DefaultStages::new(
                     factory.clone(),
-                    HeaderSyncMode::Continuous,
+                    tip_rx,
                     Arc::new(EthBeaconConsensus::new(self.chain_spec())),
                     NoopHeaderDownloader::default(),
                     NoopBodiesDownloader::default(),
@@ -375,7 +384,6 @@ where
                     factory.clone(),
                     StaticFileProducer::new(
                         factory.clone(),
-                        factory.static_file_provider(),
                         self.prune_modes().unwrap_or_default(),
                     ),
                 );
@@ -397,7 +405,7 @@ where
         Ok(factory)
     }
 
-    /// Creates a new [ProviderFactory] and attaches it to the launch context.
+    /// Creates a new [`ProviderFactory`] and attaches it to the launch context.
     pub async fn with_provider_factory(
         self,
     ) -> eyre::Result<LaunchContextWith<Attached<WithConfigs, ProviderFactory<DB>>>> {
@@ -420,7 +428,7 @@ where
         self.right().db_ref()
     }
 
-    /// Returns the configured ProviderFactory.
+    /// Returns the configured `ProviderFactory`.
     pub const fn provider_factory(&self) -> &ProviderFactory<DB> {
         self.right()
     }
@@ -430,16 +438,15 @@ where
         self.right().static_file_provider()
     }
 
-    /// Creates a new [StaticFileProducer] with the attached database.
+    /// Creates a new [`StaticFileProducer`] with the attached database.
     pub fn static_file_producer(&self) -> StaticFileProducer<DB> {
         StaticFileProducer::new(
             self.provider_factory().clone(),
-            self.static_file_provider(),
             self.prune_modes().unwrap_or_default(),
         )
     }
 
-    /// Convenience function to [Self::init_genesis]
+    /// Convenience function to [`Self::init_genesis`]
     pub fn with_genesis(self) -> Result<Self, InitDatabaseError> {
         init_genesis(self.provider_factory().clone())?;
         Ok(self)
@@ -459,7 +466,7 @@ where
         self.node_config().max_block(client, self.provider_factory().clone()).await
     }
 
-    /// Convenience function to [Self::start_prometheus_endpoint]
+    /// Convenience function to [`Self::start_prometheus_endpoint`]
     pub async fn with_prometheus(self) -> eyre::Result<Self> {
         self.start_prometheus_endpoint().await?;
         Ok(self)
@@ -538,7 +545,7 @@ impl<L, R> Attached<L, R> {
     }
 }
 
-/// Helper container type to bundle the initial [NodeConfig] and the loaded settings from the
+/// Helper container type to bundle the initial [`NodeConfig`] and the loaded settings from the
 /// reth.toml config
 #[derive(Debug, Clone)]
 pub struct WithConfigs {

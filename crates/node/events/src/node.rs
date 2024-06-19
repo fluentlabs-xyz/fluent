@@ -1,21 +1,17 @@
 //! Support for handling events emitted by node components.
 
 use crate::cl::ConsensusLayerHealthEvent;
+use alloy_rpc_types_engine::ForkchoiceState;
 use futures::Stream;
 use reth_beacon_consensus::{
     BeaconConsensusEngineEvent, ConsensusEngineLiveSyncProgress, ForkchoiceStatus,
 };
-use reth_db::{database::Database, database_metrics::DatabaseMetadata};
+use reth_db_api::{database::Database, database_metrics::DatabaseMetadata};
 use reth_network::{NetworkEvent, NetworkHandle};
 use reth_network_api::PeersInfo;
-use reth_primitives::{
-    constants,
-    stage::{EntitiesCheckpoint, StageCheckpoint, StageId},
-    BlockNumber, B256,
-};
+use reth_primitives::{constants, BlockNumber, B256};
 use reth_prune::PrunerEvent;
-use reth_rpc_types::engine::ForkchoiceState;
-use reth_stages::{ExecOutput, PipelineEvent};
+use reth_stages::{EntitiesCheckpoint, ExecOutput, PipelineEvent, StageCheckpoint, StageId};
 use reth_static_file::StaticFileProducerEvent;
 use std::{
     fmt::{Display, Formatter},
@@ -37,7 +33,7 @@ const INFO_MESSAGE_INTERVAL: Duration = Duration::from_secs(25);
 struct NodeState<DB> {
     /// Database environment.
     /// Used for freelist calculation reported in the "Status" log message.
-    /// See [EventHandler::poll].
+    /// See [`EventHandler::poll`].
     db: DB,
     /// Connection to the network.
     network: Option<NetworkHandle>,
@@ -283,7 +279,8 @@ impl<DB> NodeState<DB> {
                     hash=?block.hash(),
                     peers=self.num_connected_peers(),
                     txs=block.body.len(),
-                    mgas=%format!("{:.3}", block.header.gas_used as f64 / constants::MGAS_TO_GAS as f64),
+                    mgas=%format!("{:.3}MGas", block.header.gas_used as f64 / constants::MGAS_TO_GAS as f64),
+                    mgas_throughput=%format!("{:.3}MGas/s", block.header.gas_used as f64 / elapsed.as_secs_f64() / constants::MGAS_TO_GAS as f64),
                     full=%format!("{:.1}%", block.header.gas_used as f64 * 100.0 / block.header.gas_limit as f64),
                     base_fee=%format!("{:.2}gwei", block.header.base_fee_per_gas.unwrap_or(0) as f64 / constants::GWEI_TO_WEI as f64),
                     blobs=block.header.blob_gas_used.unwrap_or(0) / constants::eip4844::DATA_GAS_PER_BLOB,
@@ -394,7 +391,7 @@ pub enum NodeEvent {
     ConsensusLayerHealth(ConsensusLayerHealthEvent),
     /// A pruner event
     Pruner(PrunerEvent),
-    /// A static_file_producer event
+    /// A `static_file_producer` event
     StaticFileProducer(StaticFileProducerEvent),
     /// Used to encapsulate various conditions or situations that do not
     /// naturally fit into the other more specific variants.
@@ -643,8 +640,8 @@ impl Eta {
     /// Format ETA for a given stage.
     ///
     /// NOTE: Currently ETA is enabled only for the stages that have predictable progress.
-    /// It's not the case for network-dependent ([StageId::Headers] and [StageId::Bodies]) and
-    /// [StageId::Execution] stages.
+    /// It's not the case for network-dependent ([`StageId::Headers`] and [`StageId::Bodies`]) and
+    /// [`StageId::Execution`] stages.
     fn fmt_for_stage(&self, stage: StageId) -> Option<String> {
         if !self.is_available() ||
             matches!(stage, StageId::Headers | StageId::Bodies | StageId::Execution)

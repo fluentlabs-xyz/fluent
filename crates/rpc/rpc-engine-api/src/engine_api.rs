@@ -2,13 +2,15 @@ use crate::{metrics::EngineApiMetrics, EngineApiError, EngineApiResult};
 use async_trait::async_trait;
 use jsonrpsee_core::RpcResult;
 use reth_beacon_consensus::BeaconConsensusEngineHandle;
-use reth_engine_primitives::{
-    validate_payload_timestamp, EngineApiMessageVersion, EngineTypes, PayloadAttributes,
-    PayloadBuilderAttributes, PayloadOrAttributes,
-};
+use reth_chainspec::ChainSpec;
+use reth_engine_primitives::EngineTypes;
 use reth_evm::provider::EvmEnvProvider;
 use reth_payload_builder::PayloadStore;
-use reth_primitives::{BlockHash, BlockHashOrNumber, BlockNumber, ChainSpec, Hardfork, B256, U64};
+use reth_payload_primitives::{
+    validate_payload_timestamp, EngineApiMessageVersion, PayloadAttributes,
+    PayloadBuilderAttributes, PayloadOrAttributes,
+};
+use reth_primitives::{BlockHash, BlockHashOrNumber, BlockNumber, Hardfork, B256, U64};
 use reth_rpc_api::EngineApiServer;
 use reth_rpc_types::engine::{
     CancunPayloadFields, ClientVersionV1, ExecutionPayload, ExecutionPayloadBodiesV1,
@@ -24,10 +26,6 @@ use reth_tasks::TaskSpawner;
 use std::{sync::Arc, time::Instant};
 use tokio::sync::oneshot;
 use tracing::{trace, warn};
-
-/// The list of additional V4 caps
-// TODO(mattsse): move to alloy
-const V4_CAPABILITIES: [&str; 2] = ["engine_getPayloadV4", "engine_newPayloadV4"];
 
 /// The Engine API response sender.
 pub type EngineApiSender<Ok> = oneshot::Sender<EngineApiResult<Ok>>;
@@ -63,7 +61,7 @@ where
     Provider: HeaderProvider + BlockReader + StateProviderFactory + EvmEnvProvider + 'static,
     EngineT: EngineTypes + 'static,
 {
-    /// Create new instance of [EngineApi].
+    /// Create new instance of [`EngineApi`].
     pub fn new(
         provider: Provider,
         chain_spec: Arc<ChainSpec>,
@@ -364,7 +362,7 @@ where
     /// Returns the execution payload bodies by the range starting at `start`, containing `count`
     /// blocks.
     ///
-    /// WARNING: This method is associated with the BeaconBlocksByRange message in the consensus
+    /// WARNING: This method is associated with the `BeaconBlocksByRange` message in the consensus
     /// layer p2p specification, meaning the input should be treated as untrusted or potentially
     /// adversarial.
     ///
@@ -507,13 +505,13 @@ where
     ///
     /// The payload attributes will be validated according to the engine API rules for the given
     /// message version:
-    /// * If the version is [EngineApiMessageVersion::V1], then the payload attributes will be
+    /// * If the version is [`EngineApiMessageVersion::V1`], then the payload attributes will be
     ///   validated according to the Paris rules.
-    /// * If the version is [EngineApiMessageVersion::V2], then the payload attributes will be
+    /// * If the version is [`EngineApiMessageVersion::V2`], then the payload attributes will be
     ///   validated according to the Shanghai rules, as well as the validity changes from cancun:
     ///   <https://github.com/ethereum/execution-apis/blob/584905270d8ad665718058060267061ecfd79ca5/src/engine/cancun.md#update-the-methods-of-previous-forks>
     ///
-    /// * If the version above [EngineApiMessageVersion::V3], then the payload attributes will be
+    /// * If the version above [`EngineApiMessageVersion::V3`], then the payload attributes will be
     ///   validated according to the Cancun rules.
     async fn validate_and_execute_forkchoice(
         &self,
@@ -605,6 +603,8 @@ where
         Ok(res?)
     }
 
+    /// Handler for `engine_newPayloadV4`
+    /// See also <https://github.com/ethereum/execution-apis/blob/03911ffc053b8b806123f1fc237184b0092a485a/src/engine/prague.md#engine_newpayloadv4>
     async fn new_payload_v4(
         &self,
         payload: ExecutionPayloadV4,
@@ -805,6 +805,7 @@ where
         self.inner.metrics.latency.exchange_transition_configuration.record(start.elapsed());
         Ok(res?)
     }
+
     /// Handler for `engine_getClientVersionV1`
     ///
     /// See also <https://github.com/ethereum/execution-apis/blob/03911ffc053b8b806123f1fc237184b0092a485a/src/engine/identification.md>
@@ -821,7 +822,7 @@ where
     /// Handler for `engine_exchangeCapabilitiesV1`
     /// See also <https://github.com/ethereum/execution-apis/blob/6452a6b194d7db269bf1dbd087a267251d3cc7f8/src/engine/common.md#capabilities>
     async fn exchange_capabilities(&self, _capabilities: Vec<String>) -> RpcResult<Vec<String>> {
-        Ok(CAPABILITIES.into_iter().chain(V4_CAPABILITIES.into_iter()).map(str::to_owned).collect())
+        Ok(CAPABILITIES.iter().cloned().map(str::to_owned).collect())
     }
 }
 
@@ -842,8 +843,9 @@ mod tests {
     use reth_ethereum_engine_primitives::EthEngineTypes;
     use reth_testing_utils::generators::random_block;
 
+    use reth_chainspec::MAINNET;
     use reth_payload_builder::test_utils::spawn_test_payload_service;
-    use reth_primitives::{SealedBlock, B256, MAINNET};
+    use reth_primitives::{SealedBlock, B256};
     use reth_provider::test_utils::MockEthProvider;
     use reth_rpc_types::engine::{ClientCode, ClientVersionV1};
     use reth_rpc_types_compat::engine::payload::execution_payload_from_sealed_block;

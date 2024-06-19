@@ -9,25 +9,28 @@ use crate::{
 };
 use dashmap::{mapref::entry::Entry as DashMapEntry, DashMap};
 use parking_lot::RwLock;
+use reth_chainspec::ChainInfo;
 use reth_db::{
-    codecs::CompactU256,
-    cursor::DbCursorRO,
-    models::StoredBlockBodyIndices,
+    lockfile::StorageLock,
     static_file::{iter_static_files, HeaderMask, ReceiptMask, StaticFileCursor, TransactionMask},
-    table::Table,
     tables,
+};
+use reth_db_api::{
+    cursor::DbCursorRO,
+    models::{CompactU256, StoredBlockBodyIndices},
+    table::Table,
     transaction::DbTx,
 };
 use reth_nippy_jar::NippyJar;
 use reth_primitives::{
     keccak256,
-    stage::{PipelineTarget, StageId},
     static_file::{find_fixed_range, HighestStaticFiles, SegmentHeader, SegmentRangeInclusive},
-    Address, Block, BlockHash, BlockHashOrNumber, BlockNumber, BlockWithSenders, ChainInfo, Header,
-    Receipt, SealedBlock, SealedBlockWithSenders, SealedHeader, StaticFileSegment, TransactionMeta,
+    Address, Block, BlockHash, BlockHashOrNumber, BlockNumber, BlockWithSenders, Header, Receipt,
+    SealedBlock, SealedBlockWithSenders, SealedHeader, StaticFileSegment, TransactionMeta,
     TransactionSigned, TransactionSignedNoHash, TxHash, TxNumber, Withdrawal, Withdrawals, B256,
     U256,
 };
+use reth_stages_types::{PipelineTarget, StageId};
 use reth_storage_errors::provider::{ProviderError, ProviderResult};
 use std::{
     collections::{hash_map::Entry, BTreeMap, HashMap},
@@ -57,6 +60,11 @@ impl StaticFileAccess {
     /// Returns `true` if read-only access.
     pub const fn is_read_only(&self) -> bool {
         matches!(self, Self::RO)
+    }
+
+    /// Returns `true` if read-write access.
+    pub const fn is_read_write(&self) -> bool {
+        matches!(self, Self::RW)
     }
 }
 
@@ -101,21 +109,29 @@ pub struct StaticFileProviderInner {
     static_files_max_block: RwLock<HashMap<StaticFileSegment, u64>>,
     /// Available static file block ranges on disk indexed by max transactions.
     static_files_tx_index: RwLock<SegmentRanges>,
-    /// Directory where static_files are located
+    /// Directory where `static_files` are located
     path: PathBuf,
     /// Whether [`StaticFileJarProvider`] loads filters into memory. If not, `by_hash` queries
     /// won't be able to be queried directly.
     load_filters: bool,
-    /// Maintains a map of StaticFile writers for each [`StaticFileSegment`]
+    /// Maintains a map of `StaticFile` writers for each [`StaticFileSegment`]
     writers: DashMap<StaticFileSegment, StaticFileProviderRW>,
     metrics: Option<Arc<StaticFileProviderMetrics>>,
     /// Access rights of the provider.
     access: StaticFileAccess,
+    /// Write lock for when access is [`StaticFileAccess::RW`].
+    _lock_file: Option<StorageLock>,
 }
 
 impl StaticFileProviderInner {
     /// Creates a new [`StaticFileProviderInner`].
     fn new(path: impl AsRef<Path>, access: StaticFileAccess) -> ProviderResult<Self> {
+        let _lock_file = if access.is_read_write() {
+            Some(StorageLock::try_acquire(path.as_ref())?)
+        } else {
+            None
+        };
+
         let provider = Self {
             map: Default::default(),
             writers: Default::default(),
@@ -125,6 +141,7 @@ impl StaticFileProviderInner {
             load_filters: false,
             metrics: None,
             access,
+            _lock_file,
         };
 
         Ok(provider)
@@ -501,7 +518,7 @@ impl StaticFileProvider {
     ///
     /// For each static file segment:
     /// * the corresponding database table should overlap or have continuity in their keys
-    ///   ([TxNumber] or [BlockNumber]).
+    ///   ([`TxNumber`] or [`BlockNumber`]).
     /// * its highest block should match the stage checkpoint block number if it's equal or higher
     ///   than the corresponding database table last entry.
     ///
@@ -548,6 +565,13 @@ impl StaticFileProvider {
             // interruption.
             let mut highest_block = self.get_highest_static_file_block(segment);
             if initial_highest_block != highest_block {
+                info!(
+                    target: "reth::providers::static_file",
+                    ?initial_highest_block,
+                    unwind_target = highest_block,
+                    ?segment,
+                    "Setting unwind target."
+                );
                 update_unwind_target(highest_block.unwrap_or_default());
             }
 
@@ -575,6 +599,13 @@ impl StaticFileProvider {
                     }
                     last_block -= 1;
 
+                    info!(
+                        target: "reth::providers::static_file",
+                        highest_block = self.get_highest_static_file_block(segment),
+                        unwind_target = last_block,
+                        ?segment,
+                        "Setting unwind target."
+                    );
                     highest_block = Some(last_block);
                     update_unwind_target(last_block);
                 }
@@ -611,7 +642,7 @@ impl StaticFileProvider {
     /// Check invariants for each corresponding table and static file segment:
     ///
     /// * the corresponding database table should overlap or have continuity in their keys
-    ///   ([TxNumber] or [BlockNumber]).
+    ///   ([`TxNumber`] or [`BlockNumber`]).
     /// * its highest block should match the stage checkpoint block number if it's equal or higher
     ///   than the corresponding database table last entry.
     ///   * If the checkpoint block is higher, then request a pipeline unwind to the static file
@@ -635,6 +666,14 @@ impl StaticFileProvider {
             if !(db_first_entry <= highest_static_file_entry ||
                 highest_static_file_entry + 1 == db_first_entry)
             {
+                info!(
+                    target: "reth::providers::static_file",
+                    ?db_first_entry,
+                    ?highest_static_file_entry,
+                    unwind_target = highest_static_file_block,
+                    ?segment,
+                    "Setting unwind target."
+                );
                 return Ok(Some(highest_static_file_block))
             }
 
@@ -658,7 +697,14 @@ impl StaticFileProvider {
 
         // If the checkpoint is ahead, then we lost static file data. May be data corruption.
         if checkpoint_block_number > highest_static_file_block {
-            return Ok(Some(highest_static_file_block));
+            info!(
+                target: "reth::providers::static_file",
+                checkpoint_block_number,
+                unwind_target = highest_static_file_block,
+                ?segment,
+                "Setting unwind target."
+            );
+            return Ok(Some(highest_static_file_block))
         }
 
         // If the checkpoint is behind, then we failed to do a database commit **but committed** to
@@ -711,7 +757,7 @@ impl StaticFileProvider {
         }
     }
 
-    /// Iterates through segment static_files in reverse order, executing a function until it
+    /// Iterates through segment `static_files` in reverse order, executing a function until it
     /// returns some object. Useful for finding objects by [`TxHash`] or [`BlockHash`].
     pub fn find_static_file<T>(
         &self,
@@ -841,7 +887,7 @@ impl StaticFileProvider {
         }))
     }
 
-    /// Returns directory where static_files are located.
+    /// Returns directory where `static_files` are located.
     pub fn directory(&self) -> &Path {
         &self.path
     }
@@ -882,13 +928,13 @@ impl StaticFileProvider {
         fetch_from_database()
     }
 
-    /// Gets data within a specified range, potentially spanning different static_files and
+    /// Gets data within a specified range, potentially spanning different `static_files` and
     /// database.
     ///
     /// # Arguments
     /// * `segment` - The segment of the static file to query.
     /// * `block_range` - The range of data to fetch.
-    /// * `fetch_from_static_file` - A function to fetch data from the static_file.
+    /// * `fetch_from_static_file` - A function to fetch data from the `static_file`.
     /// * `fetch_from_database` - A function to fetch data from the database.
     /// * `predicate` - A function used to evaluate each item in the fetched data. Fetching is
     ///   terminated when this function returns false, thereby filtering the data based on the
@@ -934,7 +980,7 @@ impl StaticFileProvider {
     }
 
     #[cfg(any(test, feature = "test-utils"))]
-    /// Returns static_files directory
+    /// Returns `static_files` directory
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -1420,6 +1466,13 @@ impl BlockReader for StaticFileProvider {
         &self,
         _range: RangeInclusive<BlockNumber>,
     ) -> ProviderResult<Vec<BlockWithSenders>> {
+        Err(ProviderError::UnsupportedProvider)
+    }
+
+    fn sealed_block_with_senders_range(
+        &self,
+        _range: RangeInclusive<BlockNumber>,
+    ) -> ProviderResult<Vec<SealedBlockWithSenders>> {
         Err(ProviderError::UnsupportedProvider)
     }
 }

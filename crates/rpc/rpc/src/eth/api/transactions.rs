@@ -3,7 +3,7 @@ use crate::{
     eth::{
         api::pending_block::PendingBlockEnv,
         error::{EthApiError, EthResult, RpcInvalidTransactionError, SignError},
-        revm_utils::{prepare_call_env, EvmOverrides},
+        revm_utils::prepare_call_env,
         utils::recover_raw_transaction,
     },
     EthApi, EthApiSpec,
@@ -26,6 +26,7 @@ use reth_provider::{
 };
 use reth_revm::database::StateProviderDatabase;
 use reth_rpc_types::{
+    state::EvmOverrides,
     transaction::{
         EIP1559TransactionRequest, EIP2930TransactionRequest, EIP4844TransactionRequest,
         LegacyTransactionRequest,
@@ -52,7 +53,7 @@ use crate::eth::revm_utils::FillableTransaction;
 use reth_rpc_types::OptimismTransactionReceiptFields;
 use revm_primitives::db::{Database, DatabaseRef};
 
-/// Helper alias type for the state's [CacheDB]
+/// Helper alias type for the state's [`CacheDB`]
 pub(crate) type StateCacheDB = CacheDB<StateProviderDatabase<StateProviderBox>>;
 
 /// Commonly used transaction related functions for the [EthApi] type in the `eth_` namespace.
@@ -613,7 +614,7 @@ where
 
         let mut evm = self.inner.evm_config.evm_with_env(db, env);
         let mut index = 0;
-        for tx in transactions.into_iter() {
+        for tx in transactions {
             if tx.hash() == target_tx_hash {
                 // reached the target transaction
                 break
@@ -849,7 +850,8 @@ where
     async fn send_raw_transaction(&self, tx: Bytes) -> EthResult<B256> {
         // On optimism, transactions are forwarded directly to the sequencer to be included in
         // blocks that it builds.
-        if let Some(client) = self.inner.raw_transaction_forwarder.as_ref() {
+        let maybe_forwarder = self.inner.raw_transaction_forwarder.read().clone();
+        if let Some(client) = maybe_forwarder {
             tracing::debug!( target: "rpc::eth",  "forwarding raw transaction to");
             client.forward_raw_transaction(&tx).await?;
         }
@@ -1402,7 +1404,7 @@ where
     /// Returns the EIP-1559 fees if they are set, otherwise fetches a suggested gas price for
     /// EIP-1559 transactions.
     ///
-    /// Returns (max_fee, priority_fee)
+    /// Returns (`max_fee`, `priority_fee`)
     pub(crate) async fn eip1559_fees(
         &self,
         max_fee_per_gas: Option<U256>,
@@ -1457,7 +1459,7 @@ where
         Err(EthApiError::InvalidTransactionSignature)
     }
 
-    /// Get Transaction by [BlockId] and the index of the transaction within that Block.
+    /// Get Transaction by [`BlockId`] and the index of the transaction within that Block.
     ///
     /// Returns `Ok(None)` if the block does not exist, or the block as fewer transactions
     pub(crate) async fn transaction_by_block_and_tx_index(
@@ -1549,9 +1551,9 @@ where
         )
     }
 
-    /// Builds op metadata object using the provided [TransactionSigned], L1 block info and
-    /// `block_timestamp`. The L1BlockInfo is used to calculate the l1 fee and l1 data gas for the
-    /// transaction. If the L1BlockInfo is not provided, the meta info will be empty.
+    /// Builds op metadata object using the provided [`TransactionSigned`], L1 block info and
+    /// `block_timestamp`. The `L1BlockInfo` is used to calculate the l1 fee and l1 data gas for the
+    /// transaction. If the `L1BlockInfo` is not provided, the meta info will be empty.
     #[cfg(feature = "optimism")]
     pub(crate) fn build_op_tx_meta(
         &self,
@@ -1733,7 +1735,7 @@ pub(crate) fn build_transaction_receipt_with_block_receipts(
     }
 
     let rpc_receipt = reth_rpc_types::Receipt {
-        status: receipt.success,
+        status: receipt.success.into(),
         cumulative_gas_used: receipt.cumulative_gas_used as u128,
         logs,
     };

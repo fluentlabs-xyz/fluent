@@ -1,9 +1,10 @@
-//! Error handling for (`EthStream`)[crate::EthStream]
+//! Error handling for (`EthStream`)[`crate::EthStream`]
 
 use crate::{
     errors::P2PStreamError, message::MessageError, version::ParseVersionError, DisconnectReason,
 };
-use reth_primitives::{Chain, GotExpected, GotExpectedBoxed, ValidationError, B256};
+use reth_chainspec::Chain;
+use reth_primitives::{GotExpected, GotExpectedBoxed, ValidationError, B256};
 use std::io;
 
 /// Errors when sending/receiving messages
@@ -51,7 +52,7 @@ impl EthStreamError {
         }
     }
 
-    /// Returns the [io::Error] if it was caused by IO
+    /// Returns the [`io::Error`] if it was caused by IO
     pub const fn as_io(&self) -> Option<&io::Error> {
         if let Self::P2PStreamError(P2PStreamError::Io(io)) = self {
             return Some(io)

@@ -6,25 +6,23 @@ use std::{
 use futures_util::TryStreamExt;
 use tracing::*;
 
-use reth_db::{
+use reth_db::tables;
+use reth_db_api::{
     cursor::{DbCursorRO, DbCursorRW},
     database::Database,
     models::{StoredBlockBodyIndices, StoredBlockOmmers, StoredBlockWithdrawals},
-    tables,
     transaction::DbTxMut,
 };
 use reth_network_p2p::bodies::{downloader::BodyDownloader, response::BlockResponse};
-use reth_primitives::{
-    stage::{EntitiesCheckpoint, StageCheckpoint, StageId},
-    StaticFileSegment, TxNumber,
-};
+use reth_primitives::{StaticFileSegment, TxNumber};
 use reth_provider::{
     providers::{StaticFileProvider, StaticFileWriter},
     BlockReader, DatabaseProviderRW, HeaderProvider, ProviderError, StatsReader,
 };
-use reth_stages_api::{ExecInput, ExecOutput, StageError, UnwindInput, UnwindOutput};
-
-use reth_stages_api::Stage;
+use reth_stages_api::{
+    EntitiesCheckpoint, ExecInput, ExecOutput, Stage, StageCheckpoint, StageError, StageId,
+    UnwindInput, UnwindOutput,
+};
 use reth_storage_errors::provider::ProviderResult;
 
 // TODO(onbjerg): Metrics and events (gradual status for e.g. CLI)
@@ -397,8 +395,8 @@ fn stage_checkpoint<DB: Database>(
 mod tests {
     use assert_matches::assert_matches;
 
-    use reth_primitives::stage::StageUnitCheckpoint;
     use reth_provider::StaticFileProviderFactory;
+    use reth_stages_api::StageUnitCheckpoint;
     use test_utils::*;
 
     use crate::test_utils::{
@@ -614,24 +612,19 @@ mod tests {
     }
 
     mod test_utils {
-        use std::{
-            collections::{HashMap, VecDeque},
-            ops::RangeInclusive,
-            pin::Pin,
-            sync::Arc,
-            task::{Context, Poll},
+        use crate::{
+            stages::bodies::BodyStage,
+            test_utils::{
+                ExecuteStageTestRunner, StageTestRunner, TestRunnerError, TestStageDB,
+                UnwindStageTestRunner,
+            },
         };
-
         use futures_util::Stream;
-
-        use reth_db::{
+        use reth_db::{static_file::HeaderMask, tables, test_utils::TempDatabase, DatabaseEnv};
+        use reth_db_api::{
             cursor::DbCursorRO,
             models::{StoredBlockBodyIndices, StoredBlockOmmers},
-            static_file::HeaderMask,
-            tables,
-            test_utils::TempDatabase,
             transaction::{DbTx, DbTxMut},
-            DatabaseEnv,
         };
         use reth_network_p2p::{
             bodies::{
@@ -653,13 +646,12 @@ mod tests {
             generators,
             generators::{random_block_range, random_signed_tx},
         };
-
-        use crate::{
-            stages::bodies::BodyStage,
-            test_utils::{
-                ExecuteStageTestRunner, StageTestRunner, TestRunnerError, TestStageDB,
-                UnwindStageTestRunner,
-            },
+        use std::{
+            collections::{HashMap, VecDeque},
+            ops::RangeInclusive,
+            pin::Pin,
+            sync::Arc,
+            task::{Context, Poll},
         };
 
         /// The block hash of the genesis block.
@@ -678,7 +670,7 @@ mod tests {
             )
         }
 
-        /// A helper struct for running the [BodyStage].
+        /// A helper struct for running the [`BodyStage`].
         pub(crate) struct BodyTestRunner {
             responses: HashMap<B256, BlockBody>,
             db: TestStageDB,
@@ -892,7 +884,7 @@ mod tests {
             }
         }
 
-        /// A [BodyDownloader] that is backed by an internal [HashMap] for testing.
+        /// A [`BodyDownloader`] that is backed by an internal [`HashMap`] for testing.
         #[derive(Debug)]
         pub(crate) struct TestBodyDownloader {
             provider_factory: ProviderFactory<Arc<TempDatabase<DatabaseEnv>>>,
