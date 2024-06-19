@@ -19,13 +19,7 @@ use reth_beacon_consensus::BeaconEngineMessage;
 use reth_consensus::{Consensus, ConsensusError, PostExecutionInput};
 use reth_engine_primitives::EngineTypes;
 use reth_execution_errors::{BlockExecutionError, BlockValidationError};
-use reth_primitives::{
-    constants::{EMPTY_TRANSACTIONS, ETHEREUM_BLOCK_GAS_LIMIT},
-    eip4844::calculate_excess_blob_gas,
-    proofs, Block, BlockBody, BlockHash, BlockHashOrNumber, BlockNumber, BlockWithSenders,
-    ChainSpec, Header, Receipts, Requests, SealedBlock, SealedHeader, TransactionSigned,
-    Withdrawals, B256, U256,
-};
+use reth_primitives::{constants::{EMPTY_TRANSACTIONS, ETHEREUM_BLOCK_GAS_LIMIT}, eip4844::calculate_excess_blob_gas, proofs, Block, BlockBody, BlockHash, BlockHashOrNumber, BlockNumber, BlockWithSenders, ChainSpec, Header, Receipts, Requests, SealedBlock, SealedHeader, TransactionSigned, Withdrawals, B256, U256, ReceiptWithBloom, Bloom};
 use reth_provider::{
     BlockReaderIdExt, BundleStateWithReceipts, CanonStateNotificationSender, StateProviderFactory,
     StateRootProvider,
@@ -47,6 +41,7 @@ mod task;
 pub use crate::client::AutoSealClient;
 pub use mode::{FixedBlockTimeMiner, MiningMode, ReadyTransactionMiner};
 use reth_evm::execute::{BlockExecutionOutput, BlockExecutorProvider, Executor};
+use reth_primitives::constants::EMPTY_RECEIPTS;
 pub use task::MiningTask;
 
 /// A consensus implementation intended for local development and testing purposes.
@@ -396,7 +391,7 @@ impl StorageInner {
         );
 
         // execute the block
-        let BlockExecutionOutput { state, receipts, .. } =
+        let BlockExecutionOutput { state, receipts, gas_used, .. } =
             executor.executor(&mut db).execute((&block, U256::ZERO).into())?;
         let bundle_state = BundleStateWithReceipts::new(
             state,
@@ -413,8 +408,21 @@ impl StorageInner {
 
         trace!(target: "consensus::auto", ?bundle_state, ?header, ?body, "executed block, calculating state root and completing header");
 
-        // calculate the state root
+        // update header fields
         header.state_root = db.state_root(bundle_state.state())?;
+        let receipts = bundle_state.receipts_by_block(header.number);
+        header.receipts_root = if receipts.is_empty() {
+            EMPTY_RECEIPTS
+        } else {
+            let receipts_with_bloom = receipts
+                .iter()
+                .map(|r| (*r).clone().expect("receipts have not been pruned").into())
+                .collect::<Vec<ReceiptWithBloom>>();
+            header.logs_bloom =
+                receipts_with_bloom.iter().fold(Bloom::ZERO, |bloom, r| bloom | r.bloom);
+            proofs::calculate_receipt_root(&receipts_with_bloom)
+        };
+        header.gas_used = gas_used;
         trace!(target: "consensus::auto", root=?header.state_root, ?body, "calculated root");
 
         // finally insert into storage

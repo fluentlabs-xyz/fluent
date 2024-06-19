@@ -3159,6 +3159,7 @@ version = "0.1.0"
 dependencies = [
  "convert_case 0.6.0",
  "crypto-hashes",
+ "proc-macro2",
  "quote",
  "serde",
  "syn 2.0.66",
@@ -8346,7 +8347,6 @@ dependencies = [
  "fluentbase-sdk",
  "fluentbase-types",
  "lazy_static",
- "revm-interpreter",
  "revm-interpreter-fluent",
  "revm-precompile",
  "rwasm",
