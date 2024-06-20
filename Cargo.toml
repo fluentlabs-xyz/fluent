@@ -353,24 +353,24 @@ revm = { package = "revm-fluent", git = "https://github.com/fluentlabs-xyz/revm-
     "std",
     "secp256k1",
     "blst",
-    "revm-rwasm",
+    "rwasm",
 #    "debug_print",
 ], default-features = false }
-revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm.git", branch = "devel" }
+revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm.git", branch = "devel", features = ["rwasm"] }
 revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "devel", features = [
-    "revm-rwasm",
+    "rwasm",
 ]}
 
 #revm = { package = "revm-fluent", path = "../revm-rwasm/crates/revm_fluent", features = [
 #    "std",
 #    "secp256k1",
 #    "blst",
-#    "revm-rwasm",
+#    "rwasm",
 ##    "debug_print",
 #], default-features = false }
-#revm-primitives = { path = "../revm-rwasm/crates/primitives" }
+#revm-primitives = { path = "../revm-rwasm/crates/primitives", features = ["rwasm"] }
 #revm-inspectors = { path = "../revm-inspectors", features = [
-#    "revm-rwasm",
+#    "rwasm",
 #]}
 
 fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
