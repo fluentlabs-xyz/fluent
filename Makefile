@@ -30,7 +30,7 @@ EF_TESTS_URL := https://github.com/ethereum/tests/archive/refs/tags/$(EF_TESTS_T
 EF_TESTS_DIR := ./testing/ef-tests/ethereum-tests
 
 # The docker image name
-DOCKER_IMAGE_NAME ?= ghcr.io/paradigmxyz/reth
+DOCKER_IMAGE_NAME ?= ghcr.io/fluentlabs-xyz/fluent
 
 # Features in reth/op-reth binary crate other than "ethereum" and "optimism"
 BIN_OTHER_FEATURES := asm-keccak jemalloc jemalloc-prof min-error-logs min-warn-logs min-info-logs min-debug-logs min-trace-logs
