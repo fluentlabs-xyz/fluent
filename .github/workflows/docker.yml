@@ -44,9 +44,9 @@ jobs:
       - name: Build and push reth image
         if: ${{ ! contains(github.event.ref, 'beta') }}
         run: make PROFILE=maxperf docker-build-push
-      - name: Build and push op-reth image, tag as "latest"
-        if: ${{ contains(github.event.ref, 'beta') }}
-        run: make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push-latest
-      - name: Build and push op-reth image
-        if: ${{ ! contains(github.event.ref, 'beta') }}
-        run: make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push
+#      - name: Build and push op-reth image, tag as "latest"
+#        if: ${{ contains(github.event.ref, 'beta') }}
+#        run: make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push-latest
+#      - name: Build and push op-reth image
+#        if: ${{ ! contains(github.event.ref, 'beta') }}
+#        run: make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push
