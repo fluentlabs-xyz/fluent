@@ -361,6 +361,13 @@ revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git
     "rwasm",
 ]}
 
+fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-core = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-runtime = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-sdk = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-types = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+
 #revm = { package = "revm-fluent", path = "../revm-rwasm/crates/revm_fluent", features = [
 #    "std",
 #    "secp256k1",
@@ -372,25 +379,13 @@ revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git
 #revm-inspectors = { path = "../revm-inspectors", features = [
 #    "rwasm",
 #]}
-
-fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-core = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-runtime = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-sdk = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-types = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-
-#fluentbase-runtime = { path = "../fluentbase/crates/runtime", default-features = false }
+#
 #fluentbase-poseidon = { path = "../fluentbase/crates/poseidon", default-features = false }
 #fluentbase-core = { path = "../fluentbase/crates/core", default-features = false }
+#fluentbase-runtime = { path = "../fluentbase/crates/runtime", default-features = false }
 #fluentbase-sdk = { path = "../fluentbase/crates/sdk", default-features = false }
 #fluentbase-genesis = { path = "../fluentbase/crates/genesis", default-features = false }
 #fluentbase-types = { path = "../fluentbase/crates/types", default-features = false }
-
-#revm-primitives = { version = "4.0.0", features = [
-#    "std",
-#], default-features = false }
-#revm-inspectors = { git = "https://github.com/paradigmxyz/revm-inspectors", rev = "4fe17f0" }
 
 # eth
 alloy-chains = "0.1.15"
