@@ -1,6 +1,6 @@
 //! Clap parser utilities
 
-use reth_chainspec::{AllGenesisFormats, ChainSpec};
+use reth_chainspec::{AllGenesisFormats, ChainSpec, DEVELOPER_PREVIEW};
 use reth_fs_util as fs;
 use reth_primitives::{BlockHashOrNumber, B256};
 use std::{
@@ -46,6 +46,8 @@ pub fn chain_spec_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Er
         "holesky" => HOLESKY.clone(),
         #[cfg(not(feature = "optimism"))]
         "dev" => DEV.clone(),
+        #[cfg(not(feature = "optimism"))]
+        "developer-preview" => DEVELOPER_PREVIEW.clone(),
         #[cfg(feature = "optimism")]
         "optimism" => OP_MAINNET.clone(),
         #[cfg(feature = "optimism")]
@@ -82,6 +84,7 @@ pub fn genesis_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error
         #[cfg(not(feature = "optimism"))]
         "holesky" => HOLESKY.clone(),
         "dev" => DEV.clone(),
+        "developer-preview" => DEVELOPER_PREVIEW.clone(),
         #[cfg(feature = "optimism")]
         "optimism" => OP_MAINNET.clone(),
         #[cfg(feature = "optimism")]

@@ -267,6 +267,48 @@ pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
     .into()
 });
 
+pub static DEVELOPER_PREVIEW: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
+    ChainSpec {
+        chain: Chain::from(0x5201),
+        genesis: devnet_genesis_from_file(),
+        // genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json"))
+        //             .expect("Can't deserialize Dev testnet genesis json"),
+        // genesis_hash: Some(b256!("2f980576711e3617a5e4d83dd539548ec0f7792007d505a3d2e9674833af2d7c")),
+        genesis_hash: Some(b256!("fde846169e2cd11b2bc9347839bbe1ac0c8dc3c1f0f2cb7cbb1c1fc302b6ff08")),
+        paris_block_and_final_difficulty: Some((0, U256::from(0))),
+        hardforks: BTreeMap::from([
+            (Hardfork::Frontier, ForkCondition::Block(0)),
+            (Hardfork::Homestead, ForkCondition::Block(0)),
+            (Hardfork::Dao, ForkCondition::Block(0)),
+            (Hardfork::Tangerine, ForkCondition::Block(0)),
+            (Hardfork::SpuriousDragon, ForkCondition::Block(0)),
+            (Hardfork::Byzantium, ForkCondition::Block(0)),
+            (Hardfork::Constantinople, ForkCondition::Block(0)),
+            (Hardfork::Petersburg, ForkCondition::Block(0)),
+            (Hardfork::Istanbul, ForkCondition::Block(0)),
+            (Hardfork::MuirGlacier, ForkCondition::Block(0)),
+            (Hardfork::Berlin, ForkCondition::Block(0)),
+            (Hardfork::London, ForkCondition::Block(0)),
+            (
+                Hardfork::Paris,
+                ForkCondition::TTD { fork_block: Some(0), total_difficulty: U256::from(0) },
+            ),
+            (Hardfork::Shanghai, ForkCondition::Timestamp(0)),
+            (Hardfork::Cancun, ForkCondition::Timestamp(0)),
+            #[cfg(feature = "optimism")]
+            (Hardfork::Regolith, ForkCondition::Timestamp(0)),
+            #[cfg(feature = "optimism")]
+            (Hardfork::Bedrock, ForkCondition::Block(0)),
+            #[cfg(feature = "optimism")]
+            (Hardfork::Ecotone, ForkCondition::Timestamp(0)),
+        ]),
+        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
+        deposit_contract: None, // TODO: do we even have?
+        ..Default::default()
+    }
+    .into()
+});
+
 /// The Optimism Mainnet spec
 #[cfg(feature = "optimism")]
 pub static OP_MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
