@@ -274,7 +274,7 @@ pub static DEVELOPER_PREVIEW: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         // genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json"))
         //             .expect("Can't deserialize Dev testnet genesis json"),
         // genesis_hash: Some(b256!("2f980576711e3617a5e4d83dd539548ec0f7792007d505a3d2e9674833af2d7c")),
-        genesis_hash: Some(b256!("fde846169e2cd11b2bc9347839bbe1ac0c8dc3c1f0f2cb7cbb1c1fc302b6ff08")),
+        genesis_hash: Some(b256!("bc0f43f427499b652b4156e6a36991e4b2682af46cdb85808b51464b58200cb9")),
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks: BTreeMap::from([
             (Hardfork::Frontier, ForkCondition::Block(0)),
