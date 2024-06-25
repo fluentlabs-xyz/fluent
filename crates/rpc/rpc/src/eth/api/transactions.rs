@@ -52,6 +52,7 @@ use crate::eth::revm_utils::FillableTransaction;
 #[cfg(feature = "optimism")]
 use reth_rpc_types::OptimismTransactionReceiptFields;
 use revm_primitives::db::{Database, DatabaseRef};
+use revm_primitives::WASM_MAX_CODE_SIZE;
 
 /// Helper alias type for the state's [`CacheDB`]
 pub(crate) type StateCacheDB = CacheDB<StateProviderDatabase<StateProviderBox>>;
@@ -1072,6 +1073,7 @@ where
         R: Send + 'static,
     {
         let (cfg, block_env, at) = self.evm_env_at(at).await?;
+        cfg.limit_contract_code_size = Some(WASM_MAX_CODE_SIZE);
         let this = self.clone();
         self.inner
             .blocking_task_pool
