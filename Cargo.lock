@@ -109,9 +109,9 @@ checksum = "5c6cb57a04249c6480766f7f7cef5467412af1490f8d1e243141daddada3264f"
 
 [[package]]
 name = "alloy-chains"
-version = "0.1.22"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04e9a1892803b02f53e25bea3e414ddd0501f12d97456c9d5ade4edf88f9516f"
+checksum = "1752d7d62e2665da650a36d84abbf239f812534475d51f072a49a533513b7cdd"
 dependencies = [
  "alloy-rlp",
  "arbitrary",
@@ -123,9 +123,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-consensus"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a016bfa21193744d4c38b3f3ab845462284d129e5e23c7cc0fafca7e92d9db37"
+checksum = "3f63a6c9eb45684a5468536bc55379a2af0f45ffa5d756e4e4964532737e1836"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -158,9 +158,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-eips"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32d6d8118b83b0489cfb7e6435106948add2b35217f4a5004ef895f613f60299"
+checksum = "aa4b0fc6a572ef2eebda0a31a5e393d451abda703fec917c75d9615d8c978cf2"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -177,9 +177,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-genesis"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "894f33a7822abb018db56b10ab90398e63273ce1b5a33282afd186c132d764a6"
+checksum = "48450f9c6f0821c1eee00ed912942492ed4f11dd69532825833de23ecc7a2256"
 dependencies = [
  "alloy-primitives",
  "alloy-serde",
@@ -200,9 +200,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-json-rpc"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61f0ae6e93b885cc70fe8dae449e7fd629751dbee8f59767eaaa7285333c5727"
+checksum = "d484c2a934d0a4d86f8ad4db8113cb1d607707a6c54f6e78f4f1b4451b47aa70"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -213,9 +213,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-network"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc122cbee2b8523854cc11d87bcd5773741602c553d2d2d106d82eeb9c16924a"
+checksum = "7a20eba9bc551037f0626d6d29e191888638d979943fa4e842e9e6fc72bf0565"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -233,9 +233,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-node-bindings"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df0e005ecc1b41f0b3bf90f68df5a446971e7eb34e1ea051da401e7e8eeef8fd"
+checksum = "22e07c66b8b0ba8c87461a15fe3247c5b46fb500e103111b0ad4798738e45b1e"
 dependencies = [
  "alloy-genesis",
  "alloy-primitives",
@@ -276,9 +276,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-provider"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d5af289798fe8783acd0c5f10644d9d26f54a12bc52a083e4f3b31718e9bf92"
+checksum = "ad5d89acb7339fad13bc69e7b925232f242835bfd91c82fcb9326b36481bd0f0"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -312,9 +312,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-pubsub"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "702f330b7da123a71465ab9d39616292f8344a2811c28f2cc8d8438a69d79e35"
+checksum = "034258dfaa51c278e1f7fcc46e587d10079ec9372866fa48c5df9d908fc1f6b1"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -353,9 +353,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-client"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b40fcb53b2a9d0a78a4968b2eca8805a4b7011b9ee3fdfa2acaf137c5128f36b"
+checksum = "479ce003e8c74bbbc7d4235131c1d6b7eaf14a533ae850295b90d240340989cb"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -377,9 +377,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50f2fbe956a3e0f0975c798f488dc6be96b669544df3737e18f4a325b42f4c86"
+checksum = "0dfa1dd3e0bc3a3d89744fba8d1511216e83257160da2cd028a18b7d9c026030"
 dependencies = [
  "alloy-rpc-types-engine",
  "alloy-rpc-types-eth",
@@ -389,9 +389,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-admin"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "334a8c00cde17a48e073031f1534e71a75b529dbf25552178c43c2337632e0ab"
+checksum = "bae99de76a362c4311f0892e286eb752cf2a3a6ef6555dff6d93f51de2c24648"
 dependencies = [
  "alloy-genesis",
  "alloy-primitives",
@@ -401,9 +401,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-anvil"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d87f724e6170f558b809a520e37bdb34d99123092b78118bff31fb5b21dc2a2e"
+checksum = "f67aec11f9f3bc5e96c2b7f342dba6e9541a8a48d2cfbe27b6b195136aa18eee"
 dependencies = [
  "alloy-primitives",
  "alloy-serde",
@@ -412,9 +412,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-beacon"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb383cd3981cee0031aeacbd394c4e726e907f3a0180fe36d5fc76d37c41cd82"
+checksum = "dd2c363d49f460538899aaeb3325918f55fa01841fd7f3f11f58d438343ea083"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -426,9 +426,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-engine"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd473d98ec552f8229cd6d566bd2b0bbfc5bb4efcefbb5288c834aa8fd832020"
+checksum = "cc40df2dda7561d1406d0bee1d19c8787483a2cf2ee8011c05909475e7bc102d"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -445,9 +445,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-eth"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "083f443a83b9313373817236a8f4bea09cca862618e9177d822aee579640a5d6"
+checksum = "13bd7aa9ff9e67f1ba7ee0dd8cebfc95831d1649b0e4eeefae940dc3681079fa"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -467,9 +467,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-trace"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c7a838f9a34aae7022c6cb53ecf21bc0a5a30c82f8d9eb0afed701ab5fd88de"
+checksum = "535d26db98ac320a0d1637faf3e210328c3df3b1998abd7e72343d3857058efe"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -481,9 +481,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-txpool"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1572267dbc660843d87c02994029d1654c2c32867e186b266d1c03644b43af97"
+checksum = "5971c92989c6a5588d3f6d1e99e5328fba6e68694efbe969d6ec96ae5b9d1037"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -493,9 +493,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-serde"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d94da1c0c4e27cc344b05626fe22a89dc6b8b531b9475f3b7691dbf6913e4109"
+checksum = "8913f9e825068d77c516188c221c44f78fd814fce8effe550a783295a2757d19"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -507,9 +507,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-signer"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58d876be3afd8b78979540084ff63995292a26aa527ad0d44276405780aa0ffd"
+checksum = "f740e13eb4c6a0e4d0e49738f1e86f31ad2d7ef93be499539f492805000f7237"
 dependencies = [
  "alloy-primitives",
  "async-trait",
@@ -521,9 +521,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-signer-local"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d40a37dc216c269b8a7244047cb1c18a9c69f7a0332ab2c4c2aa4cbb1a31468b"
+checksum = "87db68d926887393a1d0f9c43833b44446ea29d603291e7b20e5d115f31aa4e3"
 dependencies = [
  "alloy-consensus",
  "alloy-network",
@@ -611,9 +611,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-transport"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "245af9541f0a0dbd5258669c80dfe3af118164cacec978a520041fc130550deb"
+checksum = "dd9773e4ec6832346171605c776315544bd06e40f803e7b5b7824b325d5442ca"
 dependencies = [
  "alloy-json-rpc",
  "base64 0.22.1",
@@ -629,9 +629,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-transport-http"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5619c017e1fdaa1db87f9182f4f0ed97c53d674957f4902fba655e972d359c6c"
+checksum = "ff8ef947b901c0d4e97370f9fa25844cf8b63b1a58fd4011ee82342dc8a9fc6b"
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",
@@ -644,9 +644,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-transport-ipc"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "173cefa110afac7a53cf2e75519327761f2344d305eea2993f3af1b2c1fc1c44"
+checksum = "bb40ee66887a66d875a5bb5e01cee4c9a467c263ef28c865cd4b0ebf15f705af"
 dependencies = [
  "alloy-json-rpc",
  "alloy-pubsub",
@@ -663,9 +663,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-transport-ws"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c0aff8af5be5e58856c5cdd1e46db2c67c7ecd3a652d9100b4822c96c899947"
+checksum = "3d92049d6642a18c9849ce7659430151e7c92b51552a0cabdc038c1af4cd7308"
 dependencies = [
  "alloy-pubsub",
  "alloy-transport",
@@ -3146,7 +3146,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -3160,7 +3160,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec-derive"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "convert_case 0.6.0",
  "crypto-hashes",
@@ -3172,7 +3172,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-core"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "alloy-rlp",
  "byteorder",
@@ -3190,7 +3190,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-genesis"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "alloy-genesis",
  "byteorder",
@@ -3208,7 +3208,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-poseidon"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "bitvec",
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
@@ -3220,7 +3220,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-runtime"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "byteorder",
  "chrono",
@@ -3240,7 +3240,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "alloy-rlp",
  "byteorder",
@@ -3257,7 +3257,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk-derive"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "convert_case 0.6.0",
  "crypto-hashes",
@@ -3273,7 +3273,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-types"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "alloy-primitives",
  "rwasm",
@@ -3283,7 +3283,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-zktrie"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "byteorder",
  "fluentbase-poseidon",
@@ -4750,7 +4750,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e310b3a6b5907f99202fcdb4960ff45b93735d7c7d96b760fcff8db2dc0e103d"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.5",
 ]
 
 [[package]]
@@ -8821,7 +8821,7 @@ dependencies = [
 [[package]]
 name = "revm-fluent"
 version = "9.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "auto_impl",
  "cfg-if",
@@ -8859,7 +8859,7 @@ dependencies = [
 [[package]]
 name = "revm-interpreter-fluent"
 version = "5.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "revm-primitives",
  "serde",
@@ -8868,7 +8868,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "7.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "aurora-engine-modexp",
  "blst",
@@ -8886,7 +8886,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "4.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#af4ffab98b1f25dd534159b310d61f7162149a28"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#05f1fc724f8b3fafc4c4f7f4568091ea6d709724"
 dependencies = [
  "alloy-primitives",
  "auto_impl",
