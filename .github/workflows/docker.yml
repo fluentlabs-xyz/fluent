@@ -16,6 +16,7 @@ env:
   DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/fluent
   OP_DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/op-reth
   DOCKER_USERNAME: ${{ github.actor }}
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   build:
