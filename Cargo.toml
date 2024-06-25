@@ -349,14 +349,14 @@ reth-trie-parallel = { path = "crates/trie/parallel" }
 #], default-features = false }
 #revm-inspectors = { git = "https://github.com/paradigmxyz/revm-inspectors", rev = "4fe17f0" }
 
-revm = { package = "revm-fluent", git = "https://github.com/fluentlabs-xyz/revm-rwasm.git", branch = "devel", features = [
+revm = { package = "revm-fluent", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", features = [
     "std",
     "secp256k1",
     "blst",
     "rwasm",
 #    "debug_print",
 ], default-features = false }
-revm-primitives = { git = "https://github.com/fluentlabs-xyz/revm-rwasm.git", branch = "devel", features = ["rwasm"] }
+revm-primitives = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", features = ["rwasm"] }
 revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "devel", features = [
     "rwasm",
 ]}
