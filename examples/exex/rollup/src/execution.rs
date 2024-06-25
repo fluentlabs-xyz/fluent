@@ -2,6 +2,7 @@ use crate::{db::Database, RollupContract, CHAIN_ID, CHAIN_SPEC};
 use alloy_consensus::{Blob, SidecarCoder, SimpleCoder};
 use alloy_rlp::Decodable as _;
 use eyre::OptionExt;
+use reth::primitives::revm_primitives::WASM_MAX_CODE_SIZE;
 use reth::transaction_pool::TransactionPool;
 use reth_execution_errors::BlockValidationError;
 use reth_node_api::{ConfigureEvm, ConfigureEvmEnv};
@@ -114,6 +115,7 @@ fn configure_evm<'a>(
         header,
         U256::ZERO,
     );
+    cfg.cfg_env.limit_contract_code_size = Some(WASM_MAX_CODE_SIZE);
     *evm.cfg_mut() = cfg.cfg_env;
 
     evm
