@@ -1072,7 +1072,7 @@ where
         F: FnOnce(&mut StateCacheDB, EnvWithHandlerCfg) -> EthResult<R> + Send + 'static,
         R: Send + 'static,
     {
-        let (cfg, block_env, at) = self.evm_env_at(at).await?;
+        let (mut cfg, block_env, at) = self.evm_env_at(at).await?;
         cfg.limit_contract_code_size = Some(WASM_MAX_CODE_SIZE);
         let this = self.clone();
         self.inner
