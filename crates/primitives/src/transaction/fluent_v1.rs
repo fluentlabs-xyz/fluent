@@ -1,0 +1,576 @@
+use core::{fmt::Debug, mem};
+
+use alloy_eips::eip2930::AccessList;
+use alloy_rlp::{length_of_length, Decodable, Encodable, Error as RlpError, Header};
+use bytes::BufMut;
+use proptest::prelude::*;
+
+use reth_codecs::{main_codec, Compact};
+
+use crate::{Bytes, ChainId, TxKind, TxType, B256, U256};
+
+/// Trait that must be implemented by each execution environment
+trait IExecutionEnvironment {
+    fn chain_id(&self) -> Option<ChainId>;
+    fn tx_kind(&self) -> TxKind;
+    fn value(&self) -> U256;
+    fn set_value(&mut self, value: U256);
+    fn nonce(&self) -> u64;
+    fn set_nonce(&mut self, nonce: u64);
+    fn gas_limit(&self) -> u64;
+    fn set_gas_limit(&mut self, gas_limit: u64);
+    fn max_fee_per_gas(&self) -> u128;
+    fn max_priority_fee_per_gas(&self) -> Option<u128>;
+    fn blob_versioned_hashes(&self) -> Option<Vec<B256>>;
+    fn priority_fee_or_price(&self) -> u128;
+    fn effective_gas_price(&self, base_fee: Option<u64>) -> u128;
+    fn input(&self) -> &Bytes;
+    fn set_input(&mut self, input: Bytes);
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Compact, Hash, serde::Serialize, serde::Deserialize)]
+#[repr(u8)]
+pub enum ExecutionEnvironment {
+    Fuel(FuelEnvironment) = 0,
+    Solana(SolanaEnvironment) = 1,
+}
+
+impl ExecutionEnvironment {
+    pub fn new(env_type: u8, data: Bytes) -> Result<Self, RlpError> {
+        match env_type {
+            0 => Ok(ExecutionEnvironment::Fuel(FuelEnvironment::new(data))),
+            1 => Ok(ExecutionEnvironment::Solana(SolanaEnvironment::new(data))),
+            _ => Err(RlpError::Custom("Invalid execution environment type")),
+        }
+    }
+
+    pub fn from_str_with_data(s: &str, data: Bytes) -> Result<Self, RlpError> {
+        let s = s.trim_start_matches("0x");
+        match s {
+            "0" => Ok(ExecutionEnvironment::Fuel(FuelEnvironment::new(data))),
+            "1" => Ok(ExecutionEnvironment::Solana(SolanaEnvironment::new(data))),
+            _ => Err(RlpError::Custom("Invalid execution environment string")),
+        }
+    }
+
+    pub fn env_type(&self) -> u8 {
+        match self {
+            ExecutionEnvironment::Fuel(_) => 0,
+            ExecutionEnvironment::Solana(_) => 1,
+        }
+    }
+}
+
+impl Default for ExecutionEnvironment {
+    fn default() -> Self {
+        ExecutionEnvironment::Fuel(FuelEnvironment::default())
+    }
+}
+
+impl ExecutionEnvironment {
+    pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.set_chain_id(chain_id),
+            ExecutionEnvironment::Solana(env) => env.set_chain_id(chain_id),
+        }
+    }
+    const fn chain_id(&self) -> Option<ChainId> {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.chain_id(),
+            ExecutionEnvironment::Solana(env) => env.chain_id(),
+        }
+    }
+
+    const fn tx_kind(&self) -> TxKind {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.tx_kind(),
+            ExecutionEnvironment::Solana(env) => env.tx_kind(),
+        }
+    }
+
+    const fn value(&self) -> &U256 {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.value(),
+            ExecutionEnvironment::Solana(env) => env.value(),
+        }
+    }
+
+    fn set_value(&mut self, value: U256) {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.set_value(value),
+            ExecutionEnvironment::Solana(env) => env.set_value(value),
+        }
+    }
+
+    const fn nonce(&self) -> u64 {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.nonce(),
+            ExecutionEnvironment::Solana(env) => env.nonce(),
+        }
+    }
+
+    fn set_nonce(&mut self, nonce: u64) {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.set_nonce(nonce),
+            ExecutionEnvironment::Solana(env) => env.set_nonce(nonce),
+        }
+    }
+
+    const fn gas_limit(&self) -> u64 {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.gas_limit(),
+            ExecutionEnvironment::Solana(env) => env.gas_limit(),
+        }
+    }
+
+    fn set_gas_limit(&mut self, gas_limit: u64) {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.set_gas_limit(gas_limit),
+            ExecutionEnvironment::Solana(env) => env.set_gas_limit(gas_limit),
+        }
+    }
+
+    const fn max_fee_per_gas(&self) -> u128 {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.max_fee_per_gas(),
+            ExecutionEnvironment::Solana(env) => env.max_fee_per_gas(),
+        }
+    }
+
+    const fn max_priority_fee_per_gas(&self) -> Option<u128> {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.max_priority_fee_per_gas(),
+            ExecutionEnvironment::Solana(env) => env.max_priority_fee_per_gas(),
+        }
+    }
+
+    fn blob_versioned_hashes(&self) -> Option<Vec<B256>> {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.blob_versioned_hashes(),
+            ExecutionEnvironment::Solana(env) => env.blob_versioned_hashes(),
+        }
+    }
+
+    pub const fn priority_fee_or_price(&self) -> u128 {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.priority_fee_or_price(),
+            ExecutionEnvironment::Solana(env) => env.priority_fee_or_price(),
+        }
+    }
+
+    pub const fn effective_gas_price(&self, base_fee: Option<u64>) -> u128 {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.effective_gas_price(base_fee),
+            ExecutionEnvironment::Solana(env) => env.effective_gas_price(base_fee),
+        }
+    }
+
+    pub const fn input(&self) -> &Bytes {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.input(),
+            ExecutionEnvironment::Solana(env) => env.input(),
+        }
+    }
+
+    fn set_input(&mut self, input: Bytes) {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.set_input(input),
+            ExecutionEnvironment::Solana(env) => env.set_input(input),
+        }
+    }
+}
+
+#[cfg(any(test, feature = "arbitrary"))]
+impl<'a> arbitrary::Arbitrary<'a> for ExecutionEnvironment {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let env_type = <ExecutionEnvironment as arbitrary::Arbitrary>::arbitrary(u)?;
+        match env_type {
+            ExecutionEnvironment::Fuel(_) => Ok(ExecutionEnvironment::Fuel(
+                <FuelEnvironment as arbitrary::Arbitrary>::arbitrary(u)?,
+            )),
+            ExecutionEnvironment::Solana(_) => Ok(ExecutionEnvironment::Solana(
+                <SolanaEnvironment as arbitrary::Arbitrary>::arbitrary(u)?,
+            )),
+        }
+    }
+}
+
+#[cfg(any(test, feature = "arbitrary"))]
+impl proptest::arbitrary::Arbitrary for ExecutionEnvironment {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        prop_oneof![
+            any::<FuelEnvironment>().prop_map(ExecutionEnvironment::Fuel),
+            any::<SolanaEnvironment>().prop_map(ExecutionEnvironment::Solana)
+        ]
+        .boxed()
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        Self::arbitrary_with(())
+    }
+}
+
+#[main_codec]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+pub struct TxFluentV1 {
+    pub execution_environment: ExecutionEnvironment,
+    pub data: Bytes,
+}
+
+impl TxFluentV1 {
+    #[inline]
+    pub fn size(&self) -> usize {
+        mem::size_of::<ExecutionEnvironment>() + // execution_environment
+            mem::size_of::<Bytes>() + // data
+            self.data.len()
+    }
+
+    fn fields_len(&self) -> usize {
+        1 + // execution_environment type (u8 = 1 byte)
+            length_of_length(self.data.len()) + self.data.len() // data + length
+    }
+
+    pub(crate) fn payload_len(&self) -> usize {
+        let payload_length = self.fields_len();
+        let len = 1 + length_of_length(payload_length) + payload_length;
+        length_of_length(len) + len
+    }
+
+    pub(crate) fn payload_len_without_header(&self) -> usize {
+        let payload_length = self.fields_len();
+        1 + length_of_length(payload_length) + payload_length
+    }
+
+    pub(crate) const fn tx_type(&self) -> TxType {
+        TxType::FluentV1
+    }
+
+    pub(crate) fn signature_hash(&self) -> B256 {
+        B256::ZERO
+    }
+
+    pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
+        self.execution_environment.set_chain_id(chain_id)
+    }
+
+    pub(crate) const fn chain_id(&self) -> Option<ChainId> {
+        self.execution_environment.chain_id()
+    }
+
+    pub(crate) const fn tx_kind(&self) -> TxKind {
+        self.execution_environment.tx_kind()
+    }
+
+    pub const fn value(&self) -> &U256 {
+        self.execution_environment.value()
+    }
+
+    pub fn set_value(&mut self, value: U256) {
+        self.execution_environment.set_value(value)
+    }
+
+    pub const fn nonce(&self) -> u64 {
+        self.execution_environment.nonce()
+    }
+
+    pub fn set_nonce(&mut self, nonce: u64) {
+        self.execution_environment.set_nonce(nonce)
+    }
+
+    pub const fn gas_limit(&self) -> u64 {
+        self.execution_environment.gas_limit()
+    }
+
+    pub fn set_gas_limit(&mut self, gas_limit: u64) {
+        self.execution_environment.set_gas_limit(gas_limit)
+    }
+
+    pub const fn max_fee_per_gas(&self) -> u128 {
+        self.execution_environment.max_fee_per_gas()
+    }
+
+    pub const fn max_priority_fee_per_gas(&self) -> Option<u128> {
+        self.execution_environment.max_priority_fee_per_gas()
+    }
+
+    pub fn blob_versioned_hashes(&self) -> Option<Vec<B256>> {
+        self.execution_environment.blob_versioned_hashes()
+    }
+
+    pub const fn priority_fee_or_price(&self) -> u128 {
+        self.execution_environment.priority_fee_or_price()
+    }
+
+    pub const fn effective_gas_price(&self, base_fee: Option<u64>) -> u128 {
+        self.execution_environment.effective_gas_price(base_fee)
+    }
+
+    pub fn gas_price(&self) -> u128 {
+        todo!()
+    }
+
+    pub fn access_list(&self) -> Option<&AccessList> {
+        None
+    }
+
+    pub const fn input(&self) -> &Bytes {
+        self.execution_environment.input()
+    }
+
+    pub fn set_input(&mut self, input: Bytes) {
+        self.execution_environment.set_input(input)
+    }
+
+    pub(crate) fn decode_inner(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        if buf.is_empty() {
+            return Err(RlpError::InputTooShort);
+        }
+
+        let env_type = buf[0];
+        *buf = &buf[1..];
+
+        let data: Bytes = Decodable::decode(buf)?;
+
+        let execution_environment = ExecutionEnvironment::new(env_type, data.clone())?;
+
+        Ok(Self { execution_environment, data })
+    }
+}
+
+impl Encodable for TxFluentV1 {
+    fn encode(&self, out: &mut dyn BufMut) {
+        let header = Header { list: true, payload_length: 1 + self.data.len() };
+        header.encode(out);
+
+        out.put_u8(self.execution_environment.env_type() as u8);
+        out.put_slice(&self.data);
+    }
+
+    fn length(&self) -> usize {
+        let payload_length = 1 + self.data.len();
+        let header = Header { list: true, payload_length };
+        header.length() + payload_length
+    }
+}
+
+impl Decodable for TxFluentV1 {
+    fn decode(buf: &mut &[u8]) -> Result<Self, RlpError> {
+        let header = Header::decode(buf)?;
+        if !header.list {
+            return Err(RlpError::Custom("Expected list"));
+        }
+
+        let env_type = u8::decode(buf)?;
+        let data = Bytes::decode(buf)?;
+
+        let execution_environment = ExecutionEnvironment::new(env_type, data.clone())?;
+
+        Ok(TxFluentV1 { execution_environment, data })
+    }
+}
+#[derive(
+    Debug, Default, Clone, PartialEq, Eq, Hash, Compact, serde::Serialize, serde::Deserialize,
+)]
+pub struct FuelEnvironment {
+    // Add necessary fields
+}
+
+impl FuelEnvironment {
+    pub fn new(data: Bytes) -> Self {
+        todo!()
+    }
+    pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
+        todo!()
+    }
+    pub const fn chain_id(&self) -> Option<ChainId> {
+        todo!()
+    }
+    pub const fn kind(&self) -> TxKind {
+        todo!()
+    }
+    pub const fn tx_type(&self) -> TxType {
+        todo!()
+    }
+    pub const fn value(&self) -> &U256 {
+        todo!()
+    }
+    pub const fn nonce(&self) -> u64 {
+        todo!()
+    }
+    pub const fn access_list(&self) -> Option<&AccessList> {
+        todo!()
+    }
+    pub const fn gas_limit(&self) -> u64 {
+        todo!()
+    }
+    pub const fn is_dynamic_fee(&self) -> bool {
+        todo!()
+    }
+    pub const fn max_fee_per_gas(&self) -> u128 {
+        todo!()
+    }
+    pub const fn max_priority_fee_per_gas(&self) -> Option<u128> {
+        todo!()
+    }
+    pub const fn max_fee_per_blob_gas(&self) -> Option<u128> {
+        todo!()
+    }
+    pub const fn priority_fee_or_price(&self) -> u128 {
+        todo!()
+    }
+    pub const fn effective_gas_price(&self, base_fee: Option<u64>) -> u128 {
+        todo!()
+    }
+    pub const fn input(&self) -> &Bytes {
+        todo!()
+    }
+
+    pub const fn tx_kind(&self) -> TxKind {
+        todo!()
+    }
+
+    fn blob_versioned_hashes(&self) -> Option<Vec<B256>> {
+        todo!()
+    }
+
+    fn set_value(&mut self, value: U256) {
+        todo!()
+    }
+    fn set_nonce(&mut self, nonce: u64) {
+        todo!()
+    }
+    fn set_gas_limit(&mut self, gas_limit: u64) {
+        todo!()
+    }
+    fn set_input(&mut self, input: Bytes) {
+        todo!()
+    }
+}
+
+#[cfg(any(test, feature = "arbitrary"))]
+impl<'a> arbitrary::Arbitrary<'a> for FuelEnvironment {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        // Implement arbitrary generation for FuelEnvironment
+        todo!("Implement arbitrary for FuelEnvironment")
+    }
+}
+
+#[cfg(any(test, feature = "arbitrary"))]
+impl proptest::arbitrary::Arbitrary for FuelEnvironment {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        // Implement arbitrary strategy for FuelEnvironment
+        todo!("Implement arbitrary strategy for FuelEnvironment")
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        Self::arbitrary_with(())
+    }
+}
+
+#[derive(
+    Debug, Default, Clone, PartialEq, Eq, Hash, Compact, serde::Serialize, serde::Deserialize,
+)]
+pub struct SolanaEnvironment {
+    // Add necessary fields
+    solana_specific_field: u64,
+}
+
+impl SolanaEnvironment {
+    pub fn new(data: Bytes) -> Self {
+        // Initialize SolanaEnvironment from data
+        // TODO
+        Self { solana_specific_field: 0 }
+    }
+    pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
+        todo!()
+    }
+    pub const fn chain_id(&self) -> Option<ChainId> {
+        todo!()
+    }
+    pub const fn kind(&self) -> TxKind {
+        todo!()
+    }
+    pub const fn tx_type(&self) -> TxType {
+        todo!()
+    }
+    pub const fn value(&self) -> &U256 {
+        todo!()
+    }
+    pub const fn nonce(&self) -> u64 {
+        todo!()
+    }
+    pub const fn access_list(&self) -> Option<&AccessList> {
+        todo!()
+    }
+    pub const fn gas_limit(&self) -> u64 {
+        todo!()
+    }
+    pub const fn is_dynamic_fee(&self) -> bool {
+        todo!()
+    }
+    pub const fn max_fee_per_gas(&self) -> u128 {
+        todo!()
+    }
+    pub const fn max_priority_fee_per_gas(&self) -> Option<u128> {
+        todo!()
+    }
+    pub const fn max_fee_per_blob_gas(&self) -> Option<u128> {
+        todo!()
+    }
+    pub const fn priority_fee_or_price(&self) -> u128 {
+        todo!()
+    }
+    pub const fn effective_gas_price(&self, base_fee: Option<u64>) -> u128 {
+        todo!()
+    }
+    pub const fn input(&self) -> &Bytes {
+        todo!()
+    }
+    pub const fn tx_kind(&self) -> TxKind {
+        todo!()
+    }
+    fn blob_versioned_hashes(&self) -> Option<Vec<B256>> {
+        todo!()
+    }
+    fn set_value(&mut self, value: U256) {
+        todo!()
+    }
+    fn set_nonce(&mut self, nonce: u64) {
+        todo!()
+    }
+    fn set_gas_limit(&mut self, gas_limit: u64) {
+        todo!()
+    }
+    fn set_input(&mut self, input: Bytes) {
+        todo!()
+    }
+}
+
+#[cfg(any(test, feature = "arbitrary"))]
+impl<'a> arbitrary::Arbitrary<'a> for SolanaEnvironment {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        // Implement arbitrary generation for SolanaEnvironment
+        todo!("Implement arbitrary for SolanaEnvironment")
+    }
+}
+
+#[cfg(any(test, feature = "arbitrary"))]
+impl proptest::arbitrary::Arbitrary for SolanaEnvironment {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        // Implement arbitrary strategy for SolanaEnvironment
+        todo!("Implement arbitrary strategy for SolanaEnvironment")
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        Self::arbitrary_with(())
+    }
+}

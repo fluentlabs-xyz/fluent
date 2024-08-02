@@ -1,15 +1,18 @@
 //! Common conversions from alloy types.
 
-use crate::{
-    constants::EMPTY_TRANSACTIONS, transaction::extract_chain_id, Block, Signature, Transaction,
-    TransactionSigned, TransactionSignedEcRecovered, TxEip1559, TxEip2930, TxEip4844, TxLegacy,
-    TxType,
-};
-use alloy_primitives::TxKind;
-use alloy_rlp::Error as RlpError;
-
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+
+use alloy_primitives::TxKind;
+use alloy_rlp::Error as RlpError;
+use revm_primitives::{hex, Bytes};
+
+use crate::{
+    constants::EMPTY_TRANSACTIONS,
+    transaction::{extract_chain_id, ExecutionEnvironment},
+    Block, Signature, Transaction, TransactionSigned, TransactionSignedEcRecovered, TxEip1559,
+    TxEip2930, TxEip4844, TxLegacy, TxType,
+};
 
 impl TryFrom<alloy_rpc_types::Block> for Block {
     type Error = alloy_rpc_types::ConversionError;
@@ -206,6 +209,38 @@ impl TryFrom<alloy_rpc_types::Transaction> for Transaction {
                 is_system_transaction: tx.from == crate::constants::OP_SYSTEM_TX_FROM_ADDR,
                 input: tx.input,
             })),
+            Some(TxType::FluentV1) => {
+                let execution_environment_type = tx
+                    .other
+                    .get_deserialized::<String>("executionEnvironment")
+                    .ok_or_else(|| {
+                        ConversionError::Custom("MissingExecutionEnvironment".to_string())
+                    })?
+                    .map_err(|_| {
+                        ConversionError::Custom("InvalidExecutionEnvironment".to_string())
+                    })?;
+                let raw_data = tx
+                    .other
+                    .get_deserialized::<String>("rawData")
+                    .ok_or_else(|| ConversionError::Custom("MissingRawData".to_string()))?
+                    .map_err(|_| ConversionError::Custom("InvalidRawData".to_string()))?;
+
+                let raw_data = raw_data.trim_start_matches("0x");
+                let raw_data = hex::decode(raw_data)
+                    .map_err(|_| ConversionError::Custom("InvalidRawData".to_string()))?;
+                let raw_data = Bytes::from(raw_data);
+
+                let execution_environment = ExecutionEnvironment::from_str_with_data(
+                    &execution_environment_type,
+                    raw_data.clone().into(),
+                )
+                .map_err(|_| ConversionError::Custom("InvalidExecutionEnvironment".to_string()))?;
+
+                Ok(Self::FluentV1(crate::transaction::TxFluentV1 {
+                    execution_environment,
+                    data: raw_data.into(),
+                }))
+            }
         }
     }
 }
@@ -273,10 +308,51 @@ impl TryFrom<alloy_rpc_types::Signature> for Signature {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use alloy_primitives::{B256, U256};
+    use alloy_primitives::{B256, U256, U64};
     use alloy_rpc_types::Transaction as AlloyTransaction;
-    use revm_primitives::{address, Address};
+    use revm_primitives::{address, Address, Bytes};
+
+    use super::*;
+
+    #[test]
+    fn fluent_v1_tx_conversion() {
+        // type - represents the Fluent transaction type
+        // executionEnvironment - represents the execution environment of the transaction (e.g.
+        // Solana, Fuel) rawData - represents the raw data of the transaction
+        // other fields can be filled with zeros
+        let input = r#"{
+            "chainId": "0x1",
+            "type": "0x7F",
+            "executionEnvironment": "0x1",
+            "rawData": "0x0bf1845c5d7a82ec92365d5027f7310793d53004f3c86aa80965c67bf7e7dc80",
+            "from": "0x0000000000000000000000000000000000000000",
+            "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "gas": "0x0",
+            "gasPrice": "0x0",
+            "input": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "nonce": "0x0",
+            "value": "0x0"
+        }"#;
+        let alloy_tx: AlloyTransaction =
+            serde_json::from_str(input).expect("failed to deserialize");
+
+        let reth_tx: Transaction = alloy_tx.try_into().expect("failed to convert");
+        match reth_tx {
+            Transaction::FluentV1(fluent_tx) => {
+                assert_eq!(fluent_tx.tx_type(), TxType::FluentV1);
+
+                match fluent_tx.execution_environment {
+                    ExecutionEnvironment::Solana(_) => {
+                        println!("Correctly identified Solana execution environment");
+                    }
+                    ExecutionEnvironment::Fuel(_) => {
+                        panic!("Expected Solana execution environment, but got Fuel");
+                    }
+                }
+            }
+            _ => panic!("Expected FluentV1 transaction, but got a different type"),
+        }
+    }
 
     #[test]
     #[cfg(feature = "optimism")]

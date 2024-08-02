@@ -234,6 +234,7 @@ pub fn fill_tx_env_with_recovered(
     fill_op_tx_env(tx_env, transaction.as_ref(), transaction.signer(), envelope);
 }
 
+// TODO: d1r1 TransactTo
 /// Fill transaction environment from a [Transaction] and the given sender address.
 pub fn fill_tx_env<T>(tx_env: &mut TxEnv, transaction: T, sender: Address)
 where
@@ -338,6 +339,19 @@ where
             tx_env.chain_id = None;
             tx_env.nonce = None;
         }
+        Transaction::FluentV1(tx) => {
+            tx_env.gas_limit = tx.gas_limit();
+            tx_env.gas_price = U256::from(tx.gas_price());
+            tx_env.gas_priority_fee = None;
+            tx_env.transact_to = match tx.tx_kind() {
+                TxKind::Call(to) => TransactTo::Call(to),
+                TxKind::Create => TransactTo::create(),
+            };
+            tx_env.value = *tx.value();
+            tx_env.data = tx.input().clone();
+            tx_env.chain_id = tx.chain_id();
+            tx_env.nonce = Some(tx.nonce());
+        }
     }
 }
 
@@ -373,8 +387,9 @@ pub fn fill_op_tx_env<T: AsRef<Transaction>>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use reth_chainspec::GOERLI;
+
+    use super::*;
 
     #[test]
     fn test_recover_genesis_goerli_signer() {

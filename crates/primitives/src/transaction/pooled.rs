@@ -74,6 +74,8 @@ impl PooledTransactionsElement {
             #[cfg(feature = "optimism")]
             // Not supported because deposit transactions are never pooled
             tx @ TransactionSigned { transaction: Transaction::Deposit(_), .. } => Err(tx),
+            // TODO: d1r1 should we support FluentV1 transactions in the pool?
+            tx @ TransactionSigned { transaction: Transaction::FluentV1(_), .. } => Err(tx),
         }
     }
 
@@ -239,7 +241,8 @@ impl PooledTransactionsElement {
                         hash: typed_tx.hash,
                     }),
                     #[cfg(feature = "optimism")]
-                    Transaction::Deposit(_) => Err(RlpError::Custom("Optimism deposit transaction cannot be decoded to PooledTransactionsElement"))
+                    Transaction::Deposit(_) => Err(RlpError::Custom("Optimism deposit transaction cannot be decoded to PooledTransactionsElement")),
+                    Transaction::FluentV1(_) => Err(RlpError::Custom("FluentV1 transaction cannot be decoded to PooledTransactionsElement"))
                 }
             }
         }
@@ -574,7 +577,8 @@ impl Decodable for PooledTransactionsElement {
                         hash: typed_tx.hash,
                     }),
                     #[cfg(feature = "optimism")]
-                    Transaction::Deposit(_) => Err(RlpError::Custom("Optimism deposit transaction cannot be decoded to PooledTransactionsElement"))
+                    Transaction::Deposit(_) => Err(RlpError::Custom("Optimism deposit transaction cannot be decoded to PooledTransactionsElement")),
+                    Transaction::FluentV1(_) => Err(RlpError::Custom("FluentV1 transaction cannot be decoded to PooledTransactionsElement"))
                 }
             }
         }
