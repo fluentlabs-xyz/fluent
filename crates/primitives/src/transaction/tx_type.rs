@@ -51,7 +51,7 @@ pub enum TxType {
     #[cfg(feature = "optimism")]
     Deposit = 126_isize,
     /// Fluent V1 transaction.
-    FluentV1 = 127_isize,
+    FluentV1 = 52_isize, // 0x52 = R in ASCII (RWASM)
 }
 
 impl TxType {

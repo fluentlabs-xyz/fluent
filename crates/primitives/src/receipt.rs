@@ -377,7 +377,7 @@ impl Decodable for ReceiptWithBloom {
                         buf.advance(1);
                         Self::decode_receipt(buf, TxType::Deposit)
                     }
-                    0x7F => {
+                    0x52 => {
                         buf.advance(1);
                         Self::decode_receipt(buf, TxType::FluentV1)
                     }
@@ -513,7 +513,7 @@ impl<'a> ReceiptWithBloomEncoder<'a> {
                 out.put_u8(0x7E);
             }
             TxType::FluentV1 => {
-                out.put_u8(0x7F);
+                out.put_u8(0x52);
             }
         }
         out.put_slice(payload.as_ref());

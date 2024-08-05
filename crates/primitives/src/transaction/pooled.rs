@@ -50,6 +50,8 @@ pub enum PooledTransactionsElement {
     },
     /// A blob transaction, which includes the transaction, blob data, commitments, and proofs.
     BlobTransaction(BlobTransaction),
+    // TODO: fluent_tx_d1r1
+    // add FluentV1 transaction
 }
 
 impl PooledTransactionsElement {
