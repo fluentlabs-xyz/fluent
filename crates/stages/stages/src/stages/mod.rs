@@ -115,7 +115,7 @@ mod tests {
             .tx_ref()
             .put::<tables::PlainAccountState>(
                 address!("1000000000000000000000000000000000000000"),
-                Account { nonce: 0, balance: U256::ZERO, bytecode_hash: Some(code_hash) },
+                Account { nonce: 0, balance: U256::ZERO, bytecode_hash: Some(code_hash), rwasm_hash: None },
             )
             .unwrap();
         provider_rw
@@ -125,7 +125,7 @@ mod tests {
                 Account {
                     nonce: 0,
                     balance: U256::from(0x3635c9adc5dea00000u128),
-                    bytecode_hash: None,
+                    bytecode_hash: None, rwasm_hash: None
                 },
             )
             .unwrap();

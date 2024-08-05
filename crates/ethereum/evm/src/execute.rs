@@ -502,6 +502,7 @@ mod tests {
             nonce: 1,
             balance: U256::ZERO,
             bytecode_hash: Some(keccak256(WITHDRAWAL_REQUEST_PREDEPLOY_CODE.clone())),
+            rwasm_hash: None,
         };
 
         db.insert_account(
@@ -1254,7 +1255,12 @@ mod tests {
 
         db.insert_account(
             sender_address,
-            Account { nonce: 1, balance: U256::from(ETH_TO_WEI), bytecode_hash: None },
+            Account {
+                nonce: 1,
+                balance: U256::from(ETH_TO_WEI),
+                bytecode_hash: None,
+                rwasm_hash: None,
+            },
             None,
             HashMap::new(),
         );
@@ -1340,7 +1346,12 @@ mod tests {
         // Insert the sender account into the state with a nonce of 1 and a balance of 1 ETH in Wei
         db.insert_account(
             sender_address,
-            Account { nonce: 1, balance: U256::from(ETH_TO_WEI), bytecode_hash: None },
+            Account {
+                nonce: 1,
+                balance: U256::from(ETH_TO_WEI),
+                bytecode_hash: None,
+                rwasm_hash: None,
+            },
             None,
             HashMap::new(),
         );

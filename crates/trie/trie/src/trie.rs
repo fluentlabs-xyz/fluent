@@ -678,14 +678,24 @@ mod tests {
             (
                 Address::random(),
                 (
-                    Account { nonce: 0, balance: U256::from(0), bytecode_hash: None },
+                    Account {
+                        nonce: 0,
+                        balance: U256::from(0),
+                        bytecode_hash: None,
+                        rwasm_hash: None,
+                    },
                     BTreeMap::from([(B256::with_last_byte(0x4), U256::from(12))]),
                 ),
             ),
             (
                 Address::random(),
                 (
-                    Account { nonce: 0, balance: U256::from(0), bytecode_hash: None },
+                    Account {
+                        nonce: 0,
+                        balance: U256::from(0),
+                        bytecode_hash: None,
+                        rwasm_hash: None,
+                    },
                     BTreeMap::default(),
                 ),
             ),
@@ -696,6 +706,7 @@ mod tests {
                         nonce: 155,
                         balance: U256::from(414241124u32),
                         bytecode_hash: Some(keccak256("test")),
+                        rwasm_hash: None,
                     },
                     BTreeMap::from([
                         (B256::ZERO, U256::from(3)),
@@ -719,6 +730,7 @@ mod tests {
             nonce: 155,
             balance: U256::from(414241124u32),
             bytecode_hash: Some(keccak256(code)),
+            rwasm_hash: None,
         };
         insert_account(tx.tx_ref(), address, account, &Default::default());
         tx.commit().unwrap();
@@ -743,6 +755,7 @@ mod tests {
             nonce: 155,
             balance: U256::from(414241124u32),
             bytecode_hash: Some(keccak256(code)),
+            rwasm_hash: None,
         };
 
         insert_account(tx.tx_ref(), address, account, &storage);
@@ -891,7 +904,12 @@ mod tests {
         let key1 =
             B256::from_str("b000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap();
-        let account1 = Account { nonce: 0, balance: U256::from(3).mul(ether), bytecode_hash: None };
+        let account1 = Account {
+            nonce: 0,
+            balance: U256::from(3).mul(ether),
+            bytecode_hash: None,
+            rwasm_hash: None,
+        };
         hashed_account_cursor.upsert(key1, account1).unwrap();
         hash_builder.add_leaf(Nibbles::unpack(key1), &encode_account(account1, None));
 
@@ -912,8 +930,12 @@ mod tests {
         let code_hash =
             B256::from_str("5be74cad16203c4905c068b012a2e9fb6d19d036c410f16fd177f337541440dd")
                 .unwrap();
-        let account3 =
-            Account { nonce: 0, balance: U256::from(2).mul(ether), bytecode_hash: Some(code_hash) };
+        let account3 = Account {
+            nonce: 0,
+            balance: U256::from(2).mul(ether),
+            bytecode_hash: Some(code_hash),
+            rwasm_hash: None,
+        };
         hashed_account_cursor.upsert(key3, account3).unwrap();
         for (hashed_slot, value) in storage {
             if hashed_storage_cursor
@@ -1029,8 +1051,12 @@ mod tests {
         let address4b = Address::from_str("4f61f2d5ebd991b85aa1677db97307caf5215c91").unwrap();
         let key4b = keccak256(address4b);
         assert_eq!(key4b.0[0], key4a.0[0]);
-        let account4b =
-            Account { nonce: 0, balance: U256::from(5).mul(ether), bytecode_hash: None };
+        let account4b = Account {
+            nonce: 0,
+            balance: U256::from(5).mul(ether),
+            bytecode_hash: None,
+            rwasm_hash: None,
+        };
         hashed_account_cursor.upsert(key4b, account4b).unwrap();
 
         let mut prefix_set = PrefixSetMut::default();
@@ -1331,8 +1357,12 @@ mod tests {
     }
 
     fn extension_node_trie(tx: &DatabaseProviderRW<Arc<TempDatabase<DatabaseEnv>>>) -> B256 {
-        let a =
-            Account { nonce: 0, balance: U256::from(1u64), bytecode_hash: Some(B256::random()) };
+        let a = Account {
+            nonce: 0,
+            balance: U256::from(1u64),
+            bytecode_hash: Some(B256::random()),
+            rwasm_hash: None,
+        };
         let val = encode_account(a, None);
 
         let mut hashed_accounts = tx.tx_ref().cursor_write::<tables::HashedAccounts>().unwrap();
