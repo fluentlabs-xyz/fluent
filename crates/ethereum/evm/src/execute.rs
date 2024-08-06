@@ -172,8 +172,8 @@ where
                 }
                 .into())
             }
-            // TODO: fluent_tx_d1r1
-            // 1 - update fill_tx_env to take a fluent tx
+
+            // Filling the transaction environment.
             EvmConfig::fill_tx_env(evm.tx_mut(), transaction, *sender);
 
             // Execute transaction.

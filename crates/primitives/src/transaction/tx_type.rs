@@ -24,7 +24,7 @@ pub const EIP4844_TX_TYPE_ID: u8 = 3;
 pub const DEPOSIT_TX_TYPE_ID: u8 = 126;
 
 /// Identifier for [`TxFluentV1`](crate::TxFluentV1) transaction.
-pub const FLUENT_TX_V1_TYPE_ID: u8 = 127;
+pub const FLUENT_TX_V1_TYPE_ID: u8 = 52;
 
 /// Transaction Type
 ///

@@ -1,10 +1,13 @@
 use core::{fmt::Debug, mem};
 
 use alloy_eips::eip2930::AccessList;
+use alloy_primitives::Address;
 use alloy_rlp::{length_of_length, Decodable, Encodable, Error as RlpError, Header};
 use bytes::BufMut;
 use proptest::prelude::*;
+use revm::handler::execution;
 
+use crate::Signature;
 use reth_codecs::{main_codec, Compact};
 
 use crate::{Bytes, ChainId, TxKind, TxType, B256, U256};
@@ -35,11 +38,20 @@ pub enum ExecutionEnvironment {
     Solana(SolanaEnvironment) = 1,
 }
 
+impl From<ExecutionEnvironment> for u8 {
+    fn from(env: ExecutionEnvironment) -> Self {
+        match env {
+            ExecutionEnvironment::Fuel(_) => 0,
+            ExecutionEnvironment::Solana(_) => 1,
+        }
+    }
+}
+
 impl ExecutionEnvironment {
     pub fn new(env_type: u8, data: Bytes) -> Result<Self, RlpError> {
         match env_type {
             0 => Ok(ExecutionEnvironment::Fuel(FuelEnvironment::new(data))),
-            1 => Ok(ExecutionEnvironment::Solana(SolanaEnvironment::new(data))),
+            1 => Ok(ExecutionEnvironment::Solana(SolanaEnvironment::new())),
             _ => Err(RlpError::Custom("Invalid execution environment type")),
         }
     }
@@ -48,7 +60,7 @@ impl ExecutionEnvironment {
         let s = s.trim_start_matches("0x");
         match s {
             "0" => Ok(ExecutionEnvironment::Fuel(FuelEnvironment::new(data))),
-            "1" => Ok(ExecutionEnvironment::Solana(SolanaEnvironment::new(data))),
+            "1" => Ok(ExecutionEnvironment::Solana(SolanaEnvironment::new())),
             _ => Err(RlpError::Custom("Invalid execution environment string")),
         }
     }
@@ -99,6 +111,20 @@ impl ExecutionEnvironment {
         match self {
             ExecutionEnvironment::Fuel(env) => env.set_value(value),
             ExecutionEnvironment::Solana(env) => env.set_value(value),
+        }
+    }
+
+    pub const fn access_list(&self) -> Option<&AccessList> {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.access_list(),
+            ExecutionEnvironment::Solana(env) => env.access_list(),
+        }
+    }
+
+    pub const fn is_dynamic_fee(&self) -> bool {
+        match self {
+            ExecutionEnvironment::Fuel(env) => env.is_dynamic_fee(),
+            ExecutionEnvironment::Solana(env) => env.is_dynamic_fee(),
         }
     }
 
@@ -244,6 +270,52 @@ impl TxFluentV1 {
         1 + length_of_length(payload_length) + payload_length
     }
 
+    pub(crate) fn encode_with_signature(
+        &self,
+        signature: &Signature,
+        out: &mut dyn bytes::BufMut,
+        with_header: bool,
+    ) {
+        let payload_length = self.fields_len() + signature.payload_len();
+
+        if with_header {
+            Header {
+                list: false,
+                payload_length: 1 + length_of_length(payload_length) + payload_length,
+            }
+            .encode(out);
+        }
+
+        out.put_u8(self.tx_type() as u8);
+
+        let header = Header { list: true, payload_length };
+        header.encode(out);
+
+        self.encode_fields(out);
+        signature.encode(out);
+    }
+
+    /// Encodes only the transaction's fields into the desired buffer, without a RLP header.
+    pub(crate) fn encode_fields(&self, out: &mut dyn bytes::BufMut) {
+        // Encode the execution environment as a single byte
+        out.put_u8(self.execution_environment.env_type());
+
+        // Encode the data
+        self.data.encode(out);
+    }
+
+    /// Output the length of the RLP signed transaction encoding. This encodes with a RLP header.
+    pub(crate) fn payload_len_with_signature(&self, signature: &Signature) -> usize {
+        let len = self.payload_len_with_signature_without_header(signature);
+        length_of_length(len) + len
+    }
+    /// Output the length of the RLP signed transaction encoding, _without_ a RLP string header.
+    pub(crate) fn payload_len_with_signature_without_header(&self, signature: &Signature) -> usize {
+        let payload_length = self.fields_len() + signature.payload_len();
+        // 'transaction type byte length' + 'header length' + 'payload length'
+        1 + length_of_length(payload_length) + payload_length
+    }
+
     pub(crate) const fn tx_type(&self) -> TxType {
         TxType::FluentV1
     }
@@ -308,12 +380,15 @@ impl TxFluentV1 {
         self.execution_environment.effective_gas_price(base_fee)
     }
 
+    pub const fn is_dynamic_fee(&self) -> bool {
+        self.execution_environment.is_dynamic_fee()
+    }
     pub fn gas_price(&self) -> u128 {
         todo!()
     }
 
-    pub fn access_list(&self) -> Option<&AccessList> {
-        None
+    pub const fn access_list(&self) -> Option<&AccessList> {
+        self.execution_environment.access_list()
     }
 
     pub const fn input(&self) -> &Bytes {
@@ -415,9 +490,7 @@ impl FuelEnvironment {
     pub const fn max_priority_fee_per_gas(&self) -> Option<u128> {
         todo!()
     }
-    pub const fn max_fee_per_blob_gas(&self) -> Option<u128> {
-        todo!()
-    }
+
     pub const fn priority_fee_or_price(&self) -> u128 {
         todo!()
     }
@@ -477,78 +550,159 @@ impl proptest::arbitrary::Arbitrary for FuelEnvironment {
     Debug, Default, Clone, PartialEq, Eq, Hash, Compact, serde::Serialize, serde::Deserialize,
 )]
 pub struct SolanaEnvironment {
-    // Add necessary fields
-    solana_specific_field: u64,
+    /// Added as EIP-pub 155: Simple replay attack protection
+    pub chain_id: Option<ChainId>,
+    /// A scalar value equal to the number of transactions sent by the sender; formally Tn.
+    pub nonce: u64,
+    /// A scalar value equal to the number of
+    /// Wei to be paid per unit of gas for all computation
+    /// costs incurred as a result of the execution of this transaction; formally Tp.
+    ///
+    /// As ethereum circulation is around 120mil eth as of 2022 that is around
+    /// 120000000000000000000000000 wei we are safe to use u128 as its max number is:
+    /// 340282366920938463463374607431768211455
+    pub gas_price: u128,
+    /// A scalar value equal to the maximum
+    /// amount of gas that should be used in executing
+    /// this transaction. This is paid up-front, before any
+    /// computation is done and may not be increased
+    /// later; formally Tg.
+    pub gas_limit: u64,
+    /// A scalar value equal to the maximum
+    /// amount of gas that should be used in executing
+    /// this transaction. This is paid up-front, before any
+    /// computation is done and may not be increased
+    /// later; formally Tg.
+    ///
+    /// As ethereum circulation is around 120mil eth as of 2022 that is around
+    /// 120000000000000000000000000 wei we are safe to use u128 as its max number is:
+    /// 340282366920938463463374607431768211455
+    ///
+    /// This is also known as `GasFeeCap`
+    pub max_fee_per_gas: u128,
+    /// Max Priority fee that transaction is paying
+    ///
+    /// As ethereum circulation is around 120mil eth as of 2022 that is around
+    /// 120000000000000000000000000 wei we are safe to use u128 as its max number is:
+    /// 340282366920938463463374607431768211455
+    ///
+    /// This is also known as `GasTipCap`
+    pub max_priority_fee_per_gas: Option<u128>,
+    /// The 160-bit address of the message call’s recipient or, for a contract creation
+    /// transaction, ∅, used here to denote the only member of B0 ; formally Tt.
+    pub to: TxKind,
+    /// A scalar value equal to the number of Wei to
+    /// be transferred to the message call’s recipient or,
+    /// in the case of contract creation, as an endowment
+    /// to the newly created account; formally Tv.
+    pub value: U256,
+
+    /// Input has two uses depending if transaction is Create or Call (if `to` field is None or
+    /// Some). pub init: An unlimited size byte array specifying the
+    /// EVM-code for the account initialisation procedure CREATE,
+    /// data: An unlimited size byte array specifying the
+    /// input data of the message call, formally Td.
+    pub input: Bytes,
 }
 
 impl SolanaEnvironment {
-    pub fn new(data: Bytes) -> Self {
-        // Initialize SolanaEnvironment from data
-        // TODO
-        Self { solana_specific_field: 0 }
+    pub fn new() -> Self {
+        Self {
+            chain_id: None,
+            nonce: 0,
+            gas_price: 0,
+            gas_limit: 0,
+            max_fee_per_gas: 0,
+            max_priority_fee_per_gas: None,
+            to: TxKind::Call(Address::ZERO),
+            value: U256::from(0),
+            input: Bytes::new(),
+        }
     }
     pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
-        todo!()
+        self.chain_id = chain_id;
     }
     pub const fn chain_id(&self) -> Option<ChainId> {
-        todo!()
+        self.chain_id
     }
     pub const fn kind(&self) -> TxKind {
-        todo!()
+        self.to
     }
     pub const fn tx_type(&self) -> TxType {
-        todo!()
+        TxType::FluentV1
     }
     pub const fn value(&self) -> &U256 {
-        todo!()
+        &self.value
     }
     pub const fn nonce(&self) -> u64 {
-        todo!()
+        self.nonce
     }
     pub const fn access_list(&self) -> Option<&AccessList> {
-        todo!()
+        None
     }
     pub const fn gas_limit(&self) -> u64 {
-        todo!()
+        self.gas_limit
     }
     pub const fn is_dynamic_fee(&self) -> bool {
-        todo!()
+        false
     }
     pub const fn max_fee_per_gas(&self) -> u128 {
-        todo!()
+        self.max_fee_per_gas
     }
     pub const fn max_priority_fee_per_gas(&self) -> Option<u128> {
-        todo!()
+        self.max_priority_fee_per_gas
     }
-    pub const fn max_fee_per_blob_gas(&self) -> Option<u128> {
-        todo!()
-    }
+
     pub const fn priority_fee_or_price(&self) -> u128 {
-        todo!()
+        if let Some(max_priority_fee_per_gas) = self.max_priority_fee_per_gas {
+            max_priority_fee_per_gas
+        } else {
+            self.gas_price
+        }
     }
     pub const fn effective_gas_price(&self, base_fee: Option<u64>) -> u128 {
-        todo!()
+        match base_fee {
+            None => self.max_fee_per_gas,
+            Some(base_fee) => {
+                // if the tip is greater than the max priority fee per gas, set it to the max
+                // priority fee per gas + base fee
+                let tip = self.max_fee_per_gas.saturating_sub(base_fee as u128);
+
+                let max_priority_fee_per_gas =
+                    if let Some(max_priority_fee_per_gas) = self.max_priority_fee_per_gas {
+                        max_priority_fee_per_gas
+                    } else {
+                        self.gas_price
+                    };
+                if tip > max_priority_fee_per_gas {
+                    max_priority_fee_per_gas + base_fee as u128
+                } else {
+                    // otherwise return the max fee per gas
+                    self.max_fee_per_gas
+                }
+            }
+        }
     }
     pub const fn input(&self) -> &Bytes {
-        todo!()
+        &self.input
     }
     pub const fn tx_kind(&self) -> TxKind {
-        todo!()
+        self.to
     }
     fn blob_versioned_hashes(&self) -> Option<Vec<B256>> {
-        todo!()
+        None
     }
     fn set_value(&mut self, value: U256) {
-        todo!()
+        self.value = value;
     }
     fn set_nonce(&mut self, nonce: u64) {
-        todo!()
+        self.nonce = nonce;
     }
     fn set_gas_limit(&mut self, gas_limit: u64) {
-        todo!()
+        self.gas_limit = gas_limit;
     }
     fn set_input(&mut self, input: Bytes) {
-        todo!()
+        self.input = input;
     }
 }
 
@@ -567,6 +721,7 @@ impl proptest::arbitrary::Arbitrary for SolanaEnvironment {
 
     fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
         // Implement arbitrary strategy for SolanaEnvironment
+        // TODO: fluent_tx_d1r1 add implementation
         todo!("Implement arbitrary strategy for SolanaEnvironment")
     }
 

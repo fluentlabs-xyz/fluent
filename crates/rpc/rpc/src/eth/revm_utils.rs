@@ -24,8 +24,7 @@ use revm::{
     },
     Database,
 };
-use std::cmp::min;
-use std::iter;
+use std::{cmp::min, iter};
 use tracing::trace;
 
 /// Helper type to work with different transaction types when configuring the EVM env.

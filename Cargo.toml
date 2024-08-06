@@ -350,9 +350,9 @@ reth-trie-parallel = { path = "crates/trie/parallel" }
 #revm-inspectors = { git = "https://github.com/paradigmxyz/revm-inspectors", rev = "4fe17f0" }
 
 
-revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "devel", features = [
-    "rwasm",
-] }
+# revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "devel", features = [
+#     "rwasm",
+# ] }
 
 #revm = { package = "revm-fluent", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", features = [
 #    "std",
@@ -381,6 +381,7 @@ revm = { package = "revm-fluent", path = "../fluentbase/revm/crates/revm_fluent"
 
 
 revm-primitives = { package = "revm-primitives", path = "../fluentbase/revm/crates/primitives", features = ["rwasm"] }
+revm-inspectors = { package = "revm-inspectors", path = "../revm-inspectors", features = ["rwasm"] }
 
 fluentbase-poseidon = { path = "../fluentbase/crates/poseidon", default-features = false }
 fluentbase-core = { path = "../fluentbase/crates/core", default-features = false }

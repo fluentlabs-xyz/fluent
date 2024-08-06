@@ -262,7 +262,7 @@ impl Transaction {
             Self::Eip4844(tx) => Some(&tx.access_list),
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => None,
-            Self::FluentV1(tx) => None,
+            Self::FluentV1(tx) => tx.access_list(),
         }
     }
 
@@ -286,7 +286,7 @@ impl Transaction {
             Self::Eip1559(_) | Self::Eip4844(_) => true,
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => false,
-            Self::FluentV1(tx) => false,
+            Self::FluentV1(tx) => tx.is_dynamic_fee(),
         }
     }
 

@@ -377,7 +377,8 @@ impl Decodable for ReceiptWithBloom {
                         buf.advance(1);
                         Self::decode_receipt(buf, TxType::Deposit)
                     }
-                    0x52 => {
+                    0x34 => {
+                        // 0x34 == 52
                         buf.advance(1);
                         Self::decode_receipt(buf, TxType::FluentV1)
                     }
