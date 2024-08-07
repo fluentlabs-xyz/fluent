@@ -1,8 +1,8 @@
-use core::{fmt::Debug, mem};
+use core::{default, fmt::Debug, mem};
 
 use alloy_eips::eip2930::{AccessList, AccessListItem};
 use alloy_primitives::Address;
-use alloy_rlp::{length_of_length, Decodable, Encodable, Error as RlpError, Header};
+use alloy_rlp::{length_of_length, Decodable, Encodable, Error as RlpError, Error, Header};
 use bytes::BufMut;
 use fluentbase_core::fvm::helpers::fuel_testnet_consensus_params_from;
 use fuel_core_types::fuel_types::canonical::Deserialize;
@@ -10,7 +10,7 @@ use fuel_tx::{field::Inputs, Chargeable, ConsensusParameters};
 use proptest::prelude::*;
 use revm::handler::execution;
 
-use crate::Signature;
+use crate::{Signature, TxLegacy};
 use reth_codecs::{main_codec, Compact};
 
 use crate::{Bytes, ChainId, TxKind, TxType, B256, U256};
@@ -776,6 +776,7 @@ impl proptest::arbitrary::Arbitrary for SolanaEnvironment {
 
     fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
         // Implement arbitrary strategy for SolanaEnvironment
+        // TODO: fluent_tx_d1r1 add implementation
         todo!("Implement arbitrary strategy for SolanaEnvironment")
     }
 

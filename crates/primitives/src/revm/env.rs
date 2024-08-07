@@ -342,6 +342,7 @@ where
             tx_env.nonce = None;
         }
         Transaction::FluentV1(tx) => {
+            // TODO: d1r1 we need to use the ExecutionEnvironment from the transaction
             let exec_env_u8: u8 = tx.execution_environment.clone().into();
             let exec_env = ExecutionEnvironment::try_from(exec_env_u8).unwrap();
 
