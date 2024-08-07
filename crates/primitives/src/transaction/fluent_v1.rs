@@ -1,9 +1,12 @@
 use core::{fmt::Debug, mem};
 
-use alloy_eips::eip2930::AccessList;
+use alloy_eips::eip2930::{AccessList, AccessListItem};
 use alloy_primitives::Address;
 use alloy_rlp::{length_of_length, Decodable, Encodable, Error as RlpError, Header};
 use bytes::BufMut;
+use fluentbase_core::fvm::helpers::fuel_testnet_consensus_params_from;
+use fuel_core_types::fuel_types::canonical::Deserialize;
+use fuel_tx::{field::Inputs, Chargeable, ConsensusParameters};
 use proptest::prelude::*;
 use revm::handler::execution;
 
@@ -50,7 +53,7 @@ impl From<ExecutionEnvironment> for u8 {
 impl ExecutionEnvironment {
     pub fn new(env_type: u8, data: Bytes) -> Result<Self, RlpError> {
         match env_type {
-            0 => Ok(ExecutionEnvironment::Fuel(FuelEnvironment::new(data))),
+            0 => Ok(ExecutionEnvironment::Fuel(FuelEnvironment::new(data)?)),
             1 => Ok(ExecutionEnvironment::Solana(SolanaEnvironment::new())),
             _ => Err(RlpError::Custom("Invalid execution environment type")),
         }
@@ -59,8 +62,8 @@ impl ExecutionEnvironment {
     pub fn from_str_with_data(s: &str, data: Bytes) -> Result<Self, RlpError> {
         let s = s.trim_start_matches("0x");
         match s {
-            "0" => Ok(ExecutionEnvironment::Fuel(FuelEnvironment::new(data))),
-            "1" => Ok(ExecutionEnvironment::Solana(SolanaEnvironment::new())),
+            "0" => ExecutionEnvironment::new(0, data),
+            "1" => ExecutionEnvironment::new(1, data),
             _ => Err(RlpError::Custom("Invalid execution environment string")),
         }
     }
@@ -222,7 +225,7 @@ impl<'a> arbitrary::Arbitrary<'a> for ExecutionEnvironment {
 }
 
 #[cfg(any(test, feature = "arbitrary"))]
-impl proptest::arbitrary::Arbitrary for ExecutionEnvironment {
+impl Arbitrary for ExecutionEnvironment {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
 
@@ -420,7 +423,7 @@ impl Encodable for TxFluentV1 {
         let header = Header { list: true, payload_length: 1 + self.data.len() };
         header.encode(out);
 
-        out.put_u8(self.execution_environment.env_type() as u8);
+        out.put_u8(self.execution_environment.env_type());
         out.put_slice(&self.data);
     }
 
@@ -438,7 +441,7 @@ impl Decodable for TxFluentV1 {
             return Err(RlpError::Custom("Expected list"));
         }
 
-        let env_type = u8::decode(buf)?;
+        let env_type = <u8 as Decodable>::decode(buf)?;
         let data = Bytes::decode(buf)?;
 
         let execution_environment = ExecutionEnvironment::new(env_type, data.clone())?;
@@ -446,81 +449,133 @@ impl Decodable for TxFluentV1 {
         Ok(TxFluentV1 { execution_environment, data })
     }
 }
+
+pub struct FuelTransaction(fuel_tx::Transaction);
+impl FuelTransaction {
+    pub fn inputs(&self) -> Result<&Vec<fuel_tx::Input>, alloy_rlp::Error> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(t) => Ok(t.inputs()),
+            fuel_tx::Transaction::Create(t) => Ok(t.inputs()),
+            fuel_tx::Transaction::Upgrade(t) => Ok(t.inputs()),
+            fuel_tx::Transaction::Upload(t) => Ok(t.inputs()),
+            fuel_tx::Transaction::Mint(t) => Err(alloy_rlp::Error::Custom("mint tx unsupported")),
+        }
+    }
+    pub fn gas_limit(&self, cp: &ConsensusParameters) -> Result<u64, alloy_rlp::Error> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
+            fuel_tx::Transaction::Create(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
+            fuel_tx::Transaction::Upgrade(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
+            fuel_tx::Transaction::Upload(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
+            fuel_tx::Transaction::Mint(_) => Err(alloy_rlp::Error::Custom("mint tx unsupported")),
+        }
+    }
+}
+
 #[derive(
     Debug, Default, Clone, PartialEq, Eq, Hash, Compact, serde::Serialize, serde::Deserialize,
 )]
 pub struct FuelEnvironment {
-    // Add necessary fields
+    original_tx_bytes: Vec<u8>,
+    chain_id: Option<ChainId>,
+    access_list: Option<AccessList>,
+    gas_limit: u64,
+    tx_kind: TxKind,
+    input: Bytes,
 }
 
 impl FuelEnvironment {
-    pub fn new(data: Bytes) -> Self {
-        todo!()
+    pub fn new(data: Bytes) -> Result<Self, RlpError> {
+        let tx: fuel_tx::Transaction = fuel_tx::Transaction::from_bytes(&data.as_ref())
+            .map_err(|e| RlpError::Custom(&"failed to parse fuel tx"))?;
+        let original_tx = FuelTransaction(tx);
+        let consensus_params = fuel_testnet_consensus_params_from(
+            None,
+            None,
+            None,
+            fuel_core_types::fuel_types::ChainId::new(0),
+            None,
+        );
+        let mut alt = Vec::<AccessListItem>::new();
+        for input in original_tx.inputs()? {
+            let owner = input.input_owner();
+            if let Some(owner) = owner {
+                alt.push(AccessListItem {
+                    address: Address::from_slice(&owner[12..]),
+                    storage_keys: Default::default(),
+                });
+            }
+        }
+        let instance = Self {
+            original_tx_bytes: data.to_vec(),
+            chain_id: Some(ChainId::from(consensus_params.chain_id())),
+            access_list: Some(AccessList(alt)),
+            gas_limit: original_tx
+                .gas_limit(&consensus_params)
+                .map_err(|e| RlpError::Custom("failed to get gas limit from tx"))?,
+            // TODO
+            tx_kind: TxKind::Create,
+            ..Default::default()
+        };
+
+        Ok(instance)
     }
     pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
-        todo!()
+        self.chain_id = chain_id
     }
     pub const fn chain_id(&self) -> Option<ChainId> {
-        todo!()
-    }
-    pub const fn kind(&self) -> TxKind {
-        todo!()
+        self.chain_id
     }
     pub const fn tx_type(&self) -> TxType {
-        todo!()
+        TxType::FluentV1
     }
     pub const fn value(&self) -> &U256 {
-        todo!()
+        &U256::ZERO
     }
     pub const fn nonce(&self) -> u64 {
-        todo!()
+        0
     }
     pub const fn access_list(&self) -> Option<&AccessList> {
-        todo!()
+        self.access_list.as_ref()
     }
     pub const fn gas_limit(&self) -> u64 {
-        todo!()
+        self.gas_limit
     }
     pub const fn is_dynamic_fee(&self) -> bool {
-        todo!()
+        false
     }
     pub const fn max_fee_per_gas(&self) -> u128 {
-        todo!()
+        1
     }
     pub const fn max_priority_fee_per_gas(&self) -> Option<u128> {
-        todo!()
+        None
     }
-
+    pub const fn max_fee_per_blob_gas(&self) -> Option<u128> {
+        None
+    }
     pub const fn priority_fee_or_price(&self) -> u128 {
-        todo!()
+        1
     }
-    pub const fn effective_gas_price(&self, base_fee: Option<u64>) -> u128 {
-        todo!()
+    pub const fn effective_gas_price(&self, _base_fee: Option<u64>) -> u128 {
+        1
     }
     pub const fn input(&self) -> &Bytes {
-        todo!()
+        &self.input
     }
 
     pub const fn tx_kind(&self) -> TxKind {
-        todo!()
+        // TODO use custom kind?
+        self.tx_kind
     }
 
     fn blob_versioned_hashes(&self) -> Option<Vec<B256>> {
-        todo!()
+        None
     }
 
-    fn set_value(&mut self, value: U256) {
-        todo!()
-    }
-    fn set_nonce(&mut self, nonce: u64) {
-        todo!()
-    }
-    fn set_gas_limit(&mut self, gas_limit: u64) {
-        todo!()
-    }
-    fn set_input(&mut self, input: Bytes) {
-        todo!()
-    }
+    fn set_value(&mut self, _value: U256) {}
+    fn set_nonce(&mut self, _nonce: u64) {}
+    fn set_gas_limit(&mut self, _gas_limit: u64) {}
+    fn set_input(&mut self, _input: Bytes) {}
 }
 
 #[cfg(any(test, feature = "arbitrary"))]
@@ -721,7 +776,6 @@ impl proptest::arbitrary::Arbitrary for SolanaEnvironment {
 
     fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
         // Implement arbitrary strategy for SolanaEnvironment
-        // TODO: fluent_tx_d1r1 add implementation
         todo!("Implement arbitrary strategy for SolanaEnvironment")
     }
 

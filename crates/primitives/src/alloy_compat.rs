@@ -228,18 +228,15 @@ impl TryFrom<alloy_rpc_types::Transaction> for Transaction {
                 let raw_data = raw_data.trim_start_matches("0x");
                 let raw_data = hex::decode(raw_data)
                     .map_err(|_| ConversionError::Custom("InvalidRawData".to_string()))?;
-                let raw_data = Bytes::from(raw_data);
+                let data: Bytes = raw_data.into();
 
                 let execution_environment = ExecutionEnvironment::from_str_with_data(
                     &execution_environment_type,
-                    raw_data.clone().into(),
+                    data.clone(),
                 )
                 .map_err(|_| ConversionError::Custom("InvalidExecutionEnvironment".to_string()))?;
 
-                Ok(Self::FluentV1(crate::transaction::TxFluentV1 {
-                    execution_environment,
-                    data: raw_data.into(),
-                }))
+                Ok(Self::FluentV1(crate::transaction::TxFluentV1 { execution_environment, data }))
             }
         }
     }
@@ -308,9 +305,11 @@ impl TryFrom<alloy_rpc_types::Signature> for Signature {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{B256, U256, U64};
+    use alloy_primitives::{B256, U256};
     use alloy_rpc_types::Transaction as AlloyTransaction;
-    use revm_primitives::{address, Address, Bytes};
+    use assert_matches::assert_matches;
+    use fuel_core_types::fuel_types::{canonical::Serialize, AssetId};
+    use revm_primitives::{address, Address};
 
     use super::*;
 
@@ -322,7 +321,7 @@ mod tests {
         // other fields can be filled with zeros
         let input = r#"{
             "chainId": "0x1",
-            "type": "0x7F",
+            "type": "0x34",
             "executionEnvironment": "0x1",
             "rawData": "0x0bf1845c5d7a82ec92365d5027f7310793d53004f3c86aa80965c67bf7e7dc80",
             "from": "0x0000000000000000000000000000000000000000",
@@ -341,14 +340,58 @@ mod tests {
             Transaction::FluentV1(fluent_tx) => {
                 assert_eq!(fluent_tx.tx_type(), TxType::FluentV1);
 
-                match fluent_tx.execution_environment {
-                    ExecutionEnvironment::Solana(_) => {
-                        println!("Correctly identified Solana execution environment");
-                    }
-                    ExecutionEnvironment::Fuel(_) => {
-                        panic!("Expected Solana execution environment, but got Fuel");
-                    }
-                }
+                assert_matches!(
+                    fluent_tx.execution_environment,
+                    ExecutionEnvironment::Solana(..),
+                    "solana EE expected"
+                );
+            }
+            _ => panic!("Expected FluentV1 transaction, but got a different type"),
+        }
+    }
+
+    #[test]
+    fn fluent_v1_tx_conversion_with_fuel_tx_ee() {
+        let tx1 = fuel_vm::util::test_helpers::TestBuilder::new(2322u64)
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+        let tx1: fuel_tx::Transaction = fuel_tx::Transaction::Script(tx1);
+        let tx_raw_data = tx1.to_bytes();
+        let tx_raw_data_hex = hex::encode(&tx_raw_data);
+        // type - represents the Fluent transaction type
+        // executionEnvironment - represents the execution environment of the transaction (e.g.
+        // Solana, Fuel) rawData - represents the raw data of the transaction
+        // other fields can be filled with zeros
+        let input = r#"{
+            "chainId": "0x1",
+            "type": "0x34",
+            "executionEnvironment": "0x0",
+            "rawData": "0x#RAW_DATA#",
+            "from": "0x0000000000000000000000000000000000000000",
+            "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "gas": "0x0",
+            "gasPrice": "0x0",
+            "input": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "nonce": "0x0",
+            "value": "0x0"
+        }"#
+        .replace("#RAW_DATA#", tx_raw_data_hex.as_str());
+        let alloy_tx: AlloyTransaction =
+            serde_json::from_str(input.as_str()).expect("failed to deserialize");
+
+        let reth_tx: Transaction = alloy_tx.try_into().expect("failed to convert");
+        match reth_tx {
+            Transaction::FluentV1(fluent_tx) => {
+                assert_eq!(fluent_tx.tx_type(), TxType::FluentV1);
+
+                assert_matches!(
+                    fluent_tx.execution_environment,
+                    ExecutionEnvironment::Fuel(..),
+                    "solana EE expected"
+                );
             }
             _ => panic!("Expected FluentV1 transaction, but got a different type"),
         }

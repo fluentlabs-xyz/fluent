@@ -159,7 +159,7 @@ impl Transaction {
     }
 
     /// Get `chain_id`.
-    pub const fn chain_id(&self) -> Option<u64> {
+    pub fn chain_id(&self) -> Option<u64> {
         match self {
             Self::Legacy(TxLegacy { chain_id, .. }) => *chain_id,
             Self::Eip2930(TxEip2930 { chain_id, .. }) |
@@ -189,7 +189,7 @@ impl Transaction {
 
     /// Gets the transaction's [`TxKind`], which is the address of the recipient or
     /// [`TxKind::Create`] if the transaction is a contract creation.
-    pub const fn kind(&self) -> TxKind {
+    pub fn kind(&self) -> TxKind {
         match self {
             Self::Legacy(TxLegacy { to, .. }) |
             Self::Eip2930(TxEip2930 { to, .. }) |
@@ -210,7 +210,7 @@ impl Transaction {
     }
 
     /// Get the transaction's type
-    pub const fn tx_type(&self) -> TxType {
+    pub fn tx_type(&self) -> TxType {
         match self {
             Self::Legacy(legacy_tx) => legacy_tx.tx_type(),
             Self::Eip2930(access_list_tx) => access_list_tx.tx_type(),
@@ -224,7 +224,7 @@ impl Transaction {
     }
 
     /// Gets the transaction's value field.
-    pub const fn value(&self) -> U256 {
+    pub fn value(&self) -> U256 {
         *match self {
             Self::Legacy(TxLegacy { value, .. }) |
             Self::Eip2930(TxEip2930 { value, .. }) |
@@ -232,13 +232,12 @@ impl Transaction {
             Self::Eip4844(TxEip4844 { value, .. }) => value,
             #[cfg(feature = "optimism")]
             Self::Deposit(TxDeposit { value, .. }) => value,
-
             Self::FluentV1(tx) => tx.value(),
         }
     }
 
     /// Get the transaction's nonce.
-    pub const fn nonce(&self) -> u64 {
+    pub fn nonce(&self) -> u64 {
         match self {
             Self::Legacy(TxLegacy { nonce, .. }) |
             Self::Eip2930(TxEip2930 { nonce, .. }) |
@@ -254,7 +253,7 @@ impl Transaction {
     /// Returns the [`AccessList`] of the transaction.
     ///
     /// Returns `None` for legacy transactions.
-    pub const fn access_list(&self) -> Option<&AccessList> {
+    pub fn access_list(&self) -> Option<&AccessList> {
         match self {
             Self::Legacy(_) => None,
             Self::Eip2930(tx) => Some(&tx.access_list),
@@ -267,7 +266,7 @@ impl Transaction {
     }
 
     /// Get the gas limit of the transaction.
-    pub const fn gas_limit(&self) -> u64 {
+    pub fn gas_limit(&self) -> u64 {
         match self {
             Self::Legacy(TxLegacy { gas_limit, .. }) |
             Self::Eip2930(TxEip2930 { gas_limit, .. }) |
@@ -280,7 +279,7 @@ impl Transaction {
     }
 
     /// Returns true if the tx supports dynamic fees
-    pub const fn is_dynamic_fee(&self) -> bool {
+    pub fn is_dynamic_fee(&self) -> bool {
         match self {
             Self::Legacy(_) | Self::Eip2930(_) => false,
             Self::Eip1559(_) | Self::Eip4844(_) => true,
@@ -293,7 +292,7 @@ impl Transaction {
     /// Max fee per gas for eip1559 transaction, for legacy transactions this is `gas_price`.
     ///
     /// This is also commonly referred to as the "Gas Fee Cap" (`GasFeeCap`).
-    pub const fn max_fee_per_gas(&self) -> u128 {
+    pub fn max_fee_per_gas(&self) -> u128 {
         match self {
             Self::Legacy(TxLegacy { gas_price, .. }) |
             Self::Eip2930(TxEip2930 { gas_price, .. }) => *gas_price,
@@ -311,7 +310,7 @@ impl Transaction {
     /// is `None`
     ///
     /// This is also commonly referred to as the "Gas Tip Cap" (`GasTipCap`).
-    pub const fn max_priority_fee_per_gas(&self) -> Option<u128> {
+    pub fn max_priority_fee_per_gas(&self) -> Option<u128> {
         match self {
             Self::Legacy(_) | Self::Eip2930(_) => None,
             Self::Eip1559(TxEip1559 { max_priority_fee_per_gas, .. }) |
@@ -376,7 +375,6 @@ impl Transaction {
             Self::Eip4844(TxEip4844 { max_priority_fee_per_gas, .. }) => *max_priority_fee_per_gas,
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => 0,
-
             Self::FluentV1(tx) => tx.priority_fee_or_price(),
         }
     }
@@ -517,7 +515,6 @@ impl Transaction {
             Self::Eip4844(tx) => tx.gas_limit = gas_limit,
             #[cfg(feature = "optimism")]
             Self::Deposit(tx) => tx.gas_limit = gas_limit,
-
             Self::FluentV1(tx) => tx.set_gas_limit(gas_limit),
         }
     }
@@ -544,7 +541,6 @@ impl Transaction {
             Self::Eip4844(tx) => tx.value = value,
             #[cfg(feature = "optimism")]
             Self::Deposit(tx) => tx.value = value,
-
             Self::FluentV1(tx) => tx.set_value(value),
         }
     }
@@ -781,7 +777,6 @@ impl Encodable for Transaction {
             Self::Deposit(deposit_tx) => {
                 deposit_tx.encode(out, true);
             }
-
             Self::FluentV1(fluent_tx) => fluent_tx.encode(out),
         }
     }

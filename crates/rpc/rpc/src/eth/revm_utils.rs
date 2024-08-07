@@ -1,6 +1,7 @@
 //! utilities for working with revm
 
 use crate::eth::error::{EthApiError, EthResult, RpcInvalidTransactionError};
+use alloy_primitives::Bytes;
 #[cfg(feature = "optimism")]
 use reth_primitives::revm::env::fill_op_tx_env;
 #[cfg(not(feature = "optimism"))]
@@ -14,7 +15,7 @@ use reth_rpc_types::{
     BlockOverrides, TransactionRequest,
 };
 #[cfg(feature = "optimism")]
-use revm::primitives::{Bytes, OptimismFields};
+use revm::primitives::OptimismFields;
 use revm::{
     db::CacheDB,
     precompile::{PrecompileSpecId, Precompiles},
@@ -24,6 +25,7 @@ use revm::{
     },
     Database,
 };
+use revm_primitives::ExecutionEnvironment;
 use std::{cmp::min, iter};
 use tracing::trace;
 
@@ -197,6 +199,7 @@ pub fn create_txn_env(block_env: &BlockEnv, request: TransactionRequest) -> EthR
         chain_id,
         blob_versioned_hashes,
         max_fee_per_blob_gas,
+        transaction_type,
         ..
     } = request;
 
@@ -212,6 +215,30 @@ pub fn create_txn_env(block_env: &BlockEnv, request: TransactionRequest) -> EthR
         )?;
 
     let gas_limit = gas.unwrap_or_else(|| block_env.gas_limit.min(U256::from(u64::MAX)).to());
+    // let transact_to = {
+    //     if let Some(transaction_type) = transaction_type {
+    //         let Some(data) = input.data.clone() else {
+    //             return Err(EthApiError::EvmCustom(
+    //                 "data field must be provided when tx type set".to_string(),
+    //             ))
+    //         };
+    //         match transaction_type {
+    //             5 => TransactTo::Blended(ExecutionEnvironment::Fuel, data),
+    //             6 => TransactTo::Blended(ExecutionEnvironment::Solana, data),
+    //             _ => {
+    //                 return Err(EthApiError::EvmCustom(
+    //                     "unsupported transaction_type={}. only 5 (Fuel) and 6
+    // (Solana)".to_string(),                 ))
+    //             }
+    //         }
+    //         // Transaction::FluentV1
+    //     } else {
+    //         match to {
+    //             Some(TxKind::Call(to)) => TransactTo::call(to),
+    //             _ => TransactTo::create(),
+    //         }
+    //     }
+    // };
     let transact_to = match to {
         Some(TxKind::Call(to)) => TransactTo::call(to),
         _ => TransactTo::create(),
