@@ -742,7 +742,7 @@ impl Compact for Transaction {
                         let (tx, buf) = TxDeposit::from_compact(buf, buf.len());
                         (Self::Deposit(tx), buf)
                     }
-                    127 => {
+                    52 => {
                         let (tx, buf) = TxFluentV1::from_compact(buf, buf.len());
                         (Self::FluentV1(tx), buf)
                     }
@@ -1357,7 +1357,7 @@ impl TransactionSigned {
             TxType::Eip4844 => Transaction::Eip4844(TxEip4844::decode_inner(data)?),
             #[cfg(feature = "optimism")]
             TxType::Deposit => Transaction::Deposit(TxDeposit::decode_inner(data)?),
-            TxType::FluentV1 => Transaction::FluentV1(TxFluentV1::decode_inner(data)?),
+            TxType::FluentV1 => return Err(RlpError::Custom("unexpected fluent tx type")),
             TxType::Legacy => return Err(RlpError::Custom("unexpected legacy tx type")),
         };
 

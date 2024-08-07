@@ -210,7 +210,7 @@ impl TryFrom<alloy_rpc_types::Transaction> for Transaction {
                 input: tx.input,
             })),
             Some(TxType::FluentV1) => {
-                let execution_environment_type = tx
+                let execution_environment_string = tx
                     .other
                     .get_deserialized::<String>("executionEnvironment")
                     .ok_or_else(|| {
@@ -219,26 +219,47 @@ impl TryFrom<alloy_rpc_types::Transaction> for Transaction {
                     .map_err(|_| {
                         ConversionError::Custom("InvalidExecutionEnvironment".to_string())
                     })?;
-                let raw_data = tx
+
+                let execution_environment_trimmed =
+                    execution_environment_string.trim_start_matches("0x");
+
+                let execution_environment = u8::from_str_radix(execution_environment_trimmed, 16)
+                    .map_err(|_| {
+                    ConversionError::Custom("InvalidExecutionEnvironment".to_string())
+                })?;
+
+                let execution_environment = ExecutionEnvironment::from(execution_environment);
+
+                let native_tx_string = tx
                     .other
-                    .get_deserialized::<String>("rawData")
-                    .ok_or_else(|| ConversionError::Custom("MissingRawData".to_string()))?
-                    .map_err(|_| ConversionError::Custom("InvalidRawData".to_string()))?;
+                    .get_deserialized::<String>("nativeTx")
+                    .ok_or_else(|| ConversionError::Custom("MissingNativeTx".to_string()))?
+                    .map_err(|_| ConversionError::Custom("InvalidNativeTx".to_string()))?;
 
-                let raw_data = raw_data.trim_start_matches("0x");
-                let raw_data = hex::decode(raw_data)
-                    .map_err(|_| ConversionError::Custom("InvalidRawData".to_string()))?;
-                let raw_data = Bytes::from(raw_data);
+                let native_tx_string = native_tx_string.trim_start_matches("0x");
 
-                let execution_environment = ExecutionEnvironment::from_str_with_data(
-                    &execution_environment_type,
-                    raw_data.clone().into(),
-                )
-                .map_err(|_| ConversionError::Custom("InvalidExecutionEnvironment".to_string()))?;
+                let native_tx = hex::decode(native_tx_string)
+                    .map_err(|_| ConversionError::Custom("InvalidNativeTx".to_string()))?;
+
+                let native_tx = Bytes::from(native_tx);
+
+                let eth_fields = TxLegacy {
+                    chain_id: tx.chain_id,
+                    nonce: tx.nonce,
+                    gas_price: tx.gas_price.ok_or(ConversionError::MissingGasPrice)?,
+                    gas_limit: tx
+                        .gas
+                        .try_into()
+                        .map_err(|_| ConversionError::Eip2718Error(RlpError::Overflow.into()))?,
+                    to: tx.to.map_or(TxKind::Create, TxKind::Call),
+                    value: tx.value,
+                    input: tx.input,
+                };
 
                 Ok(Self::FluentV1(crate::transaction::TxFluentV1 {
+                    eth_fields,
                     execution_environment,
-                    data: raw_data.into(),
+                    native_tx,
                 }))
             }
         }
@@ -322,7 +343,7 @@ mod tests {
         // other fields can be filled with zeros
         let input = r#"{
             "chainId": "0x1",
-            "type": "0x7F",
+            "type": "0x52",
             "executionEnvironment": "0x1",
             "rawData": "0x0bf1845c5d7a82ec92365d5027f7310793d53004f3c86aa80965c67bf7e7dc80",
             "from": "0x0000000000000000000000000000000000000000",
@@ -342,11 +363,11 @@ mod tests {
                 assert_eq!(fluent_tx.tx_type(), TxType::FluentV1);
 
                 match fluent_tx.execution_environment {
-                    ExecutionEnvironment::Solana(_) => {
-                        println!("Correctly identified Solana execution environment");
-                    }
-                    ExecutionEnvironment::Fuel(_) => {
+                    ExecutionEnvironment::Fuel => {
                         panic!("Expected Solana execution environment, but got Fuel");
+                    }
+                    ExecutionEnvironment::Solana => {
+                        println!("Correctly identified Solana execution environment");
                     }
                 }
             }
