@@ -199,7 +199,7 @@ pub fn create_txn_env(block_env: &BlockEnv, request: TransactionRequest) -> EthR
         chain_id,
         blob_versioned_hashes,
         max_fee_per_blob_gas,
-        transaction_type,
+        // transaction_type,
         ..
     } = request;
 

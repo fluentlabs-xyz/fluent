@@ -325,7 +325,7 @@ mod tests {
         // other fields can be filled with zeros
         let input = r#"{
             "chainId": "0x1",
-            "type": "0x52",
+            "type": "0x7F",
             "executionEnvironment": "0x1",
             "rawData": "0x0bf1845c5d7a82ec92365d5027f7310793d53004f3c86aa80965c67bf7e7dc80",
             "from": "0x0000000000000000000000000000000000000000",
@@ -371,7 +371,7 @@ mod tests {
         // other fields can be filled with zeros
         let input = r#"{
             "chainId": "0x1",
-            "type": "0x52",
+            "type": "0x7F",
             "executionEnvironment": "0x0",
             "rawData": "0x#RAW_DATA#",
             "from": "0x0000000000000000000000000000000000000000",
