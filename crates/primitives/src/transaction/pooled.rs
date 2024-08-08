@@ -763,8 +763,15 @@ impl TryFrom<TransactionSignedEcRecovered> for PooledTransactionsElementEcRecove
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transaction::ExecutionEnvironment;
     use alloy_primitives::{address, hex};
     use assert_matches::assert_matches;
+    use fuel_core_types::fuel_types::{canonical::Serialize, AssetId};
+    use fuel_tx::{
+        field::{Inputs, Witnesses},
+        UniqueIdentifier,
+    };
+    use revm_primitives::bitvec::macros::internal::funty::Fundamental;
 
     #[test]
     fn invalid_legacy_pooled_decoding_input_too_short() {
@@ -817,6 +824,37 @@ mod tests {
             res.into_transaction().to(),
             Some(address!("714b6a4ea9b94a8a7d9fd362ed72630688c8898c"))
         );
+    }
+
+    #[test]
+    fn decode_fluent_v1_fuel_tx() {
+        let tx_type = 0x52u8; // fluent_v1
+        let exec_env = 0x00u8;
+        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
+        let fuel_spec_tx = tb
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+        assert_eq!(fuel_spec_tx.inputs().len(), 1);
+        assert_eq!(fuel_spec_tx.witnesses().len(), 1);
+        let first_input = fuel_spec_tx.inputs().first().unwrap();
+        let wt = fuel_spec_tx.witnesses().first().unwrap();
+        let address = wt.recover_witness(&fuel_spec_tx.id(&tb.get_chain_id()), 0).unwrap();
+        assert_eq!(&address, first_input.input_owner().unwrap());
+        let fuel_tx: fuel_tx::Transaction = fuel_spec_tx.into();
+        let fuel_tx_raw = fuel_tx.to_bytes();
+        let fuel_tx_hex = hex::encode(&fuel_tx_raw);
+        let mut data = vec![];
+        data.push(tx_type);
+        let rlp_header = Header { list: true, payload_length: 1 + fuel_tx_raw.len() };
+        rlp_header.encode(&mut data);
+        data.push(exec_env);
+        data.extend_from_slice(&fuel_tx_raw);
+
+        let result = PooledTransactionsElement::decode_enveloped(&mut &data[..]).unwrap();
+        assert_eq!(result.into_transaction().to(), None);
     }
 
     #[test]

@@ -74,7 +74,8 @@ impl TryFrom<alloy_rpc_types::Transaction> for Transaction {
         use alloy_eips::eip2718::Eip2718Error;
         use alloy_rpc_types::ConversionError;
 
-        match tx.transaction_type.map(TryInto::try_into).transpose().map_err(|_| {
+        let tx_type = tx.transaction_type.map(TryInto::try_into).transpose();
+        match tx_type.map_err(|_| {
             ConversionError::Eip2718Error(Eip2718Error::UnexpectedType(
                 tx.transaction_type.unwrap(),
             ))
@@ -325,7 +326,7 @@ mod tests {
         // other fields can be filled with zeros
         let input = r#"{
             "chainId": "0x1",
-            "type": "0x7F",
+            "type": "0x52",
             "executionEnvironment": "0x1",
             "rawData": "0x0bf1845c5d7a82ec92365d5027f7310793d53004f3c86aa80965c67bf7e7dc80",
             "from": "0x0000000000000000000000000000000000000000",
@@ -339,7 +340,7 @@ mod tests {
         let alloy_tx: AlloyTransaction =
             serde_json::from_str(input).expect("failed to deserialize");
 
-        let reth_tx: Transaction = alloy_tx.try_into().expect("failed to convert");
+        let reth_tx: Transaction = alloy_tx.try_into().expect("alloy tx convertable to reth tx");
         match reth_tx {
             Transaction::FluentV1(fluent_tx) => {
                 assert_eq!(fluent_tx.tx_type(), TxType::FluentV1);
@@ -371,7 +372,7 @@ mod tests {
         // other fields can be filled with zeros
         let input = r#"{
             "chainId": "0x1",
-            "type": "0x7F",
+            "type": "0x52",
             "executionEnvironment": "0x0",
             "rawData": "0x#RAW_DATA#",
             "from": "0x0000000000000000000000000000000000000000",
@@ -384,9 +385,9 @@ mod tests {
         }"#
         .replace("#RAW_DATA#", tx_raw_data_hex.as_str());
         let alloy_tx: AlloyTransaction =
-            serde_json::from_str(input.as_str()).expect("failed to deserialize");
+            serde_json::from_str(input.as_str()).expect("input is a valid alloy tx");
 
-        let reth_tx: Transaction = alloy_tx.try_into().expect("failed to convert");
+        let reth_tx: Transaction = alloy_tx.try_into().expect("alloy tx convertable to reth tx");
         match reth_tx {
             Transaction::FluentV1(fluent_tx) => {
                 assert_eq!(fluent_tx.tx_type(), TxType::FluentV1);
@@ -394,7 +395,7 @@ mod tests {
                 assert_matches!(
                     fluent_tx.execution_environment,
                     ExecutionEnvironment::Fuel(..),
-                    "solana EE expected"
+                    "fuel EE expected"
                 );
             }
             _ => panic!("Expected FluentV1 transaction, but got a different type"),

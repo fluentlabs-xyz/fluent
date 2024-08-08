@@ -1,19 +1,22 @@
 use core::{default, fmt::Debug, mem};
+use std::io::BufRead;
 
 use alloy_eips::eip2930::{AccessList, AccessListItem};
 use alloy_primitives::Address;
-use alloy_rlp::{length_of_length, Decodable, Encodable, Error as RlpError, Error, Header};
-use bytes::BufMut;
+use alloy_rlp::{length_of_length, Decodable, Encodable, Error as RlpError, Header};
+use bytes::{Buf, BufMut};
 use fluentbase_core::fvm::helpers::fuel_testnet_consensus_params_from;
 use fuel_core_types::fuel_types::canonical::Deserialize;
-use fuel_tx::{field::Inputs, Chargeable, ConsensusParameters};
+use fuel_tx::{
+    field::{Inputs, Witnesses},
+    Chargeable, ConsensusParameters, Transaction, UniqueIdentifier, Witness,
+};
 use proptest::prelude::*;
 use revm::handler::execution;
 
-use crate::{Signature, TxLegacy};
 use reth_codecs::{main_codec, Compact};
 
-use crate::{Bytes, ChainId, TxKind, TxType, B256, U256};
+use crate::{Bytes, ChainId, Signature, TxKind, TxLegacy, TxType, B256, U256};
 
 /// Trait that must be implemented by each execution environment
 trait IExecutionEnvironment {
@@ -250,6 +253,10 @@ pub struct TxFluentV1 {
 }
 
 impl TxFluentV1 {
+    pub fn new(execution_environment: ExecutionEnvironment, data: Bytes) -> TxFluentV1 {
+        Self { execution_environment, data }
+    }
+
     #[inline]
     pub fn size(&self) -> usize {
         mem::size_of::<ExecutionEnvironment>() + // execution_environment
@@ -403,14 +410,15 @@ impl TxFluentV1 {
     }
 
     pub(crate) fn decode_inner(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        if buf.is_empty() {
+        let env_type = if let Some(v) = buf.first() {
+            *v
+        } else {
             return Err(RlpError::InputTooShort);
-        }
+        };
+        buf.advance(1);
 
-        let env_type = buf[0];
-        *buf = &buf[1..];
-
-        let data: Bytes = Decodable::decode(buf)?;
+        let data: Bytes = buf.to_vec().into();
+        buf.advance(buf.len());
 
         let execution_environment = ExecutionEnvironment::new(env_type, data.clone())?;
 
@@ -450,24 +458,76 @@ impl Decodable for TxFluentV1 {
     }
 }
 
-pub struct FuelTransaction(fuel_tx::Transaction);
+pub struct FuelTransaction(Transaction);
 impl FuelTransaction {
-    pub fn inputs(&self) -> Result<&Vec<fuel_tx::Input>, alloy_rlp::Error> {
+    pub fn inputs(&self) -> Result<&Vec<fuel_tx::Input>, RlpError> {
         match &self.0 {
-            fuel_tx::Transaction::Script(t) => Ok(t.inputs()),
-            fuel_tx::Transaction::Create(t) => Ok(t.inputs()),
-            fuel_tx::Transaction::Upgrade(t) => Ok(t.inputs()),
-            fuel_tx::Transaction::Upload(t) => Ok(t.inputs()),
-            fuel_tx::Transaction::Mint(t) => Err(alloy_rlp::Error::Custom("mint tx unsupported")),
+            Transaction::Script(t) => Ok(t.inputs()),
+            Transaction::Create(t) => Ok(t.inputs()),
+            Transaction::Upload(t) => Ok(t.inputs()),
+            Transaction::Upgrade(t) => Ok(t.inputs()),
+            Transaction::Mint(t) => Err(alloy_rlp::Error::Custom("mint tx unsupported")),
         }
     }
-    pub fn gas_limit(&self, cp: &ConsensusParameters) -> Result<u64, alloy_rlp::Error> {
+    pub fn first_input(&self) -> Result<fuel_tx::Input, RlpError> {
+        Ok(self.inputs()?.first().cloned().ok_or(RlpError::Custom("at least 1 input expected"))?)
+    }
+    pub fn gas_limit(&self, cp: &ConsensusParameters) -> Result<u64, RlpError> {
         match &self.0 {
-            fuel_tx::Transaction::Script(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
-            fuel_tx::Transaction::Create(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
-            fuel_tx::Transaction::Upgrade(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
-            fuel_tx::Transaction::Upload(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
-            fuel_tx::Transaction::Mint(_) => Err(alloy_rlp::Error::Custom("mint tx unsupported")),
+            Transaction::Script(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
+            Transaction::Create(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
+            Transaction::Upload(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
+            Transaction::Upgrade(t) => Ok(t.max_gas(cp.gas_costs(), cp.fee_params())),
+            Transaction::Mint(_) => Err(RlpError::Custom("mint tx unsupported")),
+        }
+    }
+    pub fn first_owner(&self) -> Result<&fuel_core_types::fuel_types::Address, RlpError> {
+        let Some(input) = self.inputs()?.first() else {
+            return Err(RlpError::Custom("fuel: only txs with exactly 1 input are supported"));
+        };
+        let Some(owner) = input.input_owner() else {
+            return Err(RlpError::Custom("fuel: only txs with owner are supported"));
+        };
+        Ok(owner)
+    }
+    pub fn recover_first_owner(
+        &self,
+        cp: &ConsensusParameters,
+    ) -> Result<fuel_core_types::fuel_types::Address, RlpError> {
+        let witness = self.first_witness()?;
+        let owner = witness
+            .recover_witness(&self.0.id(&cp.chain_id()), 0)
+            .map_err(|v| RlpError::Custom("failed to recover first witness"))?;
+        Ok(owner)
+    }
+    pub fn witnesses(&self) -> Result<&Vec<Witness>, RlpError> {
+        match &self.0 {
+            Transaction::Script(t) => Ok(t.witnesses()),
+            Transaction::Create(t) => Ok(t.witnesses()),
+            Transaction::Upload(t) => Ok(t.witnesses()),
+            Transaction::Upgrade(t) => Ok(t.witnesses()),
+            Transaction::Mint(_) => Err(RlpError::Custom("mint tx unsupported")),
+        }
+    }
+    pub fn first_witness(&self) -> Result<&Witness, RlpError> {
+        match &self.0 {
+            Transaction::Script(t) => Ok(t
+                .witnesses()
+                .first()
+                .ok_or(RlpError::Custom("at least 1 witness must be presented"))?),
+            Transaction::Create(t) => Ok(t
+                .witnesses()
+                .first()
+                .ok_or(RlpError::Custom("at least 1 witness must be presented"))?),
+            Transaction::Upload(t) => Ok(t
+                .witnesses()
+                .first()
+                .ok_or(RlpError::Custom("at least 1 witness must be presented"))?),
+            Transaction::Upgrade(t) => Ok(t
+                .witnesses()
+                .first()
+                .ok_or(RlpError::Custom("at least 1 witness must be presented"))?),
+            Transaction::Mint(_) => Err(RlpError::Custom("mint tx unsupported")),
         }
     }
 }
@@ -476,19 +536,20 @@ impl FuelTransaction {
     Debug, Default, Clone, PartialEq, Eq, Hash, Compact, serde::Serialize, serde::Deserialize,
 )]
 pub struct FuelEnvironment {
-    original_tx_bytes: Vec<u8>,
+    original_tx_bytes: Bytes,
     chain_id: Option<ChainId>,
     access_list: Option<AccessList>,
     gas_limit: u64,
     tx_kind: TxKind,
+    owner: B256,
     input: Bytes,
 }
 
 impl FuelEnvironment {
     pub fn new(data: Bytes) -> Result<Self, RlpError> {
-        let tx: fuel_tx::Transaction = fuel_tx::Transaction::from_bytes(&data.as_ref())
+        let tx: Transaction = Transaction::from_bytes(&data.as_ref())
             .map_err(|e| RlpError::Custom(&"failed to parse fuel tx"))?;
-        let original_tx = FuelTransaction(tx);
+        let fuel_tx = FuelTransaction(tx);
         let consensus_params = fuel_testnet_consensus_params_from(
             None,
             None,
@@ -497,24 +558,25 @@ impl FuelEnvironment {
             None,
         );
         let mut alt = Vec::<AccessListItem>::new();
-        for input in original_tx.inputs()? {
-            let owner = input.input_owner();
-            if let Some(owner) = owner {
-                alt.push(AccessListItem {
-                    address: Address::from_slice(&owner[12..]),
-                    storage_keys: Default::default(),
-                });
-            }
+        let owner = fuel_tx.first_owner()?;
+        let recovered_first_owner = fuel_tx.first_owner()?;
+        if owner != recovered_first_owner {
+            return Err(RlpError::Custom("bad signature"))
         }
+        alt.push(AccessListItem {
+            address: Address::from_slice(&owner[12..]),
+            storage_keys: Default::default(),
+        });
         let instance = Self {
-            original_tx_bytes: data.to_vec(),
+            original_tx_bytes: data,
             chain_id: Some(ChainId::from(consensus_params.chain_id())),
             access_list: Some(AccessList(alt)),
-            gas_limit: original_tx
+            gas_limit: fuel_tx
                 .gas_limit(&consensus_params)
                 .map_err(|e| RlpError::Custom("failed to get gas limit from tx"))?,
-            // TODO
+            // TODO setup custom kind?
             tx_kind: TxKind::Create,
+            owner: owner.0.into(),
             ..Default::default()
         };
 

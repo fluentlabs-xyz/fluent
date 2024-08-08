@@ -1352,12 +1352,23 @@ impl TransactionSigned {
             TxType::Eip4844 => Transaction::Eip4844(TxEip4844::decode_inner(data)?),
             #[cfg(feature = "optimism")]
             TxType::Deposit => Transaction::Deposit(TxDeposit::decode_inner(data)?),
-            TxType::FluentV1 => return Err(RlpError::Custom("unexpected fluent tx type")),
+            TxType::FluentV1 => Transaction::FluentV1(TxFluentV1::decode_inner(data)?),
             TxType::Legacy => return Err(RlpError::Custom("unexpected legacy tx type")),
         };
 
         #[cfg(not(feature = "optimism"))]
-        let signature = Signature::decode(data)?;
+        let signature = if let Transaction::FluentV1(ref tx) = transaction {
+            match tx.execution_environment {
+                ExecutionEnvironment::Fuel(_) => {
+                    Signature { r: U256::ZERO, s: U256::ZERO, odd_y_parity: false }
+                }
+                ExecutionEnvironment::Solana(_) => {
+                    Signature { r: U256::ZERO, s: U256::ZERO, odd_y_parity: false }
+                }
+            }
+        } else {
+            Signature::decode(data)?
+        };
 
         #[cfg(feature = "optimism")]
         let signature = if tx_type == TxType::Deposit {
