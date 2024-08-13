@@ -408,7 +408,7 @@ mod tests {
 
     #[test]
     fn encode_decode_transaction_signed_fluent() {
-        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(2322u64);
+        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
         tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
         let tx1 = tb
             .coin_input(AssetId::default(), 100)
@@ -420,6 +420,7 @@ mod tests {
         let mut tx_raw_data_vec = vec![];
         tx_raw_data_vec.extend_from_slice(tx1.to_bytes().as_slice());
         let tx_raw_data_bytes = Bytes::from(tx_raw_data_vec);
+        println!("tx_raw hex: {}", hex::encode(&tx_raw_data_bytes));
 
         let fuel_ee = ExecutionEnvironment::new(0, tx_raw_data_bytes.clone()).unwrap();
 
