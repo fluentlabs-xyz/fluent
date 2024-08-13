@@ -18,7 +18,7 @@ use reth_primitives::{
     kzg::KzgSettings,
     revm::compat::calculate_intrinsic_gas_after_merge,
     GotExpected, InvalidTransactionError, SealedBlock, EIP1559_TX_TYPE_ID, EIP2930_TX_TYPE_ID,
-    EIP4844_TX_TYPE_ID,FLUENT_TX_V1_TYPE_ID, LEGACY_TX_TYPE_ID,
+    EIP4844_TX_TYPE_ID, FLUENT_TX_V1_TYPE_ID, LEGACY_TX_TYPE_ID,
 };
 use reth_provider::{AccountReader, BlockReaderIdExt, StateProviderFactory};
 use reth_tasks::TaskSpawner;
@@ -155,7 +155,8 @@ where
         mut transaction: Tx,
     ) -> TransactionValidationOutcome<Tx> {
         // Checks for tx_type
-        match transaction.tx_type() {
+        let tx_type = transaction.tx_type();
+        match tx_type {
             LEGACY_TX_TYPE_ID => {
                 // Accept legacy transactions
             }
@@ -187,7 +188,7 @@ where
                 }
             }
             FLUENT_TX_V1_TYPE_ID => {
-                // Accept fluent transactions
+                // additional validation rules
             }
 
             _ => {
@@ -199,6 +200,7 @@ where
         };
 
         // Reject transactions over defined size to prevent DOS attacks
+        // TODO(bfdays): compute correct size
         let transaction_size = transaction.size();
         if transaction_size > self.max_tx_input_bytes {
             return TransactionValidationOutcome::Invalid(
@@ -251,7 +253,8 @@ where
 
         // Checks for chainid
         if let Some(chain_id) = transaction.chain_id() {
-            if chain_id != self.chain_id() {
+            let node_chain_id = self.chain_id();
+            if chain_id != node_chain_id {
                 return TransactionValidationOutcome::Invalid(
                     transaction,
                     InvalidTransactionError::ChainIdMismatch.into(),
@@ -328,6 +331,7 @@ where
             )
         }
 
+        // TODO(bfdays): compute correct cost
         let cost = transaction.cost();
 
         // Checks for max cost
@@ -717,14 +721,18 @@ pub fn ensure_intrinsic_gas<T: PoolTransaction>(
     is_shanghai: bool,
 ) -> Result<(), InvalidPoolTransactionError> {
     let access_list = transaction.access_list().map(|list| list.flattened()).unwrap_or_default();
-    if transaction.gas_limit() <
-        calculate_intrinsic_gas_after_merge(
-            transaction.input(),
-            &transaction.kind(),
-            &access_list,
-            is_shanghai,
-        )
-    {
+    let tx_gas_limit = transaction.gas_limit();
+    let intrinsic_gas_after_merge = calculate_intrinsic_gas_after_merge(
+        transaction.input(),
+        &transaction.kind(),
+        &access_list,
+        is_shanghai,
+    );
+
+    if tx_gas_limit < intrinsic_gas_after_merge {
+        if transaction.is_fluent_v1() && tx_gas_limit * 2 > intrinsic_gas_after_merge {
+            return Ok(())
+        }
         Err(InvalidPoolTransactionError::IntrinsicGasTooLow)
     } else {
         Ok(())

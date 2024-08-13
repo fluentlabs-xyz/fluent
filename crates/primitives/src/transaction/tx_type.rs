@@ -24,7 +24,7 @@ pub const EIP4844_TX_TYPE_ID: u8 = 3;
 pub const DEPOSIT_TX_TYPE_ID: u8 = 126;
 
 /// Identifier for [`TxFluentV1`](crate::TxFluentV1) transaction.
-pub const FLUENT_TX_V1_TYPE_ID: u8 = 52;
+pub const FLUENT_TX_V1_TYPE_ID: u8 = 82; // 0x52 = R in ASCII (RWASM)
 
 /// Transaction Type
 ///
@@ -51,7 +51,7 @@ pub enum TxType {
     #[cfg(feature = "optimism")]
     Deposit = 126_isize,
     /// Fluent V1 transaction.
-    FluentV1 = 82_isize, // 0x52 = R in ASCII (RWASM)
+    FluentV1 = FLUENT_TX_V1_TYPE_ID as isize,
 }
 
 impl TxType {
@@ -173,9 +173,9 @@ impl Compact for TxType {
                     let extended_identifier = buf.get_u8();
                     match extended_identifier {
                         EIP4844_TX_TYPE_ID => Self::Eip4844,
+                        FLUENT_TX_V1_TYPE_ID => Self::FluentV1,
                         #[cfg(feature = "optimism")]
                         DEPOSIT_TX_TYPE_ID => Self::Deposit,
-                        FLUENT_TX_V1_TYPE_ID => Self::FluentV1,
                         _ => panic!("Unsupported TxType identifier: {extended_identifier}"),
                     }
                 }

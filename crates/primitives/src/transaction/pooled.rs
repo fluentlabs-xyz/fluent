@@ -1,7 +1,7 @@
 //! Defines the types for blob transactions, legacy, and other EIP-2718 transactions included in a
 //! response to `GetPooledTransactions`.
 
-use super::{error::TransactionConversionError, TxFluentV1};
+use super::{error::TransactionConversionError, ExecutionEnvironment, TxFluentV1};
 use crate::{
     Address, BlobTransaction, BlobTransactionSidecar, Bytes, Signature, Transaction,
     TransactionSigned, TransactionSignedEcRecovered, TxEip1559, TxEip2930, TxEip4844, TxHash,
@@ -159,6 +159,22 @@ impl PooledTransactionsElement {
     ///
     /// Returns `None` if the transaction's signature is invalid, see also [`Self::recover_signer`].
     pub fn recover_signer(&self) -> Option<Address> {
+        match &self {
+            PooledTransactionsElement::FluentV1 { transaction, .. } => {
+                return match &transaction.execution_environment {
+                    ExecutionEnvironment::Fuel(fe) => {
+                        let Ok(tx) = fe.original_transaction_wrapper() else { return None };
+                        let Ok(owner) = tx.recover_first_owner(&fe.consensus_params()) else {
+                            return None
+                        };
+                        let address = Address::from_slice(&owner[12..]);
+                        Some(address)
+                    }
+                    ExecutionEnvironment::Solana(_) => None,
+                }
+            }
+            _ => {}
+        }
         self.signature().recover_signer(self.signature_hash())
     }
 
@@ -167,6 +183,15 @@ impl PooledTransactionsElement {
     /// Returns `Err(Self)` if the transaction's signature is invalid, see also
     /// [`Self::recover_signer`].
     pub fn try_into_ecrecovered(self) -> Result<PooledTransactionsElementEcRecovered, Self> {
+        match &self {
+            PooledTransactionsElement::FluentV1 { .. } => {
+                return Ok(PooledTransactionsElementEcRecovered {
+                    transaction: self,
+                    signer: Address::ZERO,
+                })
+            }
+            _ => {}
+        }
         match self.recover_signer() {
             None => Err(self),
             Some(signer) => Ok(PooledTransactionsElementEcRecovered { transaction: self, signer }),
@@ -763,15 +788,14 @@ impl TryFrom<TransactionSignedEcRecovered> for PooledTransactionsElementEcRecove
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transaction::ExecutionEnvironment;
     use alloy_primitives::{address, hex};
+    use alloy_rlp::length_of_length;
     use assert_matches::assert_matches;
     use fuel_core_types::fuel_types::{canonical::Serialize, AssetId};
     use fuel_tx::{
         field::{Inputs, Witnesses},
         UniqueIdentifier,
     };
-    use revm_primitives::bitvec::macros::internal::funty::Fundamental;
 
     #[test]
     fn invalid_legacy_pooled_decoding_input_too_short() {
@@ -831,30 +855,41 @@ mod tests {
         let tx_type = 0x52u8; // fluent_v1
         let exec_env = 0x00u8;
         let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
-        let fuel_spec_tx = tb
+        tb.with_chain_id(fluentbase_core::DEVNET_CHAIN_ID.into());
+        let fuel_tx = tb
             .coin_input(AssetId::default(), 100)
             .change_output(AssetId::default())
             .build()
             .transaction()
             .clone();
-        assert_eq!(fuel_spec_tx.inputs().len(), 1);
-        assert_eq!(fuel_spec_tx.witnesses().len(), 1);
-        let first_input = fuel_spec_tx.inputs().first().unwrap();
-        let wt = fuel_spec_tx.witnesses().first().unwrap();
-        let address = wt.recover_witness(&fuel_spec_tx.id(&tb.get_chain_id()), 0).unwrap();
+        let tx: fuel_tx::Transaction = fuel_tx.clone().into();
+        println!("tx hex: {}", hex::encode(tx.to_bytes()));
+        assert_eq!(fuel_tx.inputs().len(), 1);
+        assert_eq!(fuel_tx.witnesses().len(), 1);
+        let first_input = fuel_tx.inputs().first().unwrap();
+        let wt = fuel_tx.witnesses().first().unwrap();
+        let address = wt.recover_witness(&fuel_tx.id(&tb.get_chain_id()), 0).unwrap();
         assert_eq!(&address, first_input.input_owner().unwrap());
-        let fuel_tx: fuel_tx::Transaction = fuel_spec_tx.into();
+        let fuel_tx: fuel_tx::Transaction = fuel_tx.into();
         let fuel_tx_raw = fuel_tx.to_bytes();
-        let fuel_tx_hex = hex::encode(&fuel_tx_raw);
+        // let fuel_tx_hex = hex::encode(&fuel_tx_raw);
+
         let mut data = vec![];
         data.push(tx_type);
-        let rlp_header = Header { list: true, payload_length: 1 + fuel_tx_raw.len() };
+        let rlp_header = Header {
+            list: true,
+            payload_length: 1 + length_of_length(fuel_tx_raw.len()) + fuel_tx_raw.len(),
+        };
         rlp_header.encode(&mut data);
         data.push(exec_env);
-        data.extend_from_slice(&fuel_tx_raw);
+        fuel_tx_raw.as_slice().encode(&mut data);
+        println!("tx_data_hex: {}", &hex::encode(&data));
 
-        let result = PooledTransactionsElement::decode_enveloped(&mut &data[..]).unwrap();
-        assert_eq!(result.into_transaction().to(), None);
+        let pooled_transaction_element =
+            PooledTransactionsElement::decode_enveloped(&mut &data[..]).unwrap();
+        let transaction = pooled_transaction_element.clone().into_transaction();
+        assert_eq!(transaction.to().clone(), None);
+        let signer = pooled_transaction_element.try_into_ecrecovered();
     }
 
     #[test]

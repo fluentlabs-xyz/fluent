@@ -20,7 +20,7 @@ pub use eip4844::TxEip4844;
 pub use error::{
     InvalidTransactionError, TransactionConversionError, TryFromRecoveredTransactionError,
 };
-pub use fluent_v1::{ExecutionEnvironment, TxFluentV1};
+pub use fluent::fluent_v1::{ExecutionEnvironment, TxFluentV1};
 pub use legacy::TxLegacy;
 pub use meta::TransactionMeta;
 #[cfg(feature = "optimism")]
@@ -62,7 +62,7 @@ mod variant;
 #[cfg(feature = "optimism")]
 mod optimism;
 
-pub mod fluent_v1;
+pub mod fluent;
 
 /// Either a transaction hash or number.
 pub type TxHashOrNumber = BlockHashOrNumber;
@@ -181,8 +181,8 @@ impl Transaction {
             Self::Eip4844(TxEip4844 { chain_id: ref mut c, .. }) => *c = chain_id,
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => { /* noop */ }
-            Self::FluentV1(tx) => {
-                tx.set_chain_id(Some(chain_id));
+            Self::FluentV1(TxFluentV1 { execution_environment: ref mut ee, .. }) => {
+                ee.set_chain_id(Some(chain_id));
             }
         }
     }
@@ -502,7 +502,9 @@ impl Transaction {
             Self::Eip4844(blob_tx) => blob_tx.encode_with_signature(signature, out, with_header),
             #[cfg(feature = "optimism")]
             Self::Deposit(deposit_tx) => deposit_tx.encode(out, with_header),
-            Self::FluentV1(fluent_tx) => fluent_tx.encode(out),
+            Self::FluentV1(fluent_tx) => {
+                fluent_tx.encode_with_signature(signature, out, with_header)
+            }
         }
     }
 
@@ -789,7 +791,7 @@ impl Encodable for Transaction {
             Self::Eip4844(blob_tx) => blob_tx.payload_len_for_signature(),
             #[cfg(feature = "optimism")]
             Self::Deposit(deposit_tx) => deposit_tx.payload_len(),
-            Self::FluentV1(fluent_tx) => fluent_tx.payload_len(),
+            Self::FluentV1(fluent_tx) => fluent_tx.payload_len_for_signature(),
         }
     }
 }
@@ -1225,7 +1227,9 @@ impl TransactionSigned {
             Transaction::Eip4844(blob_tx) => blob_tx.payload_len_with_signature(&self.signature),
             #[cfg(feature = "optimism")]
             Transaction::Deposit(deposit_tx) => deposit_tx.payload_len(),
-            Transaction::FluentV1(fluent_tx) => fluent_tx.payload_len(),
+            Transaction::FluentV1(fluent_tx) => {
+                fluent_tx.payload_len_with_signature(&self.signature)
+            }
         }
     }
 
@@ -1358,7 +1362,7 @@ impl TransactionSigned {
 
         #[cfg(not(feature = "optimism"))]
         let signature = if let Transaction::FluentV1(ref tx) = transaction {
-            match tx.execution_environment {
+            match &tx.execution_environment {
                 ExecutionEnvironment::Fuel(_) => {
                     Signature { r: U256::ZERO, s: U256::ZERO, odd_y_parity: false }
                 }

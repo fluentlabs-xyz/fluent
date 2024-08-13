@@ -309,14 +309,19 @@ impl TryFrom<alloy_rpc_types::Signature> for Signature {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{
+        transaction::fluent::fuel::FuelEnvironment, PooledTransactionsElement, TxFluentV1,
+        FLUENT_TX_V1_TYPE_ID,
+    };
     use alloy_primitives::{B256, U256, U64};
     use alloy_rpc_types::Transaction as AlloyTransaction;
     use assert_matches::assert_matches;
+    use fluentbase_core::DEVNET_CHAIN_ID;
     use fuel_core_types::fuel_types::canonical::Serialize;
-    use fuel_vm::fuel_types::AssetId;
+    use fuel_vm::fuel_types::{AssetId, ChainId};
+    use reth_chainspec::DEV;
     use revm_primitives::{address, Address, Bytes};
-
-    use super::*;
 
     #[test]
     fn fluent_v1_tx_conversion() {
@@ -327,7 +332,7 @@ mod tests {
         let input = r#"{
             "chainId": "0x1",
             "type": "0x52",
-            "executionEnvironment": "0x1",
+            "executionEnvironment": "0x01",
             "rawData": "0x0bf1845c5d7a82ec92365d5027f7310793d53004f3c86aa80965c67bf7e7dc80",
             "from": "0x0000000000000000000000000000000000000000",
             "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -357,7 +362,9 @@ mod tests {
 
     #[test]
     fn fluent_v1_tx_conversion_with_fuel_tx_ee() {
-        let tx1 = fuel_vm::util::test_helpers::TestBuilder::new(2322u64)
+        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
+        tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
+        let tx1 = tb
             .coin_input(AssetId::default(), 100)
             .change_output(AssetId::default())
             .build()
@@ -366,14 +373,10 @@ mod tests {
         let tx1: fuel_tx::Transaction = fuel_tx::Transaction::Script(tx1);
         let tx_raw_data = tx1.to_bytes();
         let tx_raw_data_hex = hex::encode(&tx_raw_data);
-        // type - represents the Fluent transaction type
-        // executionEnvironment - represents the execution environment of the transaction (e.g.
-        // Solana, Fuel) rawData - represents the raw data of the transaction
-        // other fields can be filled with zeros
         let input = r#"{
-            "chainId": "0x1",
+            "chainId": "1337",
             "type": "0x52",
-            "executionEnvironment": "0x0",
+            "executionEnvironment": "0x00",
             "rawData": "0x#RAW_DATA#",
             "from": "0x0000000000000000000000000000000000000000",
             "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -384,6 +387,7 @@ mod tests {
             "value": "0x0"
         }"#
         .replace("#RAW_DATA#", tx_raw_data_hex.as_str());
+        println!("tx_raw_data_hex {}", &tx_raw_data_hex);
         let alloy_tx: AlloyTransaction =
             serde_json::from_str(input.as_str()).expect("input is a valid alloy tx");
 
@@ -395,11 +399,45 @@ mod tests {
                 assert_matches!(
                     fluent_tx.execution_environment,
                     ExecutionEnvironment::Fuel(..),
-                    "fuel EE expected"
+                    "Fuel EE expected"
                 );
             }
             _ => panic!("Expected FluentV1 transaction, but got a different type"),
         }
+    }
+
+    #[test]
+    fn encode_decode_transaction_signed_fluent() {
+        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(2322u64);
+        tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
+        let tx1 = tb
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+        let tx1: fuel_tx::Transaction = fuel_tx::Transaction::Script(tx1);
+        let mut tx_raw_data_vec = vec![];
+        tx_raw_data_vec.extend_from_slice(tx1.to_bytes().as_slice());
+        let tx_raw_data_bytes = Bytes::from(tx_raw_data_vec);
+
+        let fuel_ee = ExecutionEnvironment::new(0, tx_raw_data_bytes.clone()).unwrap();
+
+        let transaction_signed = TransactionSigned {
+            hash: Default::default(),
+            signature: Default::default(),
+            transaction: Transaction::FluentV1(TxFluentV1::new(fuel_ee, tx_raw_data_bytes)),
+        };
+
+        let local_transactions = vec![transaction_signed];
+
+        let mut buf = vec![];
+
+        alloy_rlp::encode_list(&local_transactions, &mut buf);
+
+        let txs: Vec<TransactionSigned> =
+            alloy_rlp::Decodable::decode(&mut buf.as_slice()).unwrap();
+        assert_eq!(txs.len(), 1);
     }
 
     #[test]
