@@ -218,11 +218,9 @@ impl Decodable for TxType {
 
 #[cfg(test)]
 mod tests {
-    use rand::Rng;
-
-    use crate::hex;
-
     use super::*;
+    use crate::hex;
+    use rand::Rng;
 
     #[test]
     fn test_u64_to_tx_type() {
@@ -242,7 +240,7 @@ mod tests {
         #[cfg(feature = "optimism")]
         assert_eq!(TxType::try_from(U64::from(126)).unwrap(), TxType::Deposit);
 
-        assert_eq!(TxType::try_from(U64::from(127)).unwrap(), TxType::FluentV1);
+        assert_eq!(TxType::try_from(U64::from(FLUENT_TX_V1_TYPE_ID)).unwrap(), TxType::FluentV1);
 
         // For transactions with unsupported values
         assert!(TxType::try_from(U64::from(4)).is_err());
@@ -326,7 +324,7 @@ mod tests {
 
         // Test for FluentV1 transaction
         {
-            let buf = [127u8];
+            let buf = [FLUENT_TX_V1_TYPE_ID];
             let tx_type = TxType::decode(&mut &buf[..]).unwrap();
             assert_eq!(tx_type, TxType::FluentV1);
         }
