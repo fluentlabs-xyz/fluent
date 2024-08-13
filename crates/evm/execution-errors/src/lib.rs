@@ -131,7 +131,7 @@ pub enum BlockExecutionError {
     },
     /// Error when appending chain on fork is not possible
     #[error(
-        "appending chain on fork (other_chain_fork:?) is not possible as the tip is {chain_tip:?}"
+        "appending chain on fork (other_chain_fork: {other_chain_fork:?}) is not possible as the tip is {chain_tip:?}"
     )]
     AppendChainDoesntConnect {
         /// The tip of the current chain
