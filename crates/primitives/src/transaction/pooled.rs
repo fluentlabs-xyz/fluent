@@ -841,10 +841,13 @@ mod tests {
         let tx_type = 0x52u8; // fluent_v1
         let exec_env = 0x00u8;
         let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
-        let secret_key_str = "0x99e87b0e9158531eeeb503ff15266e2b23c2a2507b138c9d1b1f2ab458df2d61";
+        let secret_key_str = "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c";
         let secret_key_vec = hex::decode(secret_key_str).unwrap();
         let secret_key = SecretKey::try_from(secret_key_vec.as_slice());
         tb.with_chain_id(fluentbase_core::DEVNET_CHAIN_ID.into());
+        let asset_id =
+            AssetId::from_str("0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07")
+                .expect("valid asset id");
         let fuel_tx = tb
             .coin_input(AssetId::default(), 100)
             .change_output(AssetId::default())
