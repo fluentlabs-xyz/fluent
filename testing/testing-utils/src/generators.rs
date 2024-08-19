@@ -5,8 +5,9 @@ use rand::{
     distributions::uniform::SampleRange, rngs::StdRng, seq::SliceRandom, thread_rng, SeedableRng,
 };
 use reth_primitives::{
-    proofs, sign_message, Account, Address, BlockNumber, Bytes, Header, Log, Receipt, SealedBlock,
-    SealedHeader, StorageEntry, Transaction, TransactionSigned, TxKind, TxLegacy, B256, U256,
+    proofs, revm_primitives::FixedBytes, sign_message, Account, Address, BlockNumber, Bytes,
+    Header, Log, Receipt, SealedBlock, SealedHeader, StorageEntry, Transaction, TransactionSigned,
+    TxKind, TxLegacy, B256, U256,
 };
 use secp256k1::{Keypair, Secp256k1};
 use std::{
@@ -375,11 +376,16 @@ pub fn random_receipt<R: Rng>(
 /// Generate random log
 pub fn random_log<R: Rng>(rng: &mut R, address: Option<Address>, topics_count: Option<u8>) -> Log {
     let data_byte_count = rng.gen::<u8>() as usize;
-    let topics_count = topics_count.unwrap_or_else(|| rng.gen()) as usize;
+    let topics_count = topics_count.unwrap_or_else(|| rng.gen::<u8>()) as usize;
+    let topics: Vec<FixedBytes<32>> = std::iter::repeat_with(|| rng.gen::<[u8; 32]>())
+        .take(topics_count)
+        .map(FixedBytes::from) // Преобразование [u8; 32] в FixedBytes<32>
+        .collect();
+
     Log::new_unchecked(
-        address.unwrap_or_else(|| rng.gen()),
-        std::iter::repeat_with(|| rng.gen()).take(topics_count).collect(),
-        std::iter::repeat_with(|| rng.gen()).take(data_byte_count).collect::<Vec<_>>().into(),
+        address.unwrap_or_else(|| rng.gen::<Address>()),
+        topics,
+        std::iter::repeat_with(|| rng.gen::<u8>()).take(data_byte_count).collect::<Vec<_>>().into(),
     )
 }
 

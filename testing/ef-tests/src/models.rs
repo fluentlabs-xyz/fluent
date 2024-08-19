@@ -162,6 +162,7 @@ impl State {
                 balance: account.balance,
                 nonce: account.nonce.to::<u64>(),
                 bytecode_hash: code_hash,
+                rwasm_hash: None,
             };
             tx.put::<tables::PlainAccountState>(address, reth_account)?;
             tx.put::<tables::HashedAccounts>(hashed_address, reth_account)?;

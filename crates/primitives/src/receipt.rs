@@ -377,6 +377,11 @@ impl Decodable for ReceiptWithBloom {
                         buf.advance(1);
                         Self::decode_receipt(buf, TxType::Deposit)
                     }
+                    0x34 => {
+                        // 0x34 == 52
+                        buf.advance(1);
+                        Self::decode_receipt(buf, TxType::FluentV1)
+                    }
                     _ => Err(alloy_rlp::Error::Custom("invalid receipt type")),
                 }
             }
@@ -507,6 +512,9 @@ impl<'a> ReceiptWithBloomEncoder<'a> {
             #[cfg(feature = "optimism")]
             TxType::Deposit => {
                 out.put_u8(0x7E);
+            }
+            TxType::FluentV1 => {
+                out.put_u8(0x52);
             }
         }
         out.put_slice(payload.as_ref());

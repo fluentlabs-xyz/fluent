@@ -681,7 +681,7 @@ mod tests {
         blobstore::InMemoryBlobStore, validate::EthTransactionValidatorBuilder,
         CoinbaseTipOrdering, EthPooledTransaction, Pool, PoolTransaction, TransactionOrigin,
     };
-    use reth_chainspec::MAINNET;
+    use reth_chainspec::{DEV, MAINNET};
     use reth_fs_util as fs;
     use reth_primitives::{hex, PooledTransactionsElement, U256};
     use reth_provider::test_utils::{ExtendedAccount, MockEthProvider};
@@ -720,6 +720,57 @@ mod tests {
             CoinbaseTipOrdering::default(),
             blob_store.clone(),
             Default::default(),
+        );
+
+        txpool.add_transaction(TransactionOrigin::Local, transaction.clone()).await.unwrap();
+
+        let handle = tokio::runtime::Handle::current();
+        let manager = TaskManager::new(handle);
+        let config = LocalTransactionBackupConfig::with_local_txs_backup(transactions_path.clone());
+        manager.executor().spawn_critical_with_graceful_shutdown_signal("test task", |shutdown| {
+            backup_local_transactions_task(shutdown, txpool.clone(), config)
+        });
+
+        let mut txns = txpool.get_local_transactions();
+        let tx_on_finish = txns.pop().expect("there should be 1 transaction");
+
+        assert_eq!(*tx_to_cmp.hash(), *tx_on_finish.hash());
+
+        // shutdown the executor
+        manager.graceful_shutdown();
+
+        let data = fs::read(transactions_path).unwrap();
+
+        let txs: Vec<TransactionSigned> =
+            alloy_rlp::Decodable::decode(&mut data.as_slice()).unwrap();
+        assert_eq!(txs.len(), 1);
+
+        temp_dir.close().unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_save_local_txs_backup_fluent() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let transactions_path = temp_dir.path().join(FILENAME).with_extension(EXTENSION);
+        let tx_bytes = hex!("52f901b400b901b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000008000000000000000100000000000000010000000000000001240400000000000000000000000000000000000000000000ca41dab08590eda44231b6fcf4bb110c852b24f030bf996a89f02cccc57eb5f10000000000006a13f5bd94297364b371180b42da369f74918912b80c9947d6a174c0c6e2c95fae1d0000000000000064000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000028f974f02ef30fe9ee3e62b50f24a56d9042b4bc0251f23248d92990408afa49f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040f8f6ccbd3005a7900db1de6987e439e09c37ea2ac56eb6c2d82eeb37c3d6450bbf7514dceee2d94dc24f6f610d10f13fc4e6f6dbca6a0d3864b77a2bc7e6f384");
+        let tx = PooledTransactionsElement::decode_enveloped(&mut &tx_bytes[..]).unwrap();
+        let provider = MockEthProvider::default();
+        let transaction = EthPooledTransaction::from_recovered_pooled_transaction(
+            tx.try_into_ecrecovered().unwrap(),
+        );
+        let tx_to_cmp = transaction.clone();
+        let sender = hex!("1f9090aaE28b8a3dCeaDf281B0F12828e676c326").into();
+        provider.add_account(sender, ExtendedAccount::new(42, U256::MAX));
+        let blob_store = InMemoryBlobStore::default();
+        let validator =
+            EthTransactionValidatorBuilder::new(DEV.clone()).build(provider, blob_store.clone());
+
+        let pool_config = Default::default();
+        let txpool = Pool::new(
+            validator.clone(),
+            CoinbaseTipOrdering::default(),
+            blob_store.clone(),
+            pool_config,
         );
 
         txpool.add_transaction(TransactionOrigin::Local, transaction.clone()).await.unwrap();

@@ -1,8 +1,10 @@
-use crate::{U64, U8};
 use alloy_rlp::{Decodable, Encodable};
 use bytes::Buf;
-use reth_codecs::{derive_arbitrary, Compact};
 use serde::{Deserialize, Serialize};
+
+use reth_codecs::{derive_arbitrary, Compact};
+
+use crate::{U64, U8};
 
 /// Identifier for legacy transaction, however [`TxLegacy`](crate::TxLegacy) this is technically not
 /// typed.
@@ -20,6 +22,9 @@ pub const EIP4844_TX_TYPE_ID: u8 = 3;
 /// Identifier for [`TxDeposit`](crate::TxDeposit) transaction.
 #[cfg(feature = "optimism")]
 pub const DEPOSIT_TX_TYPE_ID: u8 = 126;
+
+/// Identifier for [`TxFluentV1`](crate::TxFluentV1) transaction.
+pub const FLUENT_TX_V1_TYPE_ID: u8 = 82; // 0x52 = R in ASCII (RWASM)
 
 /// Transaction Type
 ///
@@ -45,6 +50,8 @@ pub enum TxType {
     /// Optimism Deposit transaction.
     #[cfg(feature = "optimism")]
     Deposit = 126_isize,
+    /// Fluent V1 transaction.
+    FluentV1 = FLUENT_TX_V1_TYPE_ID as isize,
 }
 
 impl TxType {
@@ -58,6 +65,7 @@ impl TxType {
             Self::Eip2930 | Self::Eip1559 | Self::Eip4844 => true,
             #[cfg(feature = "optimism")]
             Self::Deposit => false,
+            Self::FluentV1 => false,
         }
     }
 }
@@ -71,6 +79,7 @@ impl From<TxType> for u8 {
             TxType::Eip4844 => EIP4844_TX_TYPE_ID,
             #[cfg(feature = "optimism")]
             TxType::Deposit => DEPOSIT_TX_TYPE_ID,
+            TxType::FluentV1 => FLUENT_TX_V1_TYPE_ID,
         }
     }
 }
@@ -98,6 +107,8 @@ impl TryFrom<u8> for TxType {
             return Ok(Self::Eip1559)
         } else if value == Self::Eip4844 {
             return Ok(Self::Eip4844)
+        } else if value == Self::FluentV1 {
+            return Ok(Self::FluentV1)
         }
 
         Err("invalid tx type")
@@ -142,6 +153,10 @@ impl Compact for TxType {
                 buf.put_u8(self as u8);
                 3
             }
+            Self::FluentV1 => {
+                buf.put_u8(self as u8);
+                3
+            }
         }
     }
 
@@ -158,6 +173,7 @@ impl Compact for TxType {
                     let extended_identifier = buf.get_u8();
                     match extended_identifier {
                         EIP4844_TX_TYPE_ID => Self::Eip4844,
+                        FLUENT_TX_V1_TYPE_ID => Self::FluentV1,
                         #[cfg(feature = "optimism")]
                         DEPOSIT_TX_TYPE_ID => Self::Deposit,
                         _ => panic!("Unsupported TxType identifier: {extended_identifier}"),
@@ -202,11 +218,9 @@ impl Decodable for TxType {
 
 #[cfg(test)]
 mod tests {
-    use rand::Rng;
-
-    use crate::hex;
-
     use super::*;
+    use crate::hex;
+    use rand::Rng;
 
     #[test]
     fn test_u64_to_tx_type() {
@@ -226,6 +240,8 @@ mod tests {
         #[cfg(feature = "optimism")]
         assert_eq!(TxType::try_from(U64::from(126)).unwrap(), TxType::Deposit);
 
+        assert_eq!(TxType::try_from(U64::from(FLUENT_TX_V1_TYPE_ID)).unwrap(), TxType::FluentV1);
+
         // For transactions with unsupported values
         assert!(TxType::try_from(U64::from(4)).is_err());
     }
@@ -239,6 +255,7 @@ mod tests {
             (TxType::Eip4844, 3, vec![EIP4844_TX_TYPE_ID]),
             #[cfg(feature = "optimism")]
             (TxType::Deposit, 3, vec![DEPOSIT_TX_TYPE_ID]),
+            (TxType::FluentV1, 3, vec![FLUENT_TX_V1_TYPE_ID]),
         ];
 
         for (tx_type, expected_identifier, expected_buf) in cases {
@@ -261,6 +278,7 @@ mod tests {
             (TxType::Eip4844, 3, vec![EIP4844_TX_TYPE_ID]),
             #[cfg(feature = "optimism")]
             (TxType::Deposit, 3, vec![DEPOSIT_TX_TYPE_ID]),
+            (TxType::FluentV1, 3, vec![FLUENT_TX_V1_TYPE_ID]),
         ];
 
         for (expected_type, identifier, buf) in cases {
@@ -302,6 +320,13 @@ mod tests {
             let buf = [126u8];
             let tx_type = TxType::decode(&mut &buf[..]).unwrap();
             assert_eq!(tx_type, TxType::Deposit);
+        }
+
+        // Test for FluentV1 transaction
+        {
+            let buf = [FLUENT_TX_V1_TYPE_ID];
+            let tx_type = TxType::decode(&mut &buf[..]).unwrap();
+            assert_eq!(tx_type, TxType::FluentV1);
         }
     }
 }

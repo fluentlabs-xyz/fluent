@@ -51,8 +51,10 @@ use std::future::Future;
 use crate::eth::revm_utils::FillableTransaction;
 #[cfg(feature = "optimism")]
 use reth_rpc_types::OptimismTransactionReceiptFields;
-use revm_primitives::db::{Database, DatabaseRef};
-use revm_primitives::WASM_MAX_CODE_SIZE;
+use revm_primitives::{
+    db::{Database, DatabaseRef},
+    WASM_MAX_CODE_SIZE,
+};
 
 /// Helper alias type for the state's [`CacheDB`]
 pub(crate) type StateCacheDB = CacheDB<StateProviderDatabase<StateProviderBox>>;
@@ -853,7 +855,7 @@ where
         // blocks that it builds.
         let maybe_forwarder = self.inner.raw_transaction_forwarder.read().clone();
         if let Some(client) = maybe_forwarder {
-            tracing::debug!( target: "rpc::eth",  "forwarding raw transaction to");
+            tracing::debug!(target: "rpc::eth",  "forwarding raw transaction to");
             client.forward_raw_transaction(&tx).await?;
         }
 
@@ -862,6 +864,7 @@ where
 
         // submit the transaction to the pool with a `Local` origin
         let hash = self.pool().add_transaction(TransactionOrigin::Local, pool_transaction).await?;
+        tracing::trace!(target: "rpc::eth", ?hash, "send_raw_transaction");
 
         Ok(hash)
     }

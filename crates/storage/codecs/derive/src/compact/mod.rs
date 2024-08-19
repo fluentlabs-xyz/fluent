@@ -170,7 +170,7 @@ fn should_use_alt_impl(ftype: &String, segment: &syn::PathSegment) -> bool {
 pub fn get_bit_size(ftype: &str) -> u8 {
     match ftype {
         "TransactionKind" | "TxKind" | "bool" | "Option" | "Signature" => 1,
-        "TxType" => 2,
+        "TxType" | "ExecutionEnvironment" => 2,
         "u64" | "BlockNumber" | "TxNumber" | "ChainId" | "NumTransactions" => 4,
         "u128" => 5,
         "U256" => 6,

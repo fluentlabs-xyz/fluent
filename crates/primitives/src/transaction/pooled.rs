@@ -1,7 +1,7 @@
 //! Defines the types for blob transactions, legacy, and other EIP-2718 transactions included in a
 //! response to `GetPooledTransactions`.
 
-use super::error::TransactionConversionError;
+use super::{error::TransactionConversionError, ExecutionEnvironment, TxFluentV1};
 use crate::{
     Address, BlobTransaction, BlobTransactionSidecar, Bytes, Signature, Transaction,
     TransactionSigned, TransactionSignedEcRecovered, TxEip1559, TxEip2930, TxEip4844, TxHash,
@@ -50,6 +50,15 @@ pub enum PooledTransactionsElement {
     },
     /// A blob transaction, which includes the transaction, blob data, commitments, and proofs.
     BlobTransaction(BlobTransaction),
+    /// A FluentV1 transaction
+    FluentV1 {
+        /// The inner transaction
+        transaction: TxFluentV1,
+        /// The signature
+        signature: Signature,
+        /// The hash of the transaction
+        hash: TxHash,
+    },
 }
 
 impl PooledTransactionsElement {
@@ -74,6 +83,9 @@ impl PooledTransactionsElement {
             #[cfg(feature = "optimism")]
             // Not supported because deposit transactions are never pooled
             tx @ TransactionSigned { transaction: Transaction::Deposit(_), .. } => Err(tx),
+            TransactionSigned { transaction: Transaction::FluentV1(tx), signature, hash } => {
+                Ok(Self::FluentV1 { transaction: tx, signature, hash })
+            }
         }
     }
 
@@ -106,6 +118,7 @@ impl PooledTransactionsElement {
             Self::Eip2930 { transaction, .. } => transaction.signature_hash(),
             Self::Eip1559 { transaction, .. } => transaction.signature_hash(),
             Self::BlobTransaction(blob_tx) => blob_tx.transaction.signature_hash(),
+            Self::FluentV1 { transaction, .. } => transaction.signature_hash(),
         }
     }
 
@@ -116,6 +129,7 @@ impl PooledTransactionsElement {
                 hash
             }
             Self::BlobTransaction(tx) => &tx.hash,
+            Self::FluentV1 { hash, .. } => hash,
         }
     }
 
@@ -126,6 +140,7 @@ impl PooledTransactionsElement {
             Self::Eip2930 { signature, .. } |
             Self::Eip1559 { signature, .. } => signature,
             Self::BlobTransaction(blob_tx) => &blob_tx.signature,
+            Self::FluentV1 { signature, .. } => signature,
         }
     }
 
@@ -136,6 +151,7 @@ impl PooledTransactionsElement {
             Self::Eip2930 { transaction, .. } => transaction.nonce,
             Self::Eip1559 { transaction, .. } => transaction.nonce,
             Self::BlobTransaction(blob_tx) => blob_tx.transaction.nonce,
+            Self::FluentV1 { transaction, .. } => transaction.nonce(),
         }
     }
 
@@ -143,6 +159,14 @@ impl PooledTransactionsElement {
     ///
     /// Returns `None` if the transaction's signature is invalid, see also [`Self::recover_signer`].
     pub fn recover_signer(&self) -> Option<Address> {
+        match &self {
+            PooledTransactionsElement::FluentV1 { transaction, .. } => {
+                return Some(Address::from_word(
+                    transaction.recover_owner().unwrap_or_default().0.into(),
+                ));
+            }
+            _ => {}
+        }
         self.signature().recover_signer(self.signature_hash())
     }
 
@@ -239,7 +263,12 @@ impl PooledTransactionsElement {
                         hash: typed_tx.hash,
                     }),
                     #[cfg(feature = "optimism")]
-                    Transaction::Deposit(_) => Err(RlpError::Custom("Optimism deposit transaction cannot be decoded to PooledTransactionsElement"))
+                    Transaction::Deposit(_) => Err(RlpError::Custom("Optimism deposit transaction cannot be decoded to PooledTransactionsElement")),
+                    Transaction::FluentV1(tx) => Ok(Self::FluentV1 {
+                        transaction: tx,
+                        signature: typed_tx.signature,
+                        hash: typed_tx.hash,
+                    })
                 }
             }
         }
@@ -268,6 +297,11 @@ impl PooledTransactionsElement {
                 hash,
             },
             Self::BlobTransaction(blob_tx) => blob_tx.into_parts().0,
+            Self::FluentV1 { transaction, signature, hash } => TransactionSigned {
+                transaction: Transaction::FluentV1(transaction),
+                signature,
+                hash,
+            },
         }
     }
 
@@ -289,6 +323,10 @@ impl PooledTransactionsElement {
             Self::BlobTransaction(blob_tx) => {
                 // the encoding does not use a header, so we set `with_header` to false
                 blob_tx.payload_len_with_type(false)
+            }
+            Self::FluentV1 { transaction, .. } => {
+                // method computes the payload len without a RLP header
+                transaction.payload_len_without_header()
             }
         }
     }
@@ -331,6 +369,9 @@ impl PooledTransactionsElement {
                 // encoding:
                 // `tx_type || rlp([transaction_payload_body, blobs, commitments, proofs]))`
                 blob_tx.encode_with_type_inner(out, false);
+            }
+            Self::FluentV1 { transaction, signature, .. } => {
+                transaction.encode_with_signature(signature, out, false)
             }
         }
     }
@@ -403,6 +444,7 @@ impl PooledTransactionsElement {
             Self::Legacy { .. } | Self::Eip2930 { .. } => None,
             Self::Eip1559 { transaction, .. } => Some(transaction.max_priority_fee_per_gas),
             Self::BlobTransaction(tx) => Some(tx.transaction.max_priority_fee_per_gas),
+            Self::FluentV1 { transaction, .. } => transaction.max_priority_fee_per_gas(),
         }
     }
 
@@ -415,6 +457,7 @@ impl PooledTransactionsElement {
             Self::Eip2930 { transaction, .. } => transaction.gas_price,
             Self::Eip1559 { transaction, .. } => transaction.max_fee_per_gas,
             Self::BlobTransaction(tx) => tx.transaction.max_fee_per_gas,
+            Self::FluentV1 { transaction, .. } => transaction.max_fee_per_gas(),
         }
     }
 }
@@ -451,6 +494,10 @@ impl Encodable for PooledTransactionsElement {
                 // `rlp(tx_type || rlp([transaction_payload_body, blobs, commitments, proofs]))`
                 blob_tx.encode_with_type_inner(out, true);
             }
+            Self::FluentV1 { transaction, signature, .. } => {
+                // encodes with string header
+                transaction.encode_with_signature(signature, out, true)
+            }
         }
     }
 
@@ -471,6 +518,10 @@ impl Encodable for PooledTransactionsElement {
             Self::BlobTransaction(blob_tx) => {
                 // the encoding uses a header, so we set `with_header` to true
                 blob_tx.payload_len_with_type(true)
+            }
+            Self::FluentV1 { transaction, signature, .. } => {
+                // method computes the payload len with a RLP header
+                transaction.payload_len_with_signature(signature)
             }
         }
     }
@@ -574,7 +625,8 @@ impl Decodable for PooledTransactionsElement {
                         hash: typed_tx.hash,
                     }),
                     #[cfg(feature = "optimism")]
-                    Transaction::Deposit(_) => Err(RlpError::Custom("Optimism deposit transaction cannot be decoded to PooledTransactionsElement"))
+                    Transaction::Deposit(_) => Err(RlpError::Custom("Optimism deposit transaction cannot be decoded to PooledTransactionsElement")),
+                    Transaction::FluentV1(_) => Err(RlpError::Custom("FluentV1 transaction cannot be decoded to PooledTransactionsElement"))
                 }
             }
         }
@@ -720,7 +772,16 @@ impl TryFrom<TransactionSignedEcRecovered> for PooledTransactionsElementEcRecove
 mod tests {
     use super::*;
     use alloy_primitives::{address, hex};
+    use alloy_rlp::length_of_length;
     use assert_matches::assert_matches;
+    use core::str::FromStr;
+    use fuel_core_types::fuel_types::{canonical::Serialize, AssetId};
+    use fuel_tx::{
+        field::{Inputs, Witnesses},
+        Input, UniqueIdentifier,
+    };
+    use fuel_vm::fuel_crypto::SecretKey;
+    use test_fuzz::FromRef;
 
     #[test]
     fn invalid_legacy_pooled_decoding_input_too_short() {
@@ -773,6 +834,62 @@ mod tests {
             res.into_transaction().to(),
             Some(address!("714b6a4ea9b94a8a7d9fd362ed72630688c8898c"))
         );
+    }
+
+    #[test]
+    fn decode_fluent_v1_fuel_tx() {
+        let tx_type = 0x52u8; // fluent_v1
+        let exec_env = 0x00u8;
+        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
+        let secret_key_str = "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c";
+        let secret_key_vec = hex::decode(secret_key_str).unwrap();
+        let secret_key = SecretKey::try_from(secret_key_vec.as_slice());
+        tb.with_chain_id(fluentbase_core::DEVNET_CHAIN_ID.into());
+        let asset_id =
+            AssetId::from_str("0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07")
+                .expect("valid asset id");
+        let fuel_tx = tb
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+        let secret_key = secret_key.unwrap();
+        let pk = secret_key.public_key();
+        let secret_address = Input::owner(&pk);
+        let tx: fuel_tx::Transaction = fuel_tx.clone().into();
+        println!("tx hex: {}", hex::encode(tx.to_bytes()));
+        assert_eq!(fuel_tx.inputs().len(), 1);
+        assert_eq!(fuel_tx.witnesses().len(), 1);
+        let first_input = fuel_tx.inputs().first().unwrap();
+        let wt = fuel_tx.witnesses().first().unwrap();
+        let address = wt.recover_witness(&fuel_tx.id(&tb.get_chain_id()), 0).unwrap();
+        assert_eq!(&address, first_input.input_owner().unwrap());
+        println!(
+            "witness address32 (original) {} address20 (cut) {}",
+            &address,
+            Address::from_slice(&address.0[12..])
+        );
+        let fuel_tx: fuel_tx::Transaction = fuel_tx.into();
+        let fuel_tx_raw = fuel_tx.to_bytes();
+        // let fuel_tx_hex = hex::encode(&fuel_tx_raw);
+
+        let mut data = vec![];
+        data.push(tx_type);
+        let rlp_header = Header {
+            list: true,
+            payload_length: 1 + length_of_length(fuel_tx_raw.len()) + fuel_tx_raw.len(),
+        };
+        rlp_header.encode(&mut data);
+        data.push(exec_env);
+        fuel_tx_raw.as_slice().encode(&mut data);
+        println!("tx_data_hex: {}", &hex::encode(&data));
+
+        let pooled_transaction_element =
+            PooledTransactionsElement::decode_enveloped(&mut &data[..]).unwrap();
+        let transaction = pooled_transaction_element.clone().into_transaction();
+        assert_eq!(transaction.to().clone(), None);
+        let signer = pooled_transaction_element.try_into_ecrecovered();
     }
 
     #[test]

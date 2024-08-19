@@ -1,15 +1,18 @@
 //! Common conversions from alloy types.
 
-use crate::{
-    constants::EMPTY_TRANSACTIONS, transaction::extract_chain_id, Block, Signature, Transaction,
-    TransactionSigned, TransactionSignedEcRecovered, TxEip1559, TxEip2930, TxEip4844, TxLegacy,
-    TxType,
-};
-use alloy_primitives::TxKind;
-use alloy_rlp::Error as RlpError;
-
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+
+use alloy_primitives::TxKind;
+use alloy_rlp::Error as RlpError;
+use revm_primitives::{hex, Bytes};
+
+use crate::{
+    constants::EMPTY_TRANSACTIONS,
+    transaction::{extract_chain_id, ExecutionEnvironment},
+    Block, Signature, Transaction, TransactionSigned, TransactionSignedEcRecovered, TxEip1559,
+    TxEip2930, TxEip4844, TxLegacy, TxType,
+};
 
 impl TryFrom<alloy_rpc_types::Block> for Block {
     type Error = alloy_rpc_types::ConversionError;
@@ -71,7 +74,8 @@ impl TryFrom<alloy_rpc_types::Transaction> for Transaction {
         use alloy_eips::eip2718::Eip2718Error;
         use alloy_rpc_types::ConversionError;
 
-        match tx.transaction_type.map(TryInto::try_into).transpose().map_err(|_| {
+        let tx_type = tx.transaction_type.map(TryInto::try_into).transpose();
+        match tx_type.map_err(|_| {
             ConversionError::Eip2718Error(Eip2718Error::UnexpectedType(
                 tx.transaction_type.unwrap(),
             ))
@@ -206,6 +210,38 @@ impl TryFrom<alloy_rpc_types::Transaction> for Transaction {
                 is_system_transaction: tx.from == crate::constants::OP_SYSTEM_TX_FROM_ADDR,
                 input: tx.input,
             })),
+            Some(TxType::FluentV1) => {
+                let execution_environment_type = tx
+                    .other
+                    .get_deserialized::<String>("executionEnvironment")
+                    .ok_or_else(|| {
+                        ConversionError::Custom("MissingExecutionEnvironment".to_string())
+                    })?
+                    .map_err(|_| {
+                        ConversionError::Custom("InvalidExecutionEnvironment".to_string())
+                    })?;
+                let raw_data = tx
+                    .other
+                    .get_deserialized::<String>("rawData")
+                    .ok_or_else(|| ConversionError::Custom("MissingRawData".to_string()))?
+                    .map_err(|_| ConversionError::Custom("InvalidRawData".to_string()))?;
+
+                let raw_data = raw_data.trim_start_matches("0x");
+                let raw_data = hex::decode(raw_data)
+                    .map_err(|_| ConversionError::Custom("InvalidRawData".to_string()))?;
+                let raw_data = Bytes::from(raw_data);
+
+                let execution_environment = ExecutionEnvironment::from_str_with_data(
+                    &execution_environment_type,
+                    raw_data.clone().into(),
+                )
+                .map_err(|_| ConversionError::Custom("InvalidExecutionEnvironment".to_string()))?;
+
+                Ok(Self::FluentV1(crate::transaction::TxFluentV1 {
+                    execution_environment,
+                    data: raw_data.into(),
+                }))
+            }
         }
     }
 }
@@ -274,9 +310,174 @@ impl TryFrom<alloy_rpc_types::Signature> for Signature {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::{B256, U256};
+    use crate::{
+        transaction::fluent::fuel::FuelEnvironment, PooledTransactionsElement, TxFluentV1,
+        FLUENT_TX_V1_TYPE_ID,
+    };
+    use alloy_primitives::{B256, U256, U64};
     use alloy_rpc_types::Transaction as AlloyTransaction;
-    use revm_primitives::{address, Address};
+    use assert_matches::assert_matches;
+    use fluentbase_core::DEVNET_CHAIN_ID;
+    use fuel_core_types::fuel_types::canonical::Serialize;
+    use fuel_tx::UniqueIdentifier;
+    use fuel_vm::fuel_types::{AssetId, ChainId};
+    use reth_chainspec::DEV;
+    use revm_primitives::{address, Address, Bytes};
+
+    #[test]
+    fn fluent_v1_tx_conversion() {
+        // type - represents the Fluent transaction type
+        // executionEnvironment - represents the execution environment of the transaction (e.g.
+        // Solana, Fuel) rawData - represents the raw data of the transaction
+        // other fields can be filled with zeros
+        let input = r#"{
+            "chainId": "0x1",
+            "type": "0x52",
+            "executionEnvironment": "0x01",
+            "rawData": "0x0bf1845c5d7a82ec92365d5027f7310793d53004f3c86aa80965c67bf7e7dc80",
+            "from": "0x0000000000000000000000000000000000000000",
+            "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "gas": "0x0",
+            "gasPrice": "0x0",
+            "input": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "nonce": "0x0",
+            "value": "0x0"
+        }"#;
+        let alloy_tx: AlloyTransaction =
+            serde_json::from_str(input).expect("failed to deserialize");
+
+        let reth_tx: Transaction = alloy_tx.try_into().expect("alloy tx convertable to reth tx");
+        match reth_tx {
+            Transaction::FluentV1(fluent_tx) => {
+                assert_eq!(fluent_tx.tx_type(), TxType::FluentV1);
+
+                assert_matches!(
+                    fluent_tx.execution_environment,
+                    ExecutionEnvironment::Solana(..),
+                    "solana EE expected"
+                );
+            }
+            _ => panic!("Expected FluentV1 transaction, but got a different type"),
+        }
+    }
+
+    #[test]
+    fn fluent_v1_tx_conversion_with_fuel_tx_ee() {
+        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
+        tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
+        let tx1 = tb
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+        let tx1: fuel_tx::Transaction = fuel_tx::Transaction::Script(tx1);
+        let tx_raw_data = tx1.to_bytes();
+        let tx1_id = tx1.id(&tb.get_chain_id());
+        println!("tx1_id {}", hex::encode(&tx1_id));
+        let tx_raw_data_hex = hex::encode(&tx_raw_data);
+        let input = r#"{
+            "chainId": "1337",
+            "type": "0x52",
+            "executionEnvironment": "0x00",
+            "rawData": "0x#RAW_DATA#",
+            "from": "0x0000000000000000000000000000000000000000",
+            "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "gas": "0x0",
+            "gasPrice": "0x0",
+            "input": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "nonce": "0x0",
+            "value": "0x0"
+        }"#
+        .replace("#RAW_DATA#", tx_raw_data_hex.as_str());
+        println!("tx_raw_data_hex {}", &tx_raw_data_hex);
+        let alloy_tx: AlloyTransaction =
+            serde_json::from_str(input.as_str()).expect("input is a valid alloy tx");
+
+        let reth_tx: Transaction = alloy_tx.try_into().expect("alloy tx convertable to reth tx");
+        match reth_tx {
+            Transaction::FluentV1(fluent_tx) => {
+                assert_eq!(fluent_tx.tx_type(), TxType::FluentV1);
+
+                assert_matches!(
+                    fluent_tx.execution_environment,
+                    ExecutionEnvironment::Fuel(..),
+                    "Fuel EE expected"
+                );
+            }
+            _ => panic!("Expected FluentV1 transaction, but got a different type"),
+        }
+    }
+
+    #[test]
+    fn encode_decode_transaction_signed_script_fluent() {
+        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
+        tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
+        let tx1 = tb
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+        let tx1: fuel_tx::Transaction = fuel_tx::Transaction::Script(tx1);
+        let mut tx_raw_data_vec = vec![];
+        tx_raw_data_vec.extend_from_slice(tx1.to_bytes().as_slice());
+        let tx_raw_data_bytes = Bytes::from(tx_raw_data_vec);
+        println!("tx_raw hex: {}", hex::encode(&tx_raw_data_bytes));
+
+        let fuel_ee = ExecutionEnvironment::new(0, tx_raw_data_bytes.clone()).unwrap();
+
+        let transaction_signed = TransactionSigned {
+            hash: Default::default(),
+            signature: Default::default(),
+            transaction: Transaction::FluentV1(TxFluentV1::new(fuel_ee, tx_raw_data_bytes)),
+        };
+
+        let local_transactions = vec![transaction_signed];
+
+        let mut buf = vec![];
+
+        alloy_rlp::encode_list(&local_transactions, &mut buf);
+
+        let txs: Vec<TransactionSigned> =
+            alloy_rlp::Decodable::decode(&mut buf.as_slice()).unwrap();
+        assert_eq!(txs.len(), 1);
+    }
+
+    #[test]
+    fn encode_decode_transaction_signed_create_fluent() {
+        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
+        tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
+        let tx1 = tb
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+        let tx1: fuel_tx::Transaction = tx1.into();
+        let mut tx_raw_data_vec = vec![];
+        tx_raw_data_vec.extend_from_slice(tx1.to_bytes().as_slice());
+        let tx_raw_data_bytes = Bytes::from(tx_raw_data_vec);
+        println!("tx_raw hex: {}", hex::encode(&tx_raw_data_bytes));
+
+        let fuel_ee = ExecutionEnvironment::new(0, tx_raw_data_bytes.clone()).unwrap();
+
+        let transaction_signed = TransactionSigned {
+            hash: Default::default(),
+            signature: Default::default(),
+            transaction: Transaction::FluentV1(TxFluentV1::new(fuel_ee, tx_raw_data_bytes)),
+        };
+
+        let local_transactions = vec![transaction_signed];
+
+        let mut buf = vec![];
+
+        alloy_rlp::encode_list(&local_transactions, &mut buf);
+
+        let txs: Vec<TransactionSigned> =
+            alloy_rlp::Decodable::decode(&mut buf.as_slice()).unwrap();
+        assert_eq!(txs.len(), 1);
+    }
 
     #[test]
     #[cfg(feature = "optimism")]

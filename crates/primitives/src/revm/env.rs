@@ -6,11 +6,13 @@ use crate::{
 use reth_chainspec::{Chain, ChainSpec};
 
 use alloy_eips::{eip4788::BEACON_ROOTS_ADDRESS, eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS};
+// use revm_primitives::FluentFields;
 #[cfg(feature = "optimism")]
 use revm_primitives::OptimismFields;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use revm_primitives::ExecutionEnvironment;
 
 /// Fill block environment from Block.
 pub fn fill_block_env(
@@ -209,6 +211,7 @@ fn fill_tx_env_with_system_contract_call(
             // enveloped tx size.
             enveloped_tx: Some(Bytes::default()),
         },
+        // fluent: FluentFields::default(),
     };
 
     // ensure the block gas limit is >= the tx
@@ -338,6 +341,19 @@ where
             tx_env.chain_id = None;
             tx_env.nonce = None;
         }
+        Transaction::FluentV1(tx) => {
+            // TODO: d1r1 we need to use the ExecutionEnvironment from the transaction
+            let exec_env_u8: u8 = tx.execution_environment.clone().into();
+            let exec_env = ExecutionEnvironment::try_from(exec_env_u8).unwrap();
+
+            tx_env.gas_limit = tx.gas_limit();
+            tx_env.gas_price = U256::from(tx.gas_price());
+            tx_env.gas_priority_fee = Some(U256::from(tx.max_priority_fee_per_gas().unwrap()));
+            tx_env.transact_to = TransactTo::Blended(exec_env, tx.data.clone());
+            tx_env.value = *tx.value();
+            tx_env.chain_id = tx.chain_id();
+            tx_env.nonce = Some(tx.nonce());
+        }
     }
 }
 
@@ -373,8 +389,9 @@ pub fn fill_op_tx_env<T: AsRef<Transaction>>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use reth_chainspec::GOERLI;
+
+    use super::*;
 
     #[test]
     fn test_recover_genesis_goerli_signer() {

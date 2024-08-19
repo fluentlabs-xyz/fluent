@@ -25,6 +25,15 @@ revm-primitives = { workspace = true, features = ["serde"] }
 # fluentbase
 fluentbase-poseidon.workspace = true
 fluentbase-genesis.workspace = true
+fluentbase-core.workspace = true
+
+# fuel
+fuel-vm = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-tx = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-core = { workspace = true }
+fuel-core-types = { workspace = true, default-features = false, features = ["serde", "alloc"] }
+fuel-core-executor = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-core-storage = { workspace = true, default-features = false, features = ["alloc"] }
 
 # ethereum
 alloy-consensus = { workspace = true, features = ["serde"] }
@@ -52,7 +61,7 @@ once_cell.workspace = true
 rayon.workspace = true
 serde.workspace = true
 tempfile = { workspace = true, optional = true }
-thiserror-no-std = { workspace = true , default-features = false }
+thiserror-no-std = { workspace = true, default-features = false }
 zstd = { version = "0.13", features = ["experimental"], optional = true }
 roaring = "0.10.2"
 
@@ -69,6 +78,9 @@ nybbles = { workspace = true, features = ["arbitrary"] }
 alloy-trie = { workspace = true, features = ["arbitrary"] }
 alloy-eips = { workspace = true, features = ["arbitrary"] }
 alloy-consensus = { workspace = true, features = ["arbitrary"] }
+
+# fuel-vm
+fuel-vm = { workspace = true, default-features = false, features = ["test-helpers"] }
 
 assert_matches.workspace = true
 arbitrary = { workspace = true, features = ["derive"] }
