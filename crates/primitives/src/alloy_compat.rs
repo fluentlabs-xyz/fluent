@@ -319,6 +319,7 @@ mod tests {
     use assert_matches::assert_matches;
     use fluentbase_core::DEVNET_CHAIN_ID;
     use fuel_core_types::fuel_types::canonical::Serialize;
+    use fuel_tx::UniqueIdentifier;
     use fuel_vm::fuel_types::{AssetId, ChainId};
     use reth_chainspec::DEV;
     use revm_primitives::{address, Address, Bytes};
@@ -372,6 +373,8 @@ mod tests {
             .clone();
         let tx1: fuel_tx::Transaction = fuel_tx::Transaction::Script(tx1);
         let tx_raw_data = tx1.to_bytes();
+        let tx1_id = tx1.id(&tb.get_chain_id());
+        println!("tx1_id {}", hex::encode(&tx1_id));
         let tx_raw_data_hex = hex::encode(&tx_raw_data);
         let input = r#"{
             "chainId": "1337",
@@ -407,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn encode_decode_transaction_signed_fluent() {
+    fn encode_decode_transaction_signed_script_fluent() {
         let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
         tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
         let tx1 = tb
@@ -417,6 +420,41 @@ mod tests {
             .transaction()
             .clone();
         let tx1: fuel_tx::Transaction = fuel_tx::Transaction::Script(tx1);
+        let mut tx_raw_data_vec = vec![];
+        tx_raw_data_vec.extend_from_slice(tx1.to_bytes().as_slice());
+        let tx_raw_data_bytes = Bytes::from(tx_raw_data_vec);
+        println!("tx_raw hex: {}", hex::encode(&tx_raw_data_bytes));
+
+        let fuel_ee = ExecutionEnvironment::new(0, tx_raw_data_bytes.clone()).unwrap();
+
+        let transaction_signed = TransactionSigned {
+            hash: Default::default(),
+            signature: Default::default(),
+            transaction: Transaction::FluentV1(TxFluentV1::new(fuel_ee, tx_raw_data_bytes)),
+        };
+
+        let local_transactions = vec![transaction_signed];
+
+        let mut buf = vec![];
+
+        alloy_rlp::encode_list(&local_transactions, &mut buf);
+
+        let txs: Vec<TransactionSigned> =
+            alloy_rlp::Decodable::decode(&mut buf.as_slice()).unwrap();
+        assert_eq!(txs.len(), 1);
+    }
+
+    #[test]
+    fn encode_decode_transaction_signed_create_fluent() {
+        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
+        tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
+        let tx1 = tb
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+        let tx1: fuel_tx::Transaction = tx1.into();
         let mut tx_raw_data_vec = vec![];
         tx_raw_data_vec.extend_from_slice(tx1.to_bytes().as_slice());
         let tx_raw_data_bytes = Bytes::from(tx_raw_data_vec);

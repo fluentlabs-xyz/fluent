@@ -2,16 +2,16 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use core::mem;
-
 use alloy_rlp::{
-    Decodable, Encodable, Error as RlpError, Header, EMPTY_LIST_CODE, EMPTY_STRING_CODE,
+    Decodable, Encodable, Error as RlpError, Error, Header, EMPTY_LIST_CODE, EMPTY_STRING_CODE,
 };
 use bytes::Buf;
+use core::mem;
 use derive_more::{AsRef, Deref};
 use once_cell::sync::Lazy;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use std::hash::Hash;
 
 pub use access_list::{AccessList, AccessListItem};
 pub use eip1559::TxEip1559;
@@ -84,6 +84,8 @@ pub const MIN_LENGTH_EIP2930_TX_ENCODED: usize = 14;
 pub const MIN_LENGTH_EIP1559_TX_ENCODED: usize = 15;
 /// Minimum length of a rlp-encoded eip4844 transaction.
 pub const MIN_LENGTH_EIP4844_TX_ENCODED: usize = 37;
+/// Minimum length of a rlp-encoded fluent_v1 transaction.
+pub const MIN_LENGTH_FLUENT_V1_TX_ENCODED: usize = 5;
 /// Minimum length of a rlp-encoded deposit transaction.
 #[cfg(feature = "optimism")]
 pub const MIN_LENGTH_DEPOSIT_TX_ENCODED: usize = 65;
@@ -814,6 +816,10 @@ impl TransactionSignedNoHash {
     /// Calculates the transaction hash. If used more than once, it's better to convert it to
     /// [`TransactionSigned`] first.
     pub fn hash(&self) -> B256 {
+        match &self.transaction {
+            Transaction::FluentV1(fluent_tx) => return fluent_tx.hash().unwrap_or_default(),
+            _ => {}
+        }
         // pre-allocate buffer for the transaction
         let mut buf = Vec::with_capacity(128 + self.transaction.input().len());
         self.transaction.encode_with_signature(&self.signature, &mut buf, false);
@@ -829,6 +835,12 @@ impl TransactionSignedNoHash {
         #[cfg(feature = "optimism")]
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
             return Some(from)
+        }
+        match &self.transaction {
+            Transaction::FluentV1(fluent_tx) => {
+                return fluent_tx.recover_owner().map(|a| Address::from_word(a.0.into()))
+            }
+            _ => {}
         }
 
         let signature_hash = self.signature_hash();
@@ -866,6 +878,12 @@ impl TransactionSignedNoHash {
             // NOTE: this is very hacky and only relevant for op-mainnet pre bedrock
             if self.is_legacy() && self.signature == Signature::optimism_deposit_tx_signature() {
                 return Some(Address::ZERO)
+            }
+        }
+        match &self.transaction {
+            _ => {}
+            Transaction::FluentV1(fluent_tx) => {
+                return fluent_tx.recover_owner().map(|a| Address::from_word(a.0.into()))
             }
         }
 
@@ -1083,6 +1101,12 @@ impl TransactionSigned {
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
             return Some(from)
         }
+        match &self.transaction {
+            Transaction::FluentV1(tx) => {
+                return tx.recover_owner().map(|a| Address::from_word(a.0.into()))
+            }
+            _ => {}
+        }
         let signature_hash = self.signature_hash();
         self.signature.recover_signer(signature_hash)
     }
@@ -1098,6 +1122,12 @@ impl TransactionSigned {
         #[cfg(feature = "optimism")]
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
             return Some(from)
+        }
+        match &self.transaction {
+            _ => {}
+            Transaction::FluentV1(fluent_tx) => {
+                return fluent_tx.recover_owner().map(|a| Address::from_word(a.0.into()))
+            }
         }
         let signature_hash = self.signature_hash();
         self.signature.recover_signer_unchecked(signature_hash)
@@ -1236,6 +1266,10 @@ impl TransactionSigned {
     /// Calculate transaction hash, eip2728 transaction does not contain rlp header and start with
     /// tx type.
     pub fn recalculate_hash(&self) -> B256 {
+        match &self.transaction {
+            Transaction::FluentV1(tx) => return tx.hash().unwrap_or_default(),
+            _ => {}
+        }
         let mut buf = Vec::new();
         self.encode_inner(&mut buf, false);
         keccak256(&buf)
@@ -1386,7 +1420,18 @@ impl TransactionSigned {
             return Err(RlpError::UnexpectedLength)
         }
 
-        let hash = keccak256(&original_encoding_without_header[..tx_length]);
+        let hash = match tx_type {
+            TxType::FluentV1 => {
+                if let Transaction::FluentV1(tx) = &transaction {
+                    tx.hash().unwrap_or_default()
+                } else {
+                    return Err(Error::Custom(
+                        "when tx_type is fluent decoded transaction must be always fluent too",
+                    ))
+                }
+            }
+            _ => keccak256(&original_encoding_without_header[..tx_length]),
+        };
         let signed = Self { transaction, hash, signature };
         Ok(signed)
     }
@@ -1723,13 +1768,14 @@ mod tests {
     use crate::{
         hex, sign_message,
         transaction::{
-            from_compact_zstd_unaware, signature::Signature, to_compact_ztd_unaware, TxEip1559,
-            TxKind, TxLegacy, MIN_LENGTH_EIP1559_TX_ENCODED, MIN_LENGTH_EIP2930_TX_ENCODED,
-            MIN_LENGTH_EIP4844_TX_ENCODED, MIN_LENGTH_LEGACY_TX_ENCODED,
-            PARALLEL_SENDER_RECOVERY_THRESHOLD,
+            fluent::fuel::FuelEnvironment, from_compact_zstd_unaware, signature::Signature,
+            to_compact_ztd_unaware, ExecutionEnvironment, TxEip1559, TxKind, TxLegacy,
+            MIN_LENGTH_EIP1559_TX_ENCODED, MIN_LENGTH_EIP2930_TX_ENCODED,
+            MIN_LENGTH_EIP4844_TX_ENCODED, MIN_LENGTH_FLUENT_V1_TX_ENCODED,
+            MIN_LENGTH_LEGACY_TX_ENCODED, PARALLEL_SENDER_RECOVERY_THRESHOLD,
         },
         Address, Bytes, Transaction, TransactionSigned, TransactionSignedEcRecovered,
-        TransactionSignedNoHash, TxEip2930, TxEip4844, B256, U256,
+        TransactionSignedNoHash, TxEip2930, TxEip4844, TxFluentV1, B256, U256,
     };
 
     #[test]
@@ -2138,6 +2184,27 @@ mod tests {
             encoded[..]
         );
         assert_eq!(MIN_LENGTH_EIP4844_TX_ENCODED, encoded.len());
+
+        TransactionSigned::decode(&mut &encoded[..]).unwrap();
+    }
+
+    #[ignore]
+    #[test]
+    fn min_length_encoded_fluent_v1_transaction() {
+        let transaction = TxFluentV1::new(
+            ExecutionEnvironment::Fuel(FuelEnvironment::default()),
+            Bytes::default(),
+        );
+        let signature = Signature::default();
+
+        let signed_tx = TransactionSigned::from_transaction_and_signature(
+            Transaction::FluentV1(transaction),
+            signature,
+        );
+
+        let encoded = alloy_rlp::encode(signed_tx);
+        println!("encoded {}", hex::encode(&encoded));
+        assert_eq!(MIN_LENGTH_FLUENT_V1_TX_ENCODED, encoded.len());
 
         TransactionSigned::decode(&mut &encoded[..]).unwrap();
     }

@@ -1,16 +1,15 @@
-use crate::{hex, Bytes, ChainId, Signature, TxKind, TxType, B256, U256};
+use crate::{Bytes, ChainId, TxKind, TxType, B256, U256};
 use alloy_eips::eip2930::{AccessList, AccessListItem};
 use alloy_primitives::Address;
-use alloy_rlp::{encode, length_of_length, Decodable, Encodable, Error as RlpError, Header};
+use alloy_rlp::{Decodable, Encodable, Error as RlpError};
 use fluentbase_core::fvm::helpers::fuel_testnet_consensus_params_from;
-use fuel_core_types::fuel_types::canonical::Deserialize;
+use fuel_core_types::{fuel_types, fuel_types::canonical::Deserialize};
 use fuel_tx::{
     field::{Inputs, Witnesses},
     Chargeable, ConsensusParameters, Transaction, UniqueIdentifier, Witness,
 };
 use proptest::prelude::BoxedStrategy;
 use reth_codecs::Compact;
-use reth_primitives_traits::constants::MIN_PROTOCOL_BASE_FEE;
 
 pub struct FuelTransaction(Transaction);
 impl FuelTransaction {
@@ -20,13 +19,16 @@ impl FuelTransaction {
     pub fn original_tx(self) -> Transaction {
         self.0
     }
+    pub fn id(&self, chain_id: &fuel_types::ChainId) -> fuel_types::Bytes32 {
+        self.0.id(chain_id)
+    }
     pub fn inputs(&self) -> Result<&Vec<fuel_tx::Input>, RlpError> {
         match &self.0 {
             Transaction::Script(t) => Ok(t.inputs()),
             Transaction::Create(t) => Ok(t.inputs()),
             Transaction::Upload(t) => Ok(t.inputs()),
             Transaction::Upgrade(t) => Ok(t.inputs()),
-            Transaction::Mint(t) => Err(alloy_rlp::Error::Custom("mint tx unsupported")),
+            Transaction::Mint(_) => Err(alloy_rlp::Error::Custom("mint tx unsupported")),
         }
     }
     pub fn first_input(&self) -> Result<fuel_tx::Input, RlpError> {
@@ -41,7 +43,7 @@ impl FuelTransaction {
             Transaction::Mint(_) => Err(RlpError::Custom("mint tx unsupported")),
         }
     }
-    pub fn first_owner(&self) -> Result<&fuel_core_types::fuel_types::Address, RlpError> {
+    pub fn first_owner(&self) -> Result<&fuel_types::Address, RlpError> {
         let Some(input) = self.inputs()?.first() else {
             return Err(RlpError::Custom("fuel: only txs with exactly 1 input are supported"));
         };
@@ -52,11 +54,11 @@ impl FuelTransaction {
     }
     pub fn recover_first_owner(
         &self,
-        cp: &ConsensusParameters,
-    ) -> Result<fuel_core_types::fuel_types::Address, RlpError> {
+        cid: &fuel_types::ChainId,
+    ) -> Result<fuel_types::Address, RlpError> {
         let owner = self
             .first_witness()?
-            .recover_witness(&self.0.id(&cp.chain_id()), 0)
+            .recover_witness(&self.0.id(cid), 0)
             .map_err(|v| RlpError::Custom("failed to recover first witness"))?;
         Ok(owner)
     }
@@ -112,7 +114,7 @@ impl FuelEnvironment {
         let consensus_params = Self::generate_consensus_params(fluentbase_core::DEVNET_CHAIN_ID);
         let mut alt = Vec::<AccessListItem>::new();
         let owner = fuel_tx.first_owner()?;
-        let recovered_first_owner = fuel_tx.recover_first_owner(&consensus_params)?;
+        let recovered_first_owner = fuel_tx.recover_first_owner(&consensus_params.chain_id())?;
         if owner != &recovered_first_owner {
             return Err(RlpError::Custom("provided owner doesn't match recovered"))
         }
@@ -144,7 +146,7 @@ impl FuelEnvironment {
             None,
             None,
             None,
-            fuel_core_types::fuel_types::ChainId::new(chain_id),
+            fuel_types::ChainId::new(chain_id),
             None,
         )
     }
@@ -153,7 +155,7 @@ impl FuelEnvironment {
             None,
             None,
             None,
-            fuel_core_types::fuel_types::ChainId::new(self.chain_id.unwrap_or_default()),
+            fuel_types::ChainId::new(self.chain_id.unwrap_or_default()),
             None,
         )
     }
@@ -188,10 +190,10 @@ impl FuelEnvironment {
         false
     }
     pub const fn max_fee_per_gas(&self) -> u128 {
-        MIN_PROTOCOL_BASE_FEE as u128
+        1_000_000_000_u128
     }
     pub const fn max_priority_fee_per_gas(&self) -> Option<u128> {
-        None
+        Some(1)
     }
     pub const fn max_fee_per_blob_gas(&self) -> Option<u128> {
         None

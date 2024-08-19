@@ -2,6 +2,7 @@ use core::{fmt::Debug, mem};
 use std::io::BufRead;
 
 use alloy_eips::eip2930::AccessList;
+use alloy_primitives::Address;
 use alloy_rlp::{length_of_length, Decodable, Encodable, Error as RlpError, Header};
 use bytes::{Buf, BufMut};
 use fuel_core_types::fuel_types::canonical::Deserialize;
@@ -340,6 +341,27 @@ impl TxFluentV1 {
         B256::ZERO
     }
 
+    pub(crate) fn recover_owner(&self) -> Option<fuel_core_types::fuel_types::Address> {
+        match &self.execution_environment {
+            ExecutionEnvironment::Fuel(ee) => {
+                let Ok(transaction) = ee.original_transaction_wrapper() else { return None };
+                let Some(chain_id) = ee.chain_id() else { return None };
+                transaction.recover_first_owner(&chain_id.into()).map_or_else(|_| None, |a| Some(a))
+            }
+            ExecutionEnvironment::Solana(_) => None,
+        }
+    }
+
+    pub(crate) fn hash(&self) -> Option<B256> {
+        match &self.execution_environment {
+            ExecutionEnvironment::Fuel(ee) => {
+                let Ok(transaction) = ee.original_transaction_wrapper() else { return None };
+                Some(B256::new(transaction.id(&ee.chain_id()?.into()).into()))
+            }
+            ExecutionEnvironment::Solana(_) => None,
+        }
+    }
+
     pub fn set_chain_id(&mut self, chain_id: Option<ChainId>) {
         self.execution_environment.set_chain_id(chain_id)
     }
@@ -400,7 +422,7 @@ impl TxFluentV1 {
         self.execution_environment.is_dynamic_fee()
     }
     pub fn gas_price(&self) -> u128 {
-        todo!()
+        1_000_000_000_u128
     }
 
     pub const fn access_list(&self) -> Option<&AccessList> {

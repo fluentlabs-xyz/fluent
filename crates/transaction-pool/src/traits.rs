@@ -1136,7 +1136,7 @@ impl TryFromRecoveredTransaction for EthPooledTransaction {
     ) -> Result<Self, Self::Error> {
         // ensure we can handle the transaction type and its format
         match tx.tx_type() as u8 {
-            0..=EIP1559_TX_TYPE_ID => {
+            0..=EIP1559_TX_TYPE_ID | FLUENT_TX_V1_TYPE_ID => {
                 // supported
             }
             EIP4844_TX_TYPE_ID => {

@@ -161,17 +161,9 @@ impl PooledTransactionsElement {
     pub fn recover_signer(&self) -> Option<Address> {
         match &self {
             PooledTransactionsElement::FluentV1 { transaction, .. } => {
-                return match &transaction.execution_environment {
-                    ExecutionEnvironment::Fuel(fe) => {
-                        let Ok(tx) = fe.original_transaction_wrapper() else { return None };
-                        let Ok(owner) = tx.recover_first_owner(&fe.consensus_params()) else {
-                            return None
-                        };
-                        let address = Address::from_slice(&owner[12..]);
-                        Some(address)
-                    }
-                    ExecutionEnvironment::Solana(_) => None,
-                }
+                return Some(Address::from_word(
+                    transaction.recover_owner().unwrap_or_default().0.into(),
+                ));
             }
             _ => {}
         }
@@ -183,15 +175,6 @@ impl PooledTransactionsElement {
     /// Returns `Err(Self)` if the transaction's signature is invalid, see also
     /// [`Self::recover_signer`].
     pub fn try_into_ecrecovered(self) -> Result<PooledTransactionsElementEcRecovered, Self> {
-        match &self {
-            PooledTransactionsElement::FluentV1 { .. } => {
-                return Ok(PooledTransactionsElementEcRecovered {
-                    transaction: self,
-                    signer: Address::ZERO,
-                })
-            }
-            _ => {}
-        }
         match self.recover_signer() {
             None => Err(self),
             Some(signer) => Ok(PooledTransactionsElementEcRecovered { transaction: self, signer }),
@@ -791,11 +774,14 @@ mod tests {
     use alloy_primitives::{address, hex};
     use alloy_rlp::length_of_length;
     use assert_matches::assert_matches;
+    use core::str::FromStr;
     use fuel_core_types::fuel_types::{canonical::Serialize, AssetId};
     use fuel_tx::{
         field::{Inputs, Witnesses},
-        UniqueIdentifier,
+        Input, UniqueIdentifier,
     };
+    use fuel_vm::fuel_crypto::SecretKey;
+    use test_fuzz::FromRef;
 
     #[test]
     fn invalid_legacy_pooled_decoding_input_too_short() {
@@ -855,6 +841,9 @@ mod tests {
         let tx_type = 0x52u8; // fluent_v1
         let exec_env = 0x00u8;
         let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
+        let secret_key_str = "0x99e87b0e9158531eeeb503ff15266e2b23c2a2507b138c9d1b1f2ab458df2d61";
+        let secret_key_vec = hex::decode(secret_key_str).unwrap();
+        let secret_key = SecretKey::try_from(secret_key_vec.as_slice());
         tb.with_chain_id(fluentbase_core::DEVNET_CHAIN_ID.into());
         let fuel_tx = tb
             .coin_input(AssetId::default(), 100)
@@ -862,6 +851,9 @@ mod tests {
             .build()
             .transaction()
             .clone();
+        let secret_key = secret_key.unwrap();
+        let pk = secret_key.public_key();
+        let secret_address = Input::owner(&pk);
         let tx: fuel_tx::Transaction = fuel_tx.clone().into();
         println!("tx hex: {}", hex::encode(tx.to_bytes()));
         assert_eq!(fuel_tx.inputs().len(), 1);
@@ -870,6 +862,11 @@ mod tests {
         let wt = fuel_tx.witnesses().first().unwrap();
         let address = wt.recover_witness(&fuel_tx.id(&tb.get_chain_id()), 0).unwrap();
         assert_eq!(&address, first_input.input_owner().unwrap());
+        println!(
+            "witness address32 (original) {} address20 (cut) {}",
+            &address,
+            Address::from_slice(&address.0[12..])
+        );
         let fuel_tx: fuel_tx::Transaction = fuel_tx.into();
         let fuel_tx_raw = fuel_tx.to_bytes();
         // let fuel_tx_hex = hex::encode(&fuel_tx_raw);
