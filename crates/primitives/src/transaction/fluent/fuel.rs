@@ -3,6 +3,7 @@ use alloy_eips::eip2930::{AccessList, AccessListItem};
 use alloy_primitives::Address;
 use alloy_rlp::{Decodable, Encodable, Error as RlpError};
 use fluentbase_core::fvm::helpers::fuel_testnet_consensus_params_from;
+use fluentbase_types::DEVNET_CHAIN_ID;
 use fuel_core_types::{fuel_types, fuel_types::canonical::Deserialize};
 use fuel_tx::{
     field::{Inputs, Witnesses},
@@ -111,7 +112,7 @@ impl FuelEnvironment {
     pub fn new(data: Bytes) -> Result<Self, RlpError> {
         let tx: Transaction = Self::fuel_tx_from_bytes(&data)?;
         let fuel_tx = FuelTransaction(tx);
-        let consensus_params = Self::generate_consensus_params(fluentbase_core::DEVNET_CHAIN_ID);
+        let consensus_params = Self::generate_consensus_params(DEVNET_CHAIN_ID);
         let mut alt = Vec::<AccessListItem>::new();
         let owner = fuel_tx.first_owner()?;
         let recovered_first_owner = fuel_tx.recover_first_owner(&consensus_params.chain_id())?;

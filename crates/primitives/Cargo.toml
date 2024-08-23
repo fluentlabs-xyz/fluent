@@ -26,6 +26,7 @@ revm-primitives = { workspace = true, features = ["serde"] }
 fluentbase-poseidon.workspace = true
 fluentbase-genesis.workspace = true
 fluentbase-core.workspace = true
+fluentbase-types.workspace = true
 
 # fuel
 fuel-vm = { workspace = true, default-features = false, features = ["alloc"] }

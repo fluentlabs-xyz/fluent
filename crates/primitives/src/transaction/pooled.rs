@@ -775,6 +775,8 @@ mod tests {
     use alloy_rlp::length_of_length;
     use assert_matches::assert_matches;
     use core::str::FromStr;
+    use fluentbase_core::fvm::helpers::FUEL_TESTNET_BASE_ASSET_ID;
+    use fluentbase_types::DEVNET_CHAIN_ID;
     use fuel_core_types::fuel_types::{canonical::Serialize, AssetId};
     use fuel_tx::{
         field::{Inputs, Witnesses},
@@ -844,10 +846,8 @@ mod tests {
         let secret_key_str = "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c";
         let secret_key_vec = hex::decode(secret_key_str).unwrap();
         let secret_key = SecretKey::try_from(secret_key_vec.as_slice());
-        tb.with_chain_id(fluentbase_core::DEVNET_CHAIN_ID.into());
-        let asset_id =
-            AssetId::from_str("0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07")
-                .expect("valid asset id");
+        tb.with_chain_id(DEVNET_CHAIN_ID.into());
+        let asset_id = AssetId::from_str(FUEL_TESTNET_BASE_ASSET_ID).expect("valid asset id");
         let fuel_tx = tb
             .coin_input(AssetId::default(), 100)
             .change_output(AssetId::default())
@@ -857,6 +857,7 @@ mod tests {
         let secret_key = secret_key.unwrap();
         let pk = secret_key.public_key();
         let secret_address = Input::owner(&pk);
+        println!("secret_address: {}", secret_address);
         let tx: fuel_tx::Transaction = fuel_tx.clone().into();
         println!("tx hex: {}", hex::encode(tx.to_bytes()));
         assert_eq!(fuel_tx.inputs().len(), 1);
@@ -872,7 +873,6 @@ mod tests {
         );
         let fuel_tx: fuel_tx::Transaction = fuel_tx.into();
         let fuel_tx_raw = fuel_tx.to_bytes();
-        // let fuel_tx_hex = hex::encode(&fuel_tx_raw);
 
         let mut data = vec![];
         data.push(tx_type);

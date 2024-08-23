@@ -317,10 +317,24 @@ mod tests {
     use alloy_primitives::{B256, U256, U64};
     use alloy_rpc_types::Transaction as AlloyTransaction;
     use assert_matches::assert_matches;
-    use fluentbase_core::DEVNET_CHAIN_ID;
-    use fuel_core_types::fuel_types::canonical::Serialize;
-    use fuel_tx::UniqueIdentifier;
-    use fuel_vm::fuel_types::{AssetId, ChainId};
+    use core::str::FromStr;
+    use fluentbase_core::fvm::helpers::FUEL_TESTNET_BASE_ASSET_ID;
+    use fluentbase_types::DEVNET_CHAIN_ID;
+    use fuel_core_types::{
+        fuel_asm::{op, RegId},
+        fuel_crypto::SecretKey,
+        fuel_types::canonical::Serialize,
+    };
+    use fuel_tx::{
+        Bytes32, ConsensusParameters, Input, Output, TransactionBuilder, TxId, TxPointer,
+        UniqueIdentifier, UtxoId,
+    };
+    use fuel_vm::{
+        fuel_crypto::coins_bip32::ecdsa::signature::rand_core::SeedableRng,
+        fuel_types::{AssetId, BlockHeight, ChainId},
+        storage::MemoryStorage,
+    };
+    use rand::rngs::StdRng;
     use reth_chainspec::DEV;
     use revm_primitives::{address, Address, Bytes};
 
@@ -412,7 +426,8 @@ mod tests {
     #[test]
     fn encode_decode_transaction_signed_script_fluent() {
         let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
-        tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
+        let chain_id = DEVNET_CHAIN_ID;
+        tb.with_chain_id(ChainId::new(chain_id));
         let tx1 = tb
             .coin_input(AssetId::default(), 100)
             .change_output(AssetId::default())
@@ -445,16 +460,50 @@ mod tests {
     }
 
     #[test]
-    fn encode_decode_transaction_signed_create_fluent() {
-        let mut tb = fuel_vm::util::test_helpers::TestBuilder::new(1234u64);
-        tb.with_chain_id(ChainId::new(DEVNET_CHAIN_ID));
-        let tx1 = tb
-            .coin_input(AssetId::default(), 100)
-            .change_output(AssetId::default())
-            .build()
-            .transaction()
-            .clone();
-        let tx1: fuel_tx::Transaction = tx1.into();
+    fn encode_decode_transaction_signed_script_simple_transfer_fluent() {
+        let bytecode = core::iter::once(op::ret(RegId::ZERO)).collect();
+        let mut test_builder = fuel_vm::util::test_helpers::TestBuilder {
+            rng: StdRng::seed_from_u64(1234),
+            gas_price: 0,
+            max_fee_limit: 0,
+            script_gas_limit: 100,
+            builder: TransactionBuilder::script(bytecode, vec![]),
+            storage: MemoryStorage::default(),
+            block_height: Default::default(),
+            consensus_params: ConsensusParameters::standard(),
+        };
+
+        let base_asset_id = AssetId::from_str(FUEL_TESTNET_BASE_ASSET_ID).unwrap();
+
+        let secret1 = "0x99e87b0e9158531eeeb503ff15266e2b23c2a2507b138c9d1b1f2ab458df2d61";
+        let secret1_vec = hex::decode(secret1).unwrap();
+        let secret1_secret_key = SecretKey::try_from(secret1_vec.as_slice()).unwrap();
+        let secret1_address = Input::owner(&secret1_secret_key.public_key());
+        println!("secret1_address: {}", secret1_address);
+
+        let secret2 = "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c";
+        let secret2_vec = hex::decode(secret2).unwrap();
+        let secret2_secret_key = SecretKey::try_from(secret2_vec.as_slice()).unwrap();
+        let secret2_address = Input::owner(&secret2_secret_key.public_key());
+        println!("secret2_address: {}", secret2_address);
+
+        let chain_id = DEVNET_CHAIN_ID;
+        test_builder.with_chain_id(ChainId::new(chain_id));
+        let tx_id: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000001000")
+                .unwrap();
+        let utxo_id = UtxoId::new(tx_id, 0);
+        test_builder.builder.add_unsigned_coin_input(
+            secret1_secret_key.clone(),
+            utxo_id,
+            0xffff,
+            base_asset_id,
+            TxPointer::new(BlockHeight::new(0), 0),
+        );
+        test_builder.builder.add_output(Output::change(secret1_address.clone(), 0, base_asset_id));
+        test_builder.builder.add_output(Output::coin(secret2_address.clone(), 1, base_asset_id));
+        let tx1 = test_builder.build().transaction().clone();
+        let tx1: fuel_tx::Transaction = fuel_tx::Transaction::Script(tx1);
         let mut tx_raw_data_vec = vec![];
         tx_raw_data_vec.extend_from_slice(tx1.to_bytes().as_slice());
         let tx_raw_data_bytes = Bytes::from(tx_raw_data_vec);
