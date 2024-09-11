@@ -781,7 +781,6 @@ mod tests {
         Input, UniqueIdentifier,
     };
     use fuel_vm::fuel_crypto::SecretKey;
-    use test_fuzz::FromRef;
 
     #[test]
     fn invalid_legacy_pooled_decoding_input_too_short() {
@@ -844,7 +843,7 @@ mod tests {
         let secret_key_str = "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c";
         let secret_key_vec = hex::decode(secret_key_str).unwrap();
         let secret_key = SecretKey::try_from(secret_key_vec.as_slice());
-        tb.with_chain_id(fluentbase_core::DEVNET_CHAIN_ID.into());
+        tb.with_chain_id(20993.into());
         let asset_id =
             AssetId::from_str("0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07")
                 .expect("valid asset id");

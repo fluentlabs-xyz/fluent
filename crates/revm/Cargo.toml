@@ -24,9 +24,6 @@ reth-trie = { workspace = true, optional = true }
 
 # fluentbase
 fluentbase-sdk.workspace = true
-fluentbase-runtime.workspace = true
-fluentbase-core.workspace = true
-fluentbase-types.workspace = true
 
 # revm
 revm.workspace = true

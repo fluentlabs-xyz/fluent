@@ -111,7 +111,7 @@ impl FuelEnvironment {
     pub fn new(data: Bytes) -> Result<Self, RlpError> {
         let tx: Transaction = Self::fuel_tx_from_bytes(&data)?;
         let fuel_tx = FuelTransaction(tx);
-        let consensus_params = Self::generate_consensus_params(fluentbase_core::DEVNET_CHAIN_ID);
+        let consensus_params = Self::generate_consensus_params(20993);
         let mut alt = Vec::<AccessListItem>::new();
         let owner = fuel_tx.first_owner()?;
         let recovered_first_owner = fuel_tx.recover_first_owner(&consensus_params.chain_id())?;

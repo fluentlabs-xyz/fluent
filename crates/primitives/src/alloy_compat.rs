@@ -311,18 +311,14 @@ impl TryFrom<alloy_rpc_types::Signature> for Signature {
 mod tests {
     use super::*;
     use crate::{
-        transaction::fluent::fuel::FuelEnvironment, PooledTransactionsElement, TxFluentV1,
-        FLUENT_TX_V1_TYPE_ID,
+        TxFluentV1,
     };
-    use alloy_primitives::{B256, U256, U64};
     use alloy_rpc_types::Transaction as AlloyTransaction;
     use assert_matches::assert_matches;
-    use fluentbase_core::DEVNET_CHAIN_ID;
     use fuel_core_types::fuel_types::canonical::Serialize;
     use fuel_tx::UniqueIdentifier;
     use fuel_vm::fuel_types::{AssetId, ChainId};
-    use reth_chainspec::DEV;
-    use revm_primitives::{address, Address, Bytes};
+    use revm_primitives::{Bytes};
 
     #[test]
     fn fluent_v1_tx_conversion() {

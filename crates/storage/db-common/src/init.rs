@@ -28,7 +28,7 @@ use std::{
     sync::Arc,
 };
 use tracing::{debug, error, info, trace};
-use fluentbase_genesis::devnet::POSEIDON_HASH_KEY;
+use fluentbase_genesis::devnet::GENESIS_POSEIDON_HASH_SLOT;
 use fluentbase_poseidon::poseidon_hash;
 
 /// Default soft limit for number of bytes to read from state dump file, before inserting into
@@ -159,7 +159,7 @@ pub fn insert_state<'a, 'b, DB: Database>(
             contracts.insert(hash, bytecode.clone());
             let rwasm_hash = account.storage
                 .as_ref()
-                .and_then(|s| s.get(&POSEIDON_HASH_KEY))
+                .and_then(|s| s.get(&GENESIS_POSEIDON_HASH_SLOT))
                 .cloned()
                 .unwrap_or_else(|| {
                     poseidon_hash(bytecode.original_bytes().as_ref()).into()

@@ -23,8 +23,6 @@ revm.workspace = true
 revm-primitives = { workspace = true, features = ["serde"] }
 
 # fluentbase
-fluentbase-poseidon.workspace = true
-fluentbase-genesis.workspace = true
 fluentbase-core.workspace = true
 
 # fuel

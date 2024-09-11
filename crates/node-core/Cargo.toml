@@ -43,10 +43,6 @@ reth-stages-types.workspace = true
 # ethereum
 alloy-rpc-types-engine.workspace = true
 
-# fluent
-fluentbase-poseidon.workspace = true
-fluentbase-genesis.workspace = true
-
 # async
 tokio.workspace = true
 tokio-util.workspace = true

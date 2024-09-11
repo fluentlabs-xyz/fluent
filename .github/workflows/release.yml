@@ -50,8 +50,8 @@ jobs:
         build:
           - command: build
             binary: reth
-          - command: op-build
-            binary: op-reth
+#          - command: op-build
+#            binary: op-reth
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
