@@ -3546,6 +3546,7 @@ dependencies = [
  "fluentbase-zktrie",
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
  "hashbrown 0.14.5",
+ "hex",
  "hex-literal",
  "k256",
  "keccak-hash",
@@ -10171,7 +10172,7 @@ dependencies = [
 [[package]]
 name = "rwasm"
 version = "0.30.0"
-source = "git+https://github.com/fluentlabs-xyz/rwasm?branch=devel#ae03af35a11e52d7050965418e9f594cbf5bf318"
+source = "git+https://github.com/fluentlabs-xyz/rwasm?branch=devel#a6bf66574d29462f934c12b449622c639eb10e8b"
 dependencies = [
  "byteorder",
  "downcast-rs",
