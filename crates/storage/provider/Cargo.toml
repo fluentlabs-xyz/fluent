@@ -35,10 +35,6 @@ reth-evm.workspace = true
 alloy-rpc-types-engine.workspace = true
 revm.workspace = true
 
-# fluentbase
-fluentbase-types.workspace = true
-fluentbase-runtime.workspace = true
-
 # async
 tokio = { workspace = true, features = ["sync", "macros", "rt-multi-thread"] }
 tokio-stream = { workspace = true, features = ["sync"] }

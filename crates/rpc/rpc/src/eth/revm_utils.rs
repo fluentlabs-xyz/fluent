@@ -1,7 +1,6 @@
 //! utilities for working with revm
 
 use crate::eth::error::{EthApiError, EthResult, RpcInvalidTransactionError};
-use alloy_primitives::Bytes;
 #[cfg(feature = "optimism")]
 use reth_primitives::revm::env::fill_op_tx_env;
 #[cfg(not(feature = "optimism"))]
@@ -18,14 +17,12 @@ use reth_rpc_types::{
 use revm::primitives::OptimismFields;
 use revm::{
     db::CacheDB,
-    precompile::{PrecompileSpecId, Precompiles},
     primitives::{
         db::DatabaseRef, BlockEnv, Bytecode, CfgEnvWithHandlerCfg, EnvWithHandlerCfg, SpecId,
         TransactTo, TxEnv,
     },
     Database,
 };
-use revm_primitives::ExecutionEnvironment;
 use std::{cmp::min, iter};
 use tracing::trace;
 

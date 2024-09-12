@@ -310,33 +310,14 @@ impl TryFrom<alloy_rpc_types::Signature> for Signature {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        transaction::fluent::fuel::FuelEnvironment, PooledTransactionsElement, TxFluentV1,
-        FLUENT_TX_V1_TYPE_ID,
-    };
-    use alloy_primitives::{B256, U256, U64};
+    use crate::TxFluentV1;
     use alloy_rpc_types::Transaction as AlloyTransaction;
     use assert_matches::assert_matches;
-    use core::str::FromStr;
-    use fluentbase_core::fvm::helpers::FUEL_TESTNET_BASE_ASSET_ID;
-    use fluentbase_types::DEVNET_CHAIN_ID;
-    use fuel_core_types::{
-        fuel_asm::{op, RegId},
-        fuel_crypto::SecretKey,
-        fuel_types::canonical::Serialize,
-    };
-    use fuel_tx::{
-        Bytes32, ConsensusParameters, Input, Output, TransactionBuilder, TxId, TxPointer,
-        UniqueIdentifier, UtxoId,
-    };
-    use fuel_vm::{
-        fuel_crypto::coins_bip32::ecdsa::signature::rand_core::SeedableRng,
-        fuel_types::{AssetId, BlockHeight, ChainId},
-        storage::MemoryStorage,
-    };
-    use rand::rngs::StdRng;
-    use reth_chainspec::DEV;
-    use revm_primitives::{address, Address, Bytes};
+
+    use fuel_core_types::fuel_types::canonical::Serialize;
+    use fuel_tx::UniqueIdentifier;
+    use fuel_vm::fuel_types::{AssetId, ChainId};
+    use revm_primitives::Bytes;
 
     #[test]
     fn fluent_v1_tx_conversion() {

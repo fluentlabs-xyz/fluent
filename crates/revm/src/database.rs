@@ -7,7 +7,7 @@ use revm::{
     Database,
 };
 use std::ops::{Deref, DerefMut};
-use fluentbase_types::POSEIDON_EMPTY;
+use fluentbase_sdk::POSEIDON_EMPTY;
 
 /// A helper trait responsible for providing that necessary state for the EVM execution.
 ///

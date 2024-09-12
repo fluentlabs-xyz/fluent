@@ -1,7 +1,7 @@
 use alloy_consensus::constants::KECCAK_EMPTY;
 use alloy_genesis::GenesisAccount;
 use alloy_primitives::{keccak256, B256, U256};
-use fluentbase_genesis::devnet::GENESIS_POSEIDON_HASH_SLOT;
+use fluentbase_genesis::devnet::GENESIS_KECCAK_HASH_SLOT;
 use fluentbase_poseidon::poseidon_hash;
 use reth_codecs::{main_codec, Compact};
 use std::ops::Deref;
@@ -38,17 +38,15 @@ impl Account {
     pub fn from_genesis_account(value: &GenesisAccount) -> Self {
         // let bytecode_hash = value.storage
         //     .as_ref()
-        //     .and_then(|s| s.get(&KECCAK_HASH_KEY))
+        //     .and_then(|s| s.get(&GENESIS_KECCAK_HASH_SLOT))
         //     .cloned()
         //     .or_else(|| {
         //         value.code.as_ref().map(|bytes| keccak256(bytes.as_ref()))
         //     });
-        let rwasm_hash = value
-            .storage
-            .as_ref()
-            .and_then(|s| s.get(&GENESIS_POSEIDON_HASH_SLOT))
-            .cloned()
-            .or_else(|| value.code.as_ref().map(|bytes| B256::from(poseidon_hash(bytes.as_ref()))));
+        let rwasm_hash =
+            value.storage.as_ref().and_then(|s| s.get(&GENESIS_KECCAK_HASH_SLOT)).cloned().or_else(
+                || value.code.as_ref().map(|bytes| B256::from(poseidon_hash(bytes.as_ref()))),
+            );
         Self {
             // nonce must exist, so we default to zero when converting a genesis account
             nonce: value.nonce.unwrap_or_default(),

@@ -776,14 +776,12 @@ mod tests {
     use assert_matches::assert_matches;
     use core::str::FromStr;
     use fluentbase_core::fvm::helpers::FUEL_TESTNET_BASE_ASSET_ID;
-    use fluentbase_types::DEVNET_CHAIN_ID;
     use fuel_core_types::fuel_types::{canonical::Serialize, AssetId};
     use fuel_tx::{
         field::{Inputs, Witnesses},
         Input, UniqueIdentifier,
     };
     use fuel_vm::fuel_crypto::SecretKey;
-    use test_fuzz::FromRef;
 
     #[test]
     fn invalid_legacy_pooled_decoding_input_too_short() {

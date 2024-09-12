@@ -5553,7 +5553,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -8786,8 +8786,6 @@ dependencies = [
  "derive_more",
  "dirs-next",
  "eyre",
- "fluentbase-genesis",
- "fluentbase-poseidon",
  "futures",
  "http 1.1.0",
  "humantime",
@@ -9041,8 +9039,6 @@ dependencies = [
  "criterion",
  "derive_more",
  "fluentbase-core",
- "fluentbase-genesis",
- "fluentbase-poseidon",
  "fluentbase-types",
  "fuel-core",
  "fuel-core-executor",
@@ -9113,8 +9109,6 @@ dependencies = [
  "assert_matches",
  "auto_impl",
  "dashmap",
- "fluentbase-runtime",
- "fluentbase-types",
  "itertools 0.12.1",
  "metrics 0.22.3",
  "parking_lot 0.12.3",
@@ -9202,10 +9196,7 @@ version = "1.0.0-rc.2"
 dependencies = [
  "alloy-eips",
  "alloy-rlp",
- "fluentbase-core",
- "fluentbase-runtime",
  "fluentbase-sdk",
- "fluentbase-types",
  "reth-chainspec",
  "reth-consensus-common",
  "reth-execution-errors",
@@ -12138,7 +12129,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
