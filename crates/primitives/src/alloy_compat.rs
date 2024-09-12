@@ -313,10 +313,24 @@ mod tests {
     use crate::TxFluentV1;
     use alloy_rpc_types::Transaction as AlloyTransaction;
     use assert_matches::assert_matches;
-
-    use fuel_core_types::fuel_types::canonical::Serialize;
-    use fuel_tx::UniqueIdentifier;
-    use fuel_vm::fuel_types::{AssetId, ChainId};
+    use core::str::FromStr;
+    use fluentbase_core::fvm::helpers::FUEL_TESTNET_BASE_ASSET_ID;
+    use fluentbase_types::DEVNET_CHAIN_ID;
+    use fuel_core_types::{
+        fuel_asm::{op, RegId},
+        fuel_crypto::coins_bip32::ecdsa::signature::rand_core::SeedableRng,
+        fuel_types::{canonical::Serialize, BlockHeight},
+    };
+    use fuel_tx::{
+        ConsensusParameters, Input, Output, TransactionBuilder, TxId, TxPointer, UniqueIdentifier,
+        UtxoId,
+    };
+    use fuel_vm::{
+        fuel_crypto::SecretKey,
+        fuel_types::{AssetId, ChainId},
+        storage::MemoryStorage,
+    };
+    use rand::rngs::StdRng;
     use revm_primitives::Bytes;
 
     #[test]
