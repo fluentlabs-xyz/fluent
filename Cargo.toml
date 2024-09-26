@@ -396,6 +396,8 @@ fuel-core-types = { path = "../fuel-core/crates/types", default-features = false
 fuel-core-executor = { path = "../fuel-core/crates/services/executor", default-features = false, features = ["alloc"] }
 fuel-core-storage = { path = "../fuel-core/crates/storage", default-features = false, features = ["alloc"] }
 
+fuel-ee-core = { path = "../fuel-ee/crates/core", default-features = false, features = [] }
+
 # eth
 alloy-chains = "0.1.15"
 alloy-primitives = "0.7.2"

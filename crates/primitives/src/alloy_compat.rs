@@ -461,7 +461,7 @@ mod tests {
             rng: StdRng::seed_from_u64(1234),
             gas_price: 0,
             max_fee_limit: 0,
-            script_gas_limit: 100,
+            script_gas_limit: 0,
             builder: TransactionBuilder::script(bytecode, vec![]),
             storage: MemoryStorage::default(),
             block_height: Default::default(),
@@ -469,6 +469,9 @@ mod tests {
         };
 
         let base_asset_id = AssetId::from_str(FUEL_TESTNET_BASE_ASSET_ID).unwrap();
+
+        let initial_balance = 0xffff;
+        let coins_sent = 0x1;
 
         let secret1 = "0x99e87b0e9158531eeeb503ff15266e2b23c2a2507b138c9d1b1f2ab458df2d61";
         let secret1_vec = hex::decode(secret1).unwrap();
@@ -485,13 +488,13 @@ mod tests {
         let chain_id = DEVNET_CHAIN_ID;
         test_builder.with_chain_id(ChainId::new(chain_id));
         let tx_id: TxId =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000001000")
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap();
         let utxo_id = UtxoId::new(tx_id, 0);
         test_builder.builder.add_unsigned_coin_input(
             secret1_secret_key.clone(),
             utxo_id,
-            0xffff,
+            initial_balance.clone(),
             base_asset_id,
             TxPointer::new(BlockHeight::new(0), 0),
         );

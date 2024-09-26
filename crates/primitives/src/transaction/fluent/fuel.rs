@@ -2,9 +2,9 @@ use crate::{Bytes, ChainId, TxKind, TxType, B256, U256};
 use alloy_eips::eip2930::{AccessList, AccessListItem};
 use alloy_primitives::Address;
 use alloy_rlp::{Decodable, Encodable, Error as RlpError};
-use fluentbase_core::fvm::helpers::fuel_testnet_consensus_params_from;
 use fluentbase_types::DEVNET_CHAIN_ID;
 use fuel_core_types::{fuel_types, fuel_types::canonical::Deserialize};
+use fuel_ee_core::fvm::helpers::fuel_testnet_consensus_params_from;
 use fuel_tx::{
     field::{Inputs, Witnesses},
     Chargeable, ConsensusParameters, Transaction, UniqueIdentifier, Witness,

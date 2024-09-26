@@ -34,6 +34,8 @@ fuel-core-types = { workspace = true, default-features = false, features = ["ser
 fuel-core-executor = { workspace = true, default-features = false, features = ["alloc"] }
 fuel-core-storage = { workspace = true, default-features = false, features = ["alloc"] }
 
+fuel-ee-core = { workspace = true }
+
 # ethereum
 alloy-consensus = { workspace = true, features = ["serde"] }
 alloy-primitives = { workspace = true, features = ["rand", "rlp"] }

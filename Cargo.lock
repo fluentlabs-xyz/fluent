@@ -2902,7 +2902,7 @@ dependencies = [
  "socket2 0.4.10",
  "tokio",
  "tracing",
- "uint",
+ "uint 0.9.5",
  "zeroize",
 ]
 
@@ -3188,7 +3188,7 @@ checksum = "ec3aeb0284b473041df2419a28e3cdf0c64a78d2b9511af4b6e40bad3964b172"
 dependencies = [
  "ethereum-types",
  "hashbrown 0.14.5",
- "keccak-hash",
+ "keccak-hash 0.10.0",
  "log",
  "parking_lot 0.12.3",
  "rlp",
@@ -3217,8 +3217,8 @@ dependencies = [
  "fixed-hash",
  "impl-rlp",
  "impl-serde",
- "primitive-types",
- "uint",
+ "primitive-types 0.12.2",
+ "uint 0.9.5",
 ]
 
 [[package]]
@@ -3499,7 +3499,7 @@ dependencies = [
  "fuel-core-types",
  "hashbrown 0.14.5",
  "hex",
- "keccak-hash",
+ "keccak-hash 0.11.0",
  "paste",
  "phantom-type",
  "postcard",
@@ -3549,7 +3549,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "k256",
- "keccak-hash",
+ "keccak-hash 0.10.0",
  "rwasm",
 ]
 
@@ -3603,7 +3603,7 @@ dependencies = [
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
  "hex",
  "lazy_static",
- "uint",
+ "uint 0.9.5",
 ]
 
 [[package]]
@@ -3856,7 +3856,7 @@ dependencies = [
  "num_enum",
  "paste",
  "postcard",
- "primitive-types",
+ "primitive-types 0.12.2",
  "serde",
  "strum 0.26.3",
  "strum_macros 0.26.4",
@@ -3933,6 +3933,29 @@ dependencies = [
  "quote",
  "syn 2.0.75",
  "synstructure",
+]
+
+[[package]]
+name = "fuel-ee-core"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-sol-types",
+ "anyhow",
+ "byteorder",
+ "fluentbase-sdk",
+ "fuel-core-executor",
+ "fuel-core-storage",
+ "fuel-core-types",
+ "hashbrown 0.14.5",
+ "hex",
+ "hex-literal",
+ "keccak-hash 0.11.0",
+ "paste",
+ "phantom-type",
+ "postcard",
+ "rwasm",
 ]
 
 [[package]]
@@ -4014,7 +4037,7 @@ dependencies = [
  "libm",
  "paste",
  "percent-encoding",
- "primitive-types",
+ "primitive-types 0.12.2",
  "rand 0.8.5",
  "serde",
  "serde_with",
@@ -5521,7 +5544,17 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b286e6b663fb926e1eeb68528e69cb70ed46c6d65871a21b2215ae8154c6d3c"
 dependencies = [
- "primitive-types",
+ "primitive-types 0.12.2",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "keccak-hash"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e1b8590eb6148af2ea2d75f38e7d29f5ca970d5a4df456b3ef19b8b415d0264"
+dependencies = [
+ "primitive-types 0.13.1",
  "tiny-keccak",
 ]
 
@@ -5553,7 +5586,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -7034,7 +7067,17 @@ dependencies = [
  "impl-codec",
  "impl-rlp",
  "impl-serde",
- "uint",
+ "uint 0.9.5",
+]
+
+[[package]]
+name = "primitive-types"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d15600a7d856470b7d278b3fe0e311fe28c2526348549f8ef2ff7db3299c87f5"
+dependencies = [
+ "fixed-hash",
+ "uint 0.10.0",
 ]
 
 [[package]]
@@ -9044,6 +9087,7 @@ dependencies = [
  "fuel-core-executor",
  "fuel-core-storage",
  "fuel-core-types",
+ "fuel-ee-core",
  "fuel-tx",
  "fuel-vm",
  "modular-bitfield",
@@ -9763,6 +9807,7 @@ dependencies = [
  "fluentbase-runtime",
  "fluentbase-sdk",
  "fluentbase-types",
+ "fuel-ee-core",
  "lazy_static",
  "revm-interpreter",
  "revm-precompile",
@@ -9964,7 +10009,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "parity-scale-codec",
- "primitive-types",
+ "primitive-types 0.12.2",
  "proptest",
  "rand 0.8.5",
  "rlp",
@@ -11747,6 +11792,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "uint"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "909988d098b2f738727b161a106cfc7cab00c539c2687a8836f8e565976fb53e"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "hex",
+ "static_assertions",
+]
+
+[[package]]
 name = "unarray"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12129,7 +12186,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
