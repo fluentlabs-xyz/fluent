@@ -12,6 +12,7 @@ use revm_primitives::OptimismFields;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use reth_primitives_traits::constants::ETHEREUM_BLOCK_GAS_LIMIT;
 use revm_primitives::ExecutionEnvironment;
 
 /// Fill block environment from Block.
@@ -187,7 +188,7 @@ fn fill_tx_env_with_system_contract_call(
         transact_to: TransactTo::Call(contract),
         // Explicitly set nonce to None so revm does not do any nonce checks
         nonce: None,
-        gas_limit: 300_000_000,
+        gas_limit: ETHEREUM_BLOCK_GAS_LIMIT,
         value: U256::ZERO,
         data,
         // Setting the gas price to zero enforces that no value is transferred as part of the call,
