@@ -1,4 +1,5 @@
 use crate::primitives::alloy_primitives::{BlockNumber, StorageKey, StorageValue};
+use fluentbase_sdk::POSEIDON_EMPTY;
 use reth_primitives::{Account, Address, B256, KECCAK_EMPTY, U256};
 use reth_storage_errors::provider::{ProviderError, ProviderResult};
 use revm::{
@@ -7,7 +8,6 @@ use revm::{
     Database,
 };
 use std::ops::{Deref, DerefMut};
-use fluentbase_sdk::POSEIDON_EMPTY;
 
 /// A helper trait responsible for providing that necessary state for the EVM execution.
 ///
@@ -139,9 +139,9 @@ impl<DB: EvmStateProvider> DatabaseRef for StateProviderDatabase<DB> {
             balance: account.balance,
             nonce: account.nonce,
             code_hash: account.bytecode_hash.unwrap_or(KECCAK_EMPTY),
-            rwasm_code_hash: account.rwasm_hash.unwrap_or(POSEIDON_EMPTY),
+            // rwasm_code_hash: account.rwasm_hash.unwrap_or(POSEIDON_EMPTY),
             code: None,
-            rwasm_code: None,
+            // rwasm_code: None,
         }))
     }
 

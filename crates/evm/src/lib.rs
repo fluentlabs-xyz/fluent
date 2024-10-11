@@ -88,7 +88,7 @@ pub trait ConfigureEvm: ConfigureEvmEnv {
             .with_db(db)
             .with_external_context(inspector)
             .append_handler_register(inspector_handle_register)
-            .build()
+            .build_revm()
     }
 }
 

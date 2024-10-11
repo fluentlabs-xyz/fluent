@@ -1029,7 +1029,7 @@ impl PoolTransaction for EthPooledTransaction {
             Transaction::Eip2930(tx) => tx.gas_price,
             Transaction::Eip1559(tx) => tx.max_fee_per_gas,
             Transaction::Eip4844(tx) => tx.max_fee_per_gas,
-            Transaction::FluentV1(tx) => tx.max_fee_per_gas(),
+            // Transaction::FluentV1(tx) => tx.max_fee_per_gas(),
             _ => 0,
         }
     }

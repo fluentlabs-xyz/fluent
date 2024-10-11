@@ -953,7 +953,7 @@ where
             initialized_block_env.clone(),
             Default::default(),
         ))
-        .build();
+        .build_revm();
 
     // initialize a block from the env, because the pre block call needs the block itself
     apply_beacon_root_contract_call(
@@ -989,7 +989,7 @@ where
             initialized_block_env.clone(),
             Default::default(),
         ))
-        .build();
+        .build_revm();
 
     // initialize a block from the env, because the post block call needs the block itself
     apply_withdrawal_requests_contract_call(&mut evm_post_block)

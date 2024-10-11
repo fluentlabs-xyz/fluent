@@ -146,7 +146,7 @@ impl PendingBlockEnv {
             let env =
                 Env::boxed(cfg.cfg_env.clone(), block_env.clone(), tx_env_with_recovered(&tx));
 
-            let mut evm = revm::Evm::builder().with_env(env).with_db(&mut db).build();
+            let mut evm = revm::Evm::builder().with_env(env).with_db(&mut db).build_revm();
 
             let ResultAndState { result, state } = match evm.transact() {
                 Ok(res) => res,
@@ -320,7 +320,7 @@ where
             initialized_block_env.clone(),
             Default::default(),
         ))
-        .build();
+        .build_revm();
 
     // initialize a block from the env, because the pre block call needs the block itself
     apply_beacon_root_contract_call(

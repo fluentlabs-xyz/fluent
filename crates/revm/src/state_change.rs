@@ -11,7 +11,7 @@ use reth_primitives::{
         fill_tx_env_with_beacon_root_contract_call,
         fill_tx_env_with_withdrawal_requests_contract_call,
     },
-    Address, Header, Request, Withdrawal, B256, U256,
+    revm_primitives, Address, Header, Request, Withdrawal, B256, U256,
 };
 use reth_storage_errors::provider::ProviderError;
 use revm::{
@@ -116,7 +116,7 @@ where
 
     // Mark the account as touched and commit the state change
     account.mark_touch();
-    db.commit(HashMap::from([(HISTORY_STORAGE_ADDRESS, account)]));
+    db.commit(revm_primitives::HashMap::from([(HISTORY_STORAGE_ADDRESS, account)]));
 
     Ok(())
 }
