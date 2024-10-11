@@ -353,6 +353,7 @@ revm = { package = "revm", git = "https://github.com/fluentlabs-xyz/fluentbase",
     "std",
     "hashbrown",
     "blst",
+    "rwasm",
 ], default-features = false }
 revm-primitives = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/fuel-vm" }
 revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "feat/fuel-vm", features = [
