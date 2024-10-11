@@ -138,10 +138,12 @@ impl<DB: EvmStateProvider> DatabaseRef for StateProviderDatabase<DB> {
         Ok(self.basic_account(address)?.map(|account| AccountInfo {
             balance: account.balance,
             nonce: account.nonce,
-            code_hash: account.bytecode_hash.unwrap_or(KECCAK_EMPTY),
-            rwasm_code_hash: account.rwasm_hash.unwrap_or(POSEIDON_EMPTY),
+            code_hash: account.bytecode_hash.unwrap_or(if cfg!(feature = "rwasm") {
+                POSEIDON_EMPTY
+            } else {
+                KECCAK_EMPTY
+            }),
             code: None,
-            rwasm_code: None,
         }))
     }
 

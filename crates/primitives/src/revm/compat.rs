@@ -1,6 +1,5 @@
-use crate::{revm_primitives::AccountInfo, Account, Address, TxKind, KECCAK_EMPTY, U256};
+use crate::{revm_primitives::{AccountInfo, POSEIDON_EMPTY}, Account, Address, TxKind, KECCAK_EMPTY, U256};
 use revm::{interpreter::gas::validate_initial_tx_gas, primitives::SpecId};
-use revm_primitives::POSEIDON_EMPTY;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -9,13 +8,10 @@ use alloc::vec::Vec;
 ///
 /// Sets `bytecode_hash` to `None` if `code_hash` is [`KECCAK_EMPTY`].
 pub fn into_reth_acc(revm_acc: AccountInfo) -> Account {
-    let code_hash = revm_acc.code_hash;
-    let rwasm_code_hash = revm_acc.rwasm_code_hash;
     Account {
         balance: revm_acc.balance,
         nonce: revm_acc.nonce,
-        bytecode_hash: (code_hash != KECCAK_EMPTY).then_some(code_hash),
-        rwasm_hash: (revm_acc.rwasm_code_hash != POSEIDON_EMPTY).then_some(rwasm_code_hash),
+        bytecode_hash: (!revm_acc.is_empty_code_hash()).then_some(revm_acc.code_hash),
     }
 }
 
@@ -26,10 +22,12 @@ pub fn into_revm_acc(reth_acc: Account) -> AccountInfo {
     AccountInfo {
         balance: reth_acc.balance,
         nonce: reth_acc.nonce,
-        code_hash: reth_acc.bytecode_hash.unwrap_or(KECCAK_EMPTY),
-        rwasm_code_hash: reth_acc.rwasm_hash.unwrap_or(POSEIDON_EMPTY),
+        code_hash: reth_acc.bytecode_hash.unwrap_or(if cfg!(feature = "rwasm") {
+            POSEIDON_EMPTY
+        } else {
+            KECCAK_EMPTY
+        }),
         code: None,
-        rwasm_code: None,
     }
 }
 

@@ -14,7 +14,6 @@ workspace = true
 [dependencies]
 # fluentbase
 fluentbase-poseidon.workspace = true
-fluentbase-genesis.workspace = true
 
 reth-codecs.workspace = true
 
@@ -55,3 +54,4 @@ arbitrary = [
     "dep:proptest-derive"
 ]
 alloy-compat = ["alloy-rpc-types-eth"]
+rwasm = []

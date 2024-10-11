@@ -14,7 +14,7 @@ use reth_primitives::{
     BlobTransactionSidecar, BlobTransactionValidationError, FromRecoveredPooledTransaction,
     IntoRecoveredTransaction, PooledTransactionsElement, PooledTransactionsElementEcRecovered,
     SealedBlock, Transaction, TransactionSignedEcRecovered, TryFromRecoveredTransaction, TxHash,
-    TxKind, B256, EIP1559_TX_TYPE_ID, EIP4844_TX_TYPE_ID, FLUENT_TX_V1_TYPE_ID, U256,
+    TxKind, B256, EIP1559_TX_TYPE_ID, EIP4844_TX_TYPE_ID, U256,
 };
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -842,11 +842,6 @@ pub trait PoolTransaction:
         self.tx_type() == EIP4844_TX_TYPE_ID
     }
 
-    /// Returns true if the transaction is an fluent_v1 transaction.
-    fn is_fluent_v1(&self) -> bool {
-        self.tx_type() == FLUENT_TX_V1_TYPE_ID
-    }
-
     /// Returns the length of the rlp encoded transaction object
     ///
     /// Note: Implementations should cache this value.
@@ -1029,7 +1024,6 @@ impl PoolTransaction for EthPooledTransaction {
             Transaction::Eip2930(tx) => tx.gas_price,
             Transaction::Eip1559(tx) => tx.max_fee_per_gas,
             Transaction::Eip4844(tx) => tx.max_fee_per_gas,
-            Transaction::FluentV1(tx) => tx.max_fee_per_gas(),
             _ => 0,
         }
     }
@@ -1136,7 +1130,7 @@ impl TryFromRecoveredTransaction for EthPooledTransaction {
     ) -> Result<Self, Self::Error> {
         // ensure we can handle the transaction type and its format
         match tx.tx_type() as u8 {
-            0..=EIP1559_TX_TYPE_ID | FLUENT_TX_V1_TYPE_ID => {
+            0..=EIP1559_TX_TYPE_ID => {
                 // supported
             }
             EIP4844_TX_TYPE_ID => {

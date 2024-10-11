@@ -40,3 +40,4 @@ reth-trie.workspace = true
 
 [features]
 test-utils = ["dep:reth-trie"]
+rwasm = ["reth-primitives/rwasm"]

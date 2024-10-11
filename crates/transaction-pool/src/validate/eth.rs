@@ -18,7 +18,7 @@ use reth_primitives::{
     kzg::KzgSettings,
     revm::compat::calculate_intrinsic_gas_after_merge,
     GotExpected, InvalidTransactionError, SealedBlock, EIP1559_TX_TYPE_ID, EIP2930_TX_TYPE_ID,
-    EIP4844_TX_TYPE_ID, FLUENT_TX_V1_TYPE_ID, LEGACY_TX_TYPE_ID,
+    EIP4844_TX_TYPE_ID, LEGACY_TX_TYPE_ID,
 };
 use reth_provider::{AccountReader, BlockReaderIdExt, StateProviderFactory};
 use reth_tasks::TaskSpawner;
@@ -186,9 +186,6 @@ where
                         InvalidTransactionError::Eip4844Disabled.into(),
                     )
                 }
-            }
-            FLUENT_TX_V1_TYPE_ID => {
-                // additional validation rules
             }
 
             _ => {
@@ -730,9 +727,6 @@ pub fn ensure_intrinsic_gas<T: PoolTransaction>(
     );
 
     if tx_gas_limit < intrinsic_gas_after_merge {
-        if transaction.is_fluent_v1() && tx_gas_limit * 2 > intrinsic_gas_after_merge {
-            return Ok(())
-        }
         Err(InvalidPoolTransactionError::IntrinsicGasTooLow)
     } else {
         Ok(())

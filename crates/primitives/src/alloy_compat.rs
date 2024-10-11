@@ -5,11 +5,10 @@ use alloc::vec::Vec;
 
 use alloy_primitives::TxKind;
 use alloy_rlp::Error as RlpError;
-use revm_primitives::{hex, Bytes};
 
 use crate::{
     constants::EMPTY_TRANSACTIONS,
-    transaction::{extract_chain_id, ExecutionEnvironment},
+    transaction::{extract_chain_id},
     Block, Signature, Transaction, TransactionSigned, TransactionSignedEcRecovered, TxEip1559,
     TxEip2930, TxEip4844, TxLegacy, TxType,
 };
@@ -210,38 +209,6 @@ impl TryFrom<alloy_rpc_types::Transaction> for Transaction {
                 is_system_transaction: tx.from == crate::constants::OP_SYSTEM_TX_FROM_ADDR,
                 input: tx.input,
             })),
-            Some(TxType::FluentV1) => {
-                let execution_environment_type = tx
-                    .other
-                    .get_deserialized::<String>("executionEnvironment")
-                    .ok_or_else(|| {
-                        ConversionError::Custom("MissingExecutionEnvironment".to_string())
-                    })?
-                    .map_err(|_| {
-                        ConversionError::Custom("InvalidExecutionEnvironment".to_string())
-                    })?;
-                let raw_data = tx
-                    .other
-                    .get_deserialized::<String>("rawData")
-                    .ok_or_else(|| ConversionError::Custom("MissingRawData".to_string()))?
-                    .map_err(|_| ConversionError::Custom("InvalidRawData".to_string()))?;
-
-                let raw_data = raw_data.trim_start_matches("0x");
-                let raw_data = hex::decode(raw_data)
-                    .map_err(|_| ConversionError::Custom("InvalidRawData".to_string()))?;
-                let raw_data = Bytes::from(raw_data);
-
-                let execution_environment = ExecutionEnvironment::from_str_with_data(
-                    &execution_environment_type,
-                    raw_data.clone().into(),
-                )
-                .map_err(|_| ConversionError::Custom("InvalidExecutionEnvironment".to_string()))?;
-
-                Ok(Self::FluentV1(crate::transaction::TxFluentV1 {
-                    execution_environment,
-                    data: raw_data.into(),
-                }))
-            }
         }
     }
 }
