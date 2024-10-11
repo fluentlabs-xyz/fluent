@@ -1,4 +1,5 @@
 use crate::traits::PayloadEnvelopeExt;
+use alloy_primitives::B256;
 use jsonrpsee::{
     core::client::ClientT,
     http_client::{transport::HttpBackend, HttpClient},
@@ -12,18 +13,18 @@ use reth::{
     },
 };
 use reth_payload_builder::PayloadId;
-use reth_primitives::B256;
 use reth_rpc_layer::AuthClientService;
 use std::marker::PhantomData;
 
 /// Helper for engine api operations
+#[derive(Debug)]
 pub struct EngineApiTestContext<E> {
     pub canonical_stream: CanonStateNotificationStream,
     pub engine_api_client: HttpClient<AuthClientService<HttpBackend>>,
     pub _marker: PhantomData<E>,
 }
 
-impl<E: EngineTypes + 'static> EngineApiTestContext<E> {
+impl<E: EngineTypes> EngineApiTestContext<E> {
     /// Retrieves a v3 payload from the engine api
     pub async fn get_payload_v3(
         &self,

@@ -12,9 +12,19 @@ description = "RPC server types and constants"
 workspace = true
 
 [dependencies]
+reth-errors.workspace = true
+reth-network-api.workspace = true
+reth-primitives.workspace = true
+
 # ethereum
 alloy-primitives.workspace = true
+alloy-rpc-types-engine.workspace = true
+
+# rpc
+jsonrpsee-core.workspace = true
+jsonrpsee-types.workspace = true
 
 # misc
 strum = { workspace = true, features = ["derive"] }
 serde = { workspace = true, features = ["derive"] }
+

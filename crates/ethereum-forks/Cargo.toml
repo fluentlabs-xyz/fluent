@@ -16,6 +16,7 @@ workspace = true
 alloy-chains.workspace = true
 alloy-primitives = { workspace = true, features = ["serde", "rand", "rlp"] }
 alloy-rlp = { workspace = true, features = ["arrayvec", "derive"] }
+once_cell.workspace = true
 
 # used for forkid
 crc = "3"
@@ -23,20 +24,22 @@ crc = "3"
 # misc
 serde = { workspace = true, features = ["derive"], optional = true }
 thiserror-no-std = { workspace = true, default-features = false }
+dyn-clone.workspace = true
+rustc-hash = { workspace = true, optional = true }
 
 # arbitrary utils
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
+auto_impl.workspace = true
 
 [dev-dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
 proptest.workspace = true
-proptest-derive.workspace = true
 
 [features]
-default = ["std", "serde"]
-std = ["thiserror-no-std/std"]
-serde = ["dep:serde"]
+default = ["std", "serde", "rustc-hash"]
 arbitrary = ["dep:arbitrary", "dep:proptest", "dep:proptest-derive"]
-optimism = []
+serde = ["dep:serde"]
+std = ["thiserror-no-std/std", "rustc-hash/std"]
+rustc-hash = ["dep:rustc-hash"]

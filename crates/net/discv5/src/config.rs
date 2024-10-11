@@ -8,8 +8,10 @@ use std::{
 
 use alloy_primitives::Bytes;
 use derive_more::Display;
-use discv5::ListenConfig;
-use multiaddr::{Multiaddr, Protocol};
+use discv5::{
+    multiaddr::{Multiaddr, Protocol},
+    ListenConfig,
+};
 use reth_ethereum_forks::{EnrForkIdEntry, ForkId};
 use reth_network_peers::NodeRecord;
 use tracing::warn;
@@ -28,8 +30,14 @@ pub const DEFAULT_DISCOVERY_V5_ADDR_IPV6: Ipv6Addr = Ipv6Addr::UNSPECIFIED;
 
 /// The default port for discv5 via UDP.
 ///
-/// Default is port 9000. See [`discv5::ListenConfig`] default.
-pub const DEFAULT_DISCOVERY_V5_PORT: u16 = 9000;
+/// Default is port 9200.
+pub const DEFAULT_DISCOVERY_V5_PORT: u16 = 9200;
+
+/// The default [`discv5::ListenConfig`].
+///
+/// This is different from the upstream default.
+pub const DEFAULT_DISCOVERY_V5_LISTEN_CONFIG: ListenConfig =
+    ListenConfig::Ipv4 { ip: DEFAULT_DISCOVERY_V5_ADDR, port: DEFAULT_DISCOVERY_V5_PORT };
 
 /// Default interval in seconds at which to run a lookup up query.
 ///
@@ -42,7 +50,7 @@ pub const DEFAULT_SECONDS_LOOKUP_INTERVAL: u64 = 60;
 /// Default is 100 counts.
 pub const DEFAULT_COUNT_BOOTSTRAP_LOOKUPS: u64 = 100;
 
-/// Default duration of look up interval, for pulse look ups at bootstrap.
+/// Default duration of the pulse lookup interval at bootstrap.
 ///
 /// Default is 5 seconds.
 pub const DEFAULT_SECONDS_BOOTSTRAP_LOOKUP_INTERVAL: u64 = 5;
@@ -131,7 +139,7 @@ impl ConfigBuilder {
     }
 
     /// Adds boot nodes in the form a list of [`NodeRecord`]s, parsed enodes.
-    pub fn add_unsigned_boot_nodes(mut self, enodes: impl Iterator<Item = NodeRecord>) -> Self {
+    pub fn add_unsigned_boot_nodes(mut self, enodes: impl IntoIterator<Item = NodeRecord>) -> Self {
         for node in enodes {
             if let Ok(node) = BootNode::from_unsigned(node) {
                 self.bootstrap_nodes.insert(node);
@@ -220,8 +228,9 @@ impl ConfigBuilder {
             discovered_peer_filter,
         } = self;
 
-        let mut discv5_config = discv5_config
-            .unwrap_or_else(|| discv5::ConfigBuilder::new(ListenConfig::default()).build());
+        let mut discv5_config = discv5_config.unwrap_or_else(|| {
+            discv5::ConfigBuilder::new(DEFAULT_DISCOVERY_V5_LISTEN_CONFIG).build()
+        });
 
         discv5_config.listen_config =
             amend_listen_config_wrt_rlpx(&discv5_config.listen_config, tcp_socket.ip());
@@ -288,7 +297,7 @@ impl Config {
     pub fn builder(rlpx_tcp_socket: SocketAddr) -> ConfigBuilder {
         ConfigBuilder {
             discv5_config: None,
-            bootstrap_nodes: HashSet::new(),
+            bootstrap_nodes: HashSet::default(),
             fork: None,
             tcp_socket: rlpx_tcp_socket,
             other_enr_kv_pairs: Vec::new(),
@@ -296,6 +305,27 @@ impl Config {
             bootstrap_lookup_interval: None,
             bootstrap_lookup_countdown: None,
             discovered_peer_filter: None,
+        }
+    }
+
+    /// Inserts a new boot node to the list of boot nodes.
+    pub fn insert_boot_node(&mut self, boot_node: BootNode) {
+        self.bootstrap_nodes.insert(boot_node);
+    }
+
+    /// Inserts a new unsigned enode boot node to the list of boot nodes if it can be parsed, see
+    /// also [`BootNode::from_unsigned`].
+    pub fn insert_unsigned_boot_node(&mut self, node_record: NodeRecord) {
+        let _ = BootNode::from_unsigned(node_record).map(|node| self.insert_boot_node(node));
+    }
+
+    /// Extends the list of boot nodes with a list of enode boot nodes if they can be parsed.
+    pub fn extend_unsigned_boot_nodes(
+        &mut self,
+        node_records: impl IntoIterator<Item = NodeRecord>,
+    ) {
+        for node_record in node_records {
+            self.insert_unsigned_boot_node(node_record);
         }
     }
 
@@ -419,10 +449,10 @@ pub fn discv5_sockets_wrt_rlpx_addr(
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Display)]
 pub enum BootNode {
     /// An unsigned node record.
-    #[display(fmt = "{_0}")]
+    #[display("{_0}")]
     Enode(Multiaddr),
     /// A signed node record.
-    #[display(fmt = "{_0:?}")]
+    #[display("{_0:?}")]
     Enr(discv5::Enr),
 }
 
@@ -505,7 +535,7 @@ mod test {
     fn overwrite_ipv4_addr() {
         let rlpx_addr: Ipv4Addr = "192.168.0.1".parse().unwrap();
 
-        let listen_config = ListenConfig::default();
+        let listen_config = DEFAULT_DISCOVERY_V5_LISTEN_CONFIG;
 
         let amended_config = amend_listen_config_wrt_rlpx(&listen_config, rlpx_addr.into());
 
@@ -520,7 +550,7 @@ mod test {
     fn overwrite_ipv6_addr() {
         let rlpx_addr: Ipv6Addr = "fe80::1".parse().unwrap();
 
-        let listen_config = ListenConfig::default();
+        let listen_config = DEFAULT_DISCOVERY_V5_LISTEN_CONFIG;
 
         let amended_config = amend_listen_config_wrt_rlpx(&listen_config, rlpx_addr.into());
 

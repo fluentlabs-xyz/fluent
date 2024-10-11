@@ -12,16 +12,19 @@ workspace = true
 
 [dependencies]
 # reth
-reth-network.workspace = true
+reth-network-types = { workspace = true, features = ["serde"] }
 reth-prune-types.workspace = true
+reth-stages-types.workspace = true
 
 # serde
 serde.workspace = true
 humantime-serde.workspace = true
 
 # toml
-confy.workspace = true
+toml.workspace = true
+eyre.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-toml.workspace = true
+reth-network-peers.workspace = true
+alloy-primitives.workspace = true

@@ -1,26 +1,31 @@
-use reth::{rpc::types::engine::PayloadAttributes, tasks::TaskManager};
-use reth_chainspec::{ChainSpecBuilder, BASE_MAINNET};
-use reth_e2e_test_utils::{transaction::TransactionTestContext, wallet::Wallet, NodeHelperType};
-use reth_node_optimism::{OptimismBuiltPayload, OptimismNode, OptimismPayloadBuilderAttributes};
-use reth_payload_builder::EthPayloadBuilderAttributes;
-use reth_primitives::{Address, Genesis, B256};
 use std::sync::Arc;
+
+use alloy_genesis::Genesis;
+use alloy_primitives::{Address, B256};
+use reth::{rpc::types::engine::PayloadAttributes, tasks::TaskManager};
+use reth_chainspec::ChainSpecBuilder;
+use reth_e2e_test_utils::{transaction::TransactionTestContext, wallet::Wallet, NodeHelperType};
+use reth_optimism_chainspec::{OpChainSpec, BASE_MAINNET};
+use reth_optimism_node::{
+    node::OptimismAddOns, OptimismBuiltPayload, OptimismNode, OptimismPayloadBuilderAttributes,
+};
+use reth_payload_builder::EthPayloadBuilderAttributes;
 use tokio::sync::Mutex;
 
 /// Optimism Node Helper type
-pub(crate) type OpNode = NodeHelperType<OptimismNode>;
+pub(crate) type OpNode = NodeHelperType<OptimismNode, OptimismAddOns>;
 
 pub(crate) async fn setup(num_nodes: usize) -> eyre::Result<(Vec<OpNode>, TaskManager, Wallet)> {
     let genesis: Genesis = serde_json::from_str(include_str!("../assets/genesis.json")).unwrap();
     reth_e2e_test_utils::setup(
         num_nodes,
-        Arc::new(
+        Arc::new(OpChainSpec::new(
             ChainSpecBuilder::default()
                 .chain(BASE_MAINNET.chain)
                 .genesis(genesis)
                 .ecotone_activated()
                 .build(),
-        ),
+        )),
         false,
     )
     .await

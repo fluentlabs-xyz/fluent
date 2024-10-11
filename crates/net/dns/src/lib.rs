@@ -21,7 +21,7 @@ use crate::{
 };
 pub use config::DnsDiscoveryConfig;
 use enr::Enr;
-use error::ParseDnsEntryError;
+pub use error::ParseDnsEntryError;
 use reth_ethereum_forks::{EnrForkIdEntry, ForkId};
 use reth_network_peers::{pk2id, NodeRecord};
 use schnellru::{ByLength, LruMap};
@@ -415,7 +415,7 @@ mod tests {
     use alloy_rlp::{Decodable, Encodable};
     use enr::EnrKey;
     use reth_chainspec::MAINNET;
-    use reth_ethereum_forks::{ForkHash, Hardfork};
+    use reth_ethereum_forks::{EthereumHardfork, ForkHash};
     use secp256k1::rand::thread_rng;
     use std::{future::poll_fn, net::Ipv4Addr};
 
@@ -513,7 +513,7 @@ mod tests {
         resolver.insert(link.domain.clone(), root.to_string());
 
         let mut builder = Enr::builder();
-        let fork_id = MAINNET.hardfork_fork_id(Hardfork::Frontier).unwrap();
+        let fork_id = MAINNET.hardfork_fork_id(EthereumHardfork::Frontier).unwrap();
         builder
             .ip4(Ipv4Addr::LOCALHOST)
             .udp4(30303)

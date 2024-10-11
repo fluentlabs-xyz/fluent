@@ -5,10 +5,9 @@ use crate::{
     identifier::{SenderId, TransactionId},
     traits::{PoolTransaction, TransactionOrigin},
 };
-use reth_primitives::{
-    Address, BlobTransactionSidecar, IntoRecoveredTransaction, SealedBlock,
-    TransactionSignedEcRecovered, TxHash, B256, U256,
-};
+use alloy_primitives::{Address, TxHash, B256, U256};
+use futures_util::future::Either;
+use reth_primitives::{BlobTransactionSidecar, SealedBlock, TransactionSignedEcRecovered};
 use std::{fmt, future::Future, time::Instant};
 
 mod constants;
@@ -49,7 +48,7 @@ pub enum TransactionValidationOutcome<T: PoolTransaction> {
     /// this transaction from ever becoming valid.
     Invalid(T, InvalidPoolTransactionError),
     /// An error occurred while trying to validate the transaction
-    Error(TxHash, Box<dyn std::error::Error + Send + Sync>),
+    Error(TxHash, Box<dyn core::error::Error + Send + Sync>),
 }
 
 impl<T: PoolTransaction> TransactionValidationOutcome<T> {
@@ -208,6 +207,42 @@ pub trait TransactionValidator: Send + Sync {
     fn on_new_head_block(&self, _new_tip_block: &SealedBlock) {}
 }
 
+impl<A, B> TransactionValidator for Either<A, B>
+where
+    A: TransactionValidator,
+    B: TransactionValidator<Transaction = A::Transaction>,
+{
+    type Transaction = A::Transaction;
+
+    async fn validate_transaction(
+        &self,
+        origin: TransactionOrigin,
+        transaction: Self::Transaction,
+    ) -> TransactionValidationOutcome<Self::Transaction> {
+        match self {
+            Self::Left(v) => v.validate_transaction(origin, transaction).await,
+            Self::Right(v) => v.validate_transaction(origin, transaction).await,
+        }
+    }
+
+    async fn validate_transactions(
+        &self,
+        transactions: Vec<(TransactionOrigin, Self::Transaction)>,
+    ) -> Vec<TransactionValidationOutcome<Self::Transaction>> {
+        match self {
+            Self::Left(v) => v.validate_transactions(transactions).await,
+            Self::Right(v) => v.validate_transactions(transactions).await,
+        }
+    }
+
+    fn on_new_head_block(&self, new_tip_block: &SealedBlock) {
+        match self {
+            Self::Left(v) => v.on_new_head_block(new_tip_block),
+            Self::Right(v) => v.on_new_head_block(new_tip_block),
+        }
+    }
+}
+
 /// A valid transaction in the pool.
 ///
 /// This is used as the internal representation of a transaction inside the pool.
@@ -339,14 +374,17 @@ impl<T: PoolTransaction> ValidPoolTransaction<T> {
     }
 }
 
-impl<T: PoolTransaction> IntoRecoveredTransaction for ValidPoolTransaction<T> {
-    fn to_recovered_transaction(&self) -> TransactionSignedEcRecovered {
-        self.transaction.to_recovered_transaction()
+impl<T: PoolTransaction<Consensus: Into<TransactionSignedEcRecovered>>> ValidPoolTransaction<T> {
+    /// Converts to this type into a [`TransactionSignedEcRecovered`].
+    ///
+    /// Note: this takes `&self` since indented usage is via `Arc<Self>`.
+    pub fn to_recovered_transaction(&self) -> TransactionSignedEcRecovered {
+        self.transaction.clone().into_consensus().into()
     }
 }
 
 #[cfg(test)]
-impl<T: PoolTransaction + Clone> Clone for ValidPoolTransaction<T> {
+impl<T: PoolTransaction> Clone for ValidPoolTransaction<T> {
     fn clone(&self) -> Self {
         Self {
             transaction: self.transaction.clone(),

@@ -1,10 +1,10 @@
 use crate::EthVersion;
+use alloy_chains::{Chain, NamedChain};
+use alloy_primitives::{hex, B256, U256};
 use alloy_rlp::{RlpDecodable, RlpEncodable};
-use reth_chainspec::{Chain, ChainSpec, NamedChain, MAINNET};
-use reth_codecs_derive::derive_arbitrary;
-use reth_primitives::{hex, ForkId, Genesis, Hardfork, Head, B256, U256};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use reth_chainspec::{EthChainSpec, Hardforks, MAINNET};
+use reth_codecs_derive::add_arbitrary_tests;
+use reth_primitives::{EthereumHardfork, ForkId, Head};
 use std::fmt::{Debug, Display};
 
 /// The status message is used in the eth protocol handshake to ensure that peers are on the same
@@ -12,9 +12,10 @@ use std::fmt::{Debug, Display};
 ///
 /// When performing a handshake, the total difficulty is not guaranteed to correspond to the block
 /// hash. This information should be treated as untrusted.
-#[derive_arbitrary(rlp)]
 #[derive(Copy, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+#[add_arbitrary_tests(rlp)]
 pub struct Status {
     /// The current protocol version. For example, peers running `eth/66` would have a version of
     /// 66.
@@ -41,23 +42,6 @@ pub struct Status {
     pub forkid: ForkId,
 }
 
-impl From<Genesis> for Status {
-    fn from(genesis: Genesis) -> Self {
-        let chain = genesis.config.chain_id;
-        let total_difficulty = genesis.difficulty;
-        let chainspec = ChainSpec::from(genesis);
-
-        Self {
-            version: EthVersion::Eth68 as u8,
-            chain: Chain::from_id(chain),
-            total_difficulty,
-            blockhash: chainspec.genesis_hash(),
-            genesis: chainspec.genesis_hash(),
-            forkid: chainspec.fork_id(&Head::default()),
-        }
-    }
-}
-
 impl Status {
     /// Helper for returning a builder for the status message.
     pub fn builder() -> StatusBuilder {
@@ -69,13 +53,16 @@ impl Status {
         self.version = version as u8;
     }
 
-    /// Create a [`StatusBuilder`] from the given [`ChainSpec`] and head block.
+    /// Create a [`StatusBuilder`] from the given [`EthChainSpec`] and head block.
     ///
-    /// Sets the `chain` and `genesis`, `blockhash`, and `forkid` fields based on the [`ChainSpec`]
-    /// and head.
-    pub fn spec_builder(spec: &ChainSpec, head: &Head) -> StatusBuilder {
+    /// Sets the `chain` and `genesis`, `blockhash`, and `forkid` fields based on the
+    /// [`EthChainSpec`] and head.
+    pub fn spec_builder<Spec>(spec: Spec, head: &Head) -> StatusBuilder
+    where
+        Spec: EthChainSpec + Hardforks,
+    {
         Self::builder()
-            .chain(spec.chain)
+            .chain(spec.chain())
             .genesis(spec.genesis_hash())
             .blockhash(head.hash)
             .total_difficulty(head.total_difficulty)
@@ -141,7 +128,7 @@ impl Default for Status {
             blockhash: mainnet_genesis,
             genesis: mainnet_genesis,
             forkid: MAINNET
-                .hardfork_fork_id(Hardfork::Frontier)
+                .hardfork_fork_id(EthereumHardfork::Frontier)
                 .expect("The Frontier hardfork should always exist"),
         }
     }
@@ -151,9 +138,10 @@ impl Default for Status {
 ///
 /// # Example
 /// ```
-/// use reth_chainspec::{Chain, Hardfork, MAINNET};
+/// use alloy_primitives::{B256, U256};
+/// use reth_chainspec::{Chain, EthereumHardfork, MAINNET};
 /// use reth_eth_wire_types::{EthVersion, Status};
-/// use reth_primitives::{B256, MAINNET_GENESIS_HASH, U256};
+/// use reth_primitives::MAINNET_GENESIS_HASH;
 ///
 /// // this is just an example status message!
 /// let status = Status::builder()
@@ -162,7 +150,7 @@ impl Default for Status {
 ///     .total_difficulty(U256::from(100))
 ///     .blockhash(B256::from(MAINNET_GENESIS_HASH))
 ///     .genesis(B256::from(MAINNET_GENESIS_HASH))
-///     .forkid(MAINNET.hardfork_fork_id(Hardfork::Paris).unwrap())
+///     .forkid(MAINNET.hardfork_fork_id(EthereumHardfork::Paris).unwrap())
 ///     .build();
 ///
 /// assert_eq!(
@@ -173,7 +161,7 @@ impl Default for Status {
 ///         total_difficulty: U256::from(100),
 ///         blockhash: B256::from(MAINNET_GENESIS_HASH),
 ///         genesis: B256::from(MAINNET_GENESIS_HASH),
-///         forkid: MAINNET.hardfork_fork_id(Hardfork::Paris).unwrap(),
+///         forkid: MAINNET.hardfork_fork_id(EthereumHardfork::Paris).unwrap(),
 ///     }
 /// );
 /// ```
@@ -228,10 +216,12 @@ impl StatusBuilder {
 #[cfg(test)]
 mod tests {
     use crate::{EthVersion, Status};
+    use alloy_genesis::Genesis;
+    use alloy_primitives::{hex, B256, U256};
     use alloy_rlp::{Decodable, Encodable};
     use rand::Rng;
     use reth_chainspec::{Chain, ChainSpec, ForkCondition, NamedChain};
-    use reth_primitives::{hex, ForkHash, ForkId, Genesis, Hardfork, Head, B256, U256};
+    use reth_primitives::{EthereumHardfork, ForkHash, ForkId, Head};
     use std::str::FromStr;
 
     #[test]
@@ -366,12 +356,12 @@ mod tests {
 
         // add a few hardforks
         let hardforks = vec![
-            (Hardfork::Tangerine, ForkCondition::Block(1)),
-            (Hardfork::SpuriousDragon, ForkCondition::Block(2)),
-            (Hardfork::Byzantium, ForkCondition::Block(3)),
-            (Hardfork::MuirGlacier, ForkCondition::Block(5)),
-            (Hardfork::London, ForkCondition::Block(8)),
-            (Hardfork::Shanghai, ForkCondition::Timestamp(13)),
+            (EthereumHardfork::Tangerine, ForkCondition::Block(1)),
+            (EthereumHardfork::SpuriousDragon, ForkCondition::Block(2)),
+            (EthereumHardfork::Byzantium, ForkCondition::Block(3)),
+            (EthereumHardfork::MuirGlacier, ForkCondition::Block(5)),
+            (EthereumHardfork::London, ForkCondition::Block(8)),
+            (EthereumHardfork::Shanghai, ForkCondition::Timestamp(13)),
         ];
 
         let mut chainspec = ChainSpec::builder().genesis(genesis).chain(Chain::from_id(1337));

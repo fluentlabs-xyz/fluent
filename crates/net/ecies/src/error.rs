@@ -13,6 +13,11 @@ impl ECIESError {
     pub fn into_inner(self) -> ECIESErrorImpl {
         *self.inner
     }
+
+    /// Returns a reference to the inner error
+    pub const fn inner(&self) -> &ECIESErrorImpl {
+        &self.inner
+    }
 }
 
 impl fmt::Display for ECIESError {
@@ -81,7 +86,7 @@ pub enum ECIESErrorImpl {
     /// decode a message from the (partially filled) buffer.
     #[error("stream closed due to not being readable")]
     UnreadableStream,
-    // Error when data is not received from peer for a prolonged period.
+    /// Error when data is not received from peer for a prolonged period.
     #[error("never received data from remote peer")]
     StreamTimeout,
 }

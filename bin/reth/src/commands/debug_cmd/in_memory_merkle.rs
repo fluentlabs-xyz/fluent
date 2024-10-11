@@ -1,31 +1,36 @@
 //! Command for debugging in-memory merkle trie calculation.
 
 use crate::{
-    args::{get_secret_key, NetworkArgs},
-    commands::common::{AccessRights, Environment, EnvironmentArgs},
-    macros::block_executor,
+    args::NetworkArgs,
     utils::{get_single_body, get_single_header},
 };
 use backon::{ConstantBuilder, Retryable};
 use clap::Parser;
+use reth_chainspec::ChainSpec;
+use reth_cli::chainspec::ChainSpecParser;
+use reth_cli_commands::common::{AccessRights, Environment, EnvironmentArgs};
 use reth_cli_runner::CliContext;
+use reth_cli_util::get_secret_key;
 use reth_config::Config;
-use reth_db::DatabaseEnv;
 use reth_errors::BlockValidationError;
-use reth_evm::execute::{BlockExecutionOutput, BlockExecutorProvider, Executor};
-use reth_network::NetworkHandle;
+use reth_evm::execute::{BlockExecutorProvider, Executor};
+use reth_execution_types::ExecutionOutcome;
+use reth_network::{BlockDownloaderProvider, NetworkHandle};
 use reth_network_api::NetworkInfo;
+use reth_node_api::{NodeTypesWithDB, NodeTypesWithEngine};
+use reth_node_ethereum::EthExecutorProvider;
 use reth_primitives::BlockHashOrNumber;
 use reth_provider::{
-    AccountExtReader, ChainSpecProvider, ExecutionOutcome, HashingWriter, HeaderProvider,
-    LatestStateProviderRef, OriginalValuesKnown, ProviderFactory, StageCheckpointReader,
-    StateWriter, StaticFileProviderFactory, StorageReader,
+    writer::UnifiedStorageWriter, AccountExtReader, ChainSpecProvider, HashingWriter,
+    HeaderProvider, LatestStateProviderRef, OriginalValuesKnown, ProviderFactory,
+    StageCheckpointReader, StateWriter, StaticFileProviderFactory, StorageReader,
 };
 use reth_revm::database::StateProviderDatabase;
 use reth_stages::StageId;
 use reth_tasks::TaskExecutor;
-use reth_trie::{updates::TrieKey, StateRoot};
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use reth_trie::StateRoot;
+use reth_trie_db::DatabaseStateRoot;
+use std::{path::PathBuf, sync::Arc};
 use tracing::*;
 
 /// `reth debug in-memory-merkle` command
@@ -33,9 +38,9 @@ use tracing::*;
 /// The script will then download the block from p2p network and attempt to calculate and verify
 /// merkle root for it.
 #[derive(Debug, Parser)]
-pub struct Command {
+pub struct Command<C: ChainSpecParser> {
     #[command(flatten)]
-    env: EnvironmentArgs,
+    env: EnvironmentArgs<C>,
 
     #[command(flatten)]
     network: NetworkArgs,
@@ -49,12 +54,12 @@ pub struct Command {
     skip_node_depth: Option<usize>,
 }
 
-impl Command {
-    async fn build_network(
+impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
+    async fn build_network<N: NodeTypesWithDB<ChainSpec = C::ChainSpec>>(
         &self,
         config: &Config,
         task_executor: TaskExecutor,
-        provider_factory: ProviderFactory<Arc<DatabaseEnv>>,
+        provider_factory: ProviderFactory<N>,
         network_secret_path: PathBuf,
         default_peers_path: PathBuf,
     ) -> eyre::Result<NetworkHandle> {
@@ -63,11 +68,6 @@ impl Command {
             .network
             .network_config(config, provider_factory.chain_spec(), secret_key, default_peers_path)
             .with_task_executor(Box::new(task_executor))
-            .listener_addr(SocketAddr::new(self.network.addr, self.network.port))
-            .discovery_addr(SocketAddr::new(
-                self.network.discovery.addr,
-                self.network.discovery.port,
-            ))
             .build(provider_factory)
             .start_network()
             .await?;
@@ -77,8 +77,12 @@ impl Command {
     }
 
     /// Execute `debug in-memory-merkle` command
-    pub async fn execute(self, ctx: CliContext) -> eyre::Result<()> {
-        let Environment { provider_factory, config, data_dir } = self.env.init(AccessRights::RW)?;
+    pub async fn execute<N: NodeTypesWithEngine<ChainSpec = C::ChainSpec>>(
+        self,
+        ctx: CliContext,
+    ) -> eyre::Result<()> {
+        let Environment { provider_factory, config, data_dir } =
+            self.env.init::<N>(AccessRights::RW)?;
 
         let provider = provider_factory.provider()?;
 
@@ -114,14 +118,14 @@ impl Command {
         let header = (move || {
             get_single_header(client.clone(), BlockHashOrNumber::Number(target_block_number))
         })
-        .retry(&backoff)
+        .retry(backoff)
         .notify(|err, _| warn!(target: "reth::cli", "Error requesting header: {err}. Retrying..."))
         .await?;
 
         let client = fetch_client.clone();
         let chain = provider_factory.chain_spec();
         let block = (move || get_single_body(client.clone(), Arc::clone(&chain), header.clone()))
-            .retry(&backoff)
+            .retry(backoff)
             .notify(
                 |err, _| warn!(target: "reth::cli", "Error requesting body: {err}. Retrying..."),
             )
@@ -132,11 +136,11 @@ impl Command {
             provider_factory.static_file_provider(),
         ));
 
-        let executor = block_executor!(provider_factory.chain_spec()).executor(db);
+        let executor = EthExecutorProvider::ethereum(provider_factory.chain_spec()).executor(db);
 
         let merkle_block_td =
             provider.header_td_by_number(merkle_block_number)?.unwrap_or_default();
-        let BlockExecutionOutput { state, receipts, requests, .. } = executor.execute(
+        let block_execution_output = executor.execute(
             (
                 &block
                     .clone()
@@ -147,12 +151,13 @@ impl Command {
             )
                 .into(),
         )?;
-        let execution_outcome =
-            ExecutionOutcome::new(state, receipts.into(), block.number, vec![requests.into()]);
+        let execution_outcome = ExecutionOutcome::from((block_execution_output, block.number));
 
         // Unpacked `BundleState::state_root_slow` function
-        let (in_memory_state_root, in_memory_updates) =
-            execution_outcome.hash_state_slow().state_root_with_updates(provider.tx_ref())?;
+        let (in_memory_state_root, in_memory_updates) = StateRoot::overlay_root_with_updates(
+            provider.tx_ref(),
+            execution_outcome.hash_state_slow(),
+        )?;
 
         if in_memory_state_root == block.state_root {
             info!(target: "reth::cli", state_root = ?in_memory_state_root, "Computed in-memory state root matches");
@@ -167,9 +172,9 @@ impl Command {
                 .clone()
                 .try_seal_with_senders()
                 .map_err(|_| BlockValidationError::SenderRecoveryError)?,
-            None,
         )?;
-        execution_outcome.write_to_storage(provider_rw.tx_ref(), None, OriginalValuesKnown::No)?;
+        let mut storage_writer = UnifiedStorageWriter::from_database(&provider_rw.0);
+        storage_writer.write_to_storage(execution_outcome, OriginalValuesKnown::No)?;
         let storage_lists = provider_rw.changed_storages_with_range(block.number..=block.number)?;
         let storages = provider_rw.plain_state_storages(storage_lists)?;
         provider_rw.insert_storage_for_hashing(storages)?;
@@ -192,15 +197,16 @@ impl Command {
         // Compare updates
         let mut in_mem_mismatched = Vec::new();
         let mut incremental_mismatched = Vec::new();
-        let mut in_mem_updates_iter = in_memory_updates.into_iter().peekable();
-        let mut incremental_updates_iter = incremental_trie_updates.into_iter().peekable();
+        let mut in_mem_updates_iter = in_memory_updates.account_nodes_ref().iter().peekable();
+        let mut incremental_updates_iter =
+            incremental_trie_updates.account_nodes_ref().iter().peekable();
 
         while in_mem_updates_iter.peek().is_some() || incremental_updates_iter.peek().is_some() {
             match (in_mem_updates_iter.next(), incremental_updates_iter.next()) {
                 (Some(in_mem), Some(incr)) => {
                     similar_asserts::assert_eq!(in_mem.0, incr.0, "Nibbles don't match");
                     if in_mem.1 != incr.1 &&
-                        matches!(in_mem.0, TrieKey::AccountNode(ref nibbles) if nibbles.0.len() > self.skip_node_depth.unwrap_or_default())
+                        in_mem.0.len() > self.skip_node_depth.unwrap_or_default()
                     {
                         in_mem_mismatched.push(in_mem);
                         incremental_mismatched.push(incr);

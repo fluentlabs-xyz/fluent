@@ -2,19 +2,19 @@
 //!
 //! See also <https://github.com/ethereum/devp2p/blob/master/README.md>
 
-use futures::Stream;
-use reth_eth_wire::{
-    capability::SharedCapabilities, multiplex::ProtocolConnection, protocol::Protocol,
-};
-use reth_network_api::Direction;
-use reth_primitives::BytesMut;
-use reth_rpc_types::PeerId;
 use std::{
     fmt,
     net::SocketAddr,
     ops::{Deref, DerefMut},
     pin::Pin,
 };
+
+use alloy_primitives::bytes::BytesMut;
+use futures::Stream;
+use reth_eth_wire::{
+    capability::SharedCapabilities, multiplex::ProtocolConnection, protocol::Protocol,
+};
+use reth_network_api::{Direction, PeerId};
 
 /// A trait that allows to offer additional RLPx-based application-level protocols when establishing
 /// a peer-to-peer connection.

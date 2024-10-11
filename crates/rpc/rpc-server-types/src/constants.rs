@@ -26,6 +26,9 @@ pub fn default_max_tracing_requests() -> usize {
         .map_or(25, |cpus| max(cpus.get().saturating_sub(RESERVED), RESERVED))
 }
 
+/// The default number of getproof calls we are allowing to run concurrently.
+pub const DEFAULT_PROOF_PERMITS: usize = 25;
+
 /// The default IPC endpoint
 #[cfg(windows)]
 pub const DEFAULT_IPC_ENDPOINT: &str = r"\\.\pipe\reth.ipc";
@@ -41,6 +44,16 @@ pub const DEFAULT_ENGINE_API_IPC_ENDPOINT: &str = r"\\.\pipe\reth_engine_api.ipc
 /// The `engine_api` IPC endpoint
 #[cfg(not(windows))]
 pub const DEFAULT_ENGINE_API_IPC_ENDPOINT: &str = "/tmp/reth_engine_api.ipc";
+
+/// The default limit for blocks count in `eth_simulateV1`.
+pub const DEFAULT_MAX_SIMULATE_BLOCKS: u64 = 256;
+
+/// The default eth historical proof window.
+pub const DEFAULT_ETH_PROOF_WINDOW: u64 = 0;
+
+/// Maximum eth historical proof window. Equivalent to roughly one and a half months of data on a 12
+/// second block time, and a week on a 2 second block time.
+pub const MAX_ETH_PROOF_WINDOW: u64 = 7 * 24 * 60 * 60 / 2;
 
 /// GPO specific constants
 pub mod gas_oracle {
@@ -64,6 +77,21 @@ pub mod gas_oracle {
 
     /// The default minimum gas price, under which the sample will be ignored
     pub const DEFAULT_IGNORE_GAS_PRICE: U256 = U256::from_limbs([2u64, 0, 0, 0]);
+
+    /// The default gas limit for `eth_call` and adjacent calls.
+    ///
+    /// This is different from the default to regular 30M block gas limit
+    /// [`ETHEREUM_BLOCK_GAS_LIMIT`](reth_primitives::constants::ETHEREUM_BLOCK_GAS_LIMIT) to allow
+    /// for more complex calls.
+    pub const RPC_DEFAULT_GAS_CAP: u64 = 50_000_000;
+
+    /// Allowed error ratio for gas estimation
+    /// Taken from Geth's implementation in order to pass the hive tests
+    /// <https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186a4/internal/ethapi/api.go#L56>
+    pub const ESTIMATE_GAS_ERROR_RATIO: f64 = 0.015;
+
+    /// Gas required at the beginning of a call.
+    pub const CALL_STIPEND_GAS: u64 = 2_300;
 }
 
 /// Cache specific constants

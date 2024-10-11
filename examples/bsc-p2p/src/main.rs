@@ -14,7 +14,7 @@
 
 use chainspec::{boot_nodes, bsc_chain_spec};
 use reth_discv4::Discv4ConfigBuilder;
-use reth_network::{NetworkConfig, NetworkEvent, NetworkEvents, NetworkManager};
+use reth_network::{NetworkConfig, NetworkEvent, NetworkEventListenerProvider, NetworkManager};
 use reth_network_api::PeersInfo;
 use reth_primitives::{ForkHash, ForkId};
 use reth_tracing::{
@@ -49,9 +49,8 @@ async fn main() {
 
     // The network configuration
     let mut net_cfg = NetworkConfig::builder(secret_key)
-        .chain_spec(bsc_chain_spec())
         .listener_addr(local_addr)
-        .build_with_noop_provider()
+        .build_with_noop_provider(bsc_chain_spec())
         .set_discovery_v4(
             Discv4ConfigBuilder::default()
                 .add_boot_nodes(boot_nodes())

@@ -214,9 +214,8 @@ impl Discv4 {
     /// ```
     /// # use std::io;
     /// use rand::thread_rng;
-    /// use reth_chainspec::net::NodeRecord;
     /// use reth_discv4::{Discv4, Discv4Config};
-    /// use reth_network_peers::{pk2id, PeerId};
+    /// use reth_network_peers::{pk2id, NodeRecord, PeerId};
     /// use secp256k1::SECP256K1;
     /// use std::{net::SocketAddr, str::FromStr};
     /// # async fn t() -> io::Result<()> {
@@ -1537,7 +1536,7 @@ impl Discv4Service {
     ///  - timestamp is expired (lower than current local UNIX timestamp)
     fn ensure_not_expired(&self, timestamp: u64) -> Result<(), ()> {
         // ensure the timestamp is a valid UNIX timestamp
-        let _ = i64::try_from(timestamp).map_err(|_| ())?;
+        let _ = i64::try_from(timestamp).map_err(drop)?;
 
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
         if self.config.enforce_expiration_timestamps && timestamp < now {
@@ -2288,8 +2287,8 @@ mod tests {
     use alloy_primitives::hex;
     use alloy_rlp::{Decodable, Encodable};
     use rand::{thread_rng, Rng};
-    use reth_chainspec::net::mainnet_nodes;
     use reth_ethereum_forks::{EnrForkIdEntry, ForkHash};
+    use reth_network_peers::mainnet_nodes;
     use std::future::poll_fn;
 
     #[tokio::test]

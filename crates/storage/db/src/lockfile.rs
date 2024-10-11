@@ -7,7 +7,7 @@ use reth_tracing::tracing::error;
 use std::{
     path::{Path, PathBuf},
     process,
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
@@ -91,7 +91,7 @@ impl StorageLockInner {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ProcessUID {
     /// OS process identifier
     pid: usize,
@@ -102,14 +102,19 @@ struct ProcessUID {
 impl ProcessUID {
     /// Creates [`Self`] for the provided PID.
     fn new(pid: usize) -> Option<Self> {
-        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()))
-            .process(pid.into())
-            .map(|process| Self { pid, start_time: process.start_time() })
+        let mut system = System::new();
+        let pid2 = sysinfo::Pid::from(pid);
+        system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[pid2]),
+            ProcessRefreshKind::new(),
+        );
+        system.process(pid2).map(|process| Self { pid, start_time: process.start_time() })
     }
 
     /// Creates [`Self`] from own process.
     fn own() -> Self {
-        Self::new(process::id() as usize).expect("own process")
+        static CACHE: OnceLock<ProcessUID> = OnceLock::new();
+        CACHE.get_or_init(|| Self::new(process::id() as usize).expect("own process")).clone()
     }
 
     /// Parses [`Self`] from a file.
@@ -144,9 +149,19 @@ impl ProcessUID {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    // helper to ensure some tests are run serially
+    static SERIAL: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn serial_lock() -> MutexGuard<'static, ()> {
+        SERIAL.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
 
     #[test]
     fn test_lock() {
+        let _guard = serial_lock();
+
         let temp_dir = tempfile::tempdir().unwrap();
 
         let lock = StorageLock::try_acquire(temp_dir.path()).unwrap();
@@ -178,6 +193,8 @@ mod tests {
 
     #[test]
     fn test_drop_lock() {
+        let _guard = serial_lock();
+
         let temp_dir = tempfile::tempdir().unwrap();
         let lock_file = temp_dir.path().join(LOCKFILE_NAME);
 

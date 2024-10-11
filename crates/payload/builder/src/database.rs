@@ -1,11 +1,8 @@
 //! Database adapters for payload building.
-
-use reth_primitives::{
-    revm_primitives::{
-        db::{Database, DatabaseRef},
-        AccountInfo, Address, Bytecode, B256,
-    },
-    U256,
+use alloy_primitives::{Address, B256, U256};
+use reth_primitives::revm_primitives::{
+    db::{Database, DatabaseRef},
+    AccountInfo, Bytecode,
 };
 use std::{
     cell::RefCell,
@@ -35,7 +32,7 @@ use std::{
 pub struct CachedReads {
     accounts: HashMap<Address, CachedAccount>,
     contracts: HashMap<B256, Bytecode>,
-    block_hashes: HashMap<U256, B256>,
+    block_hashes: HashMap<u64, B256>,
 }
 
 // === impl CachedReads ===
@@ -70,7 +67,7 @@ pub struct CachedReadsDbMut<'a, DB> {
     pub db: DB,
 }
 
-impl<'a, DB: DatabaseRef> Database for CachedReadsDbMut<'a, DB> {
+impl<DB: DatabaseRef> Database for CachedReadsDbMut<'_, DB> {
     type Error = <DB as DatabaseRef>::Error;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -114,7 +111,7 @@ impl<'a, DB: DatabaseRef> Database for CachedReadsDbMut<'a, DB> {
         }
     }
 
-    fn block_hash(&mut self, number: U256) -> Result<B256, Self::Error> {
+    fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
         let code = match self.cached.block_hashes.entry(number) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => *entry.insert(self.db.block_hash_ref(number)?),
@@ -133,7 +130,7 @@ pub struct CachedReadsDBRef<'a, DB> {
     pub inner: RefCell<CachedReadsDbMut<'a, DB>>,
 }
 
-impl<'a, DB: DatabaseRef> DatabaseRef for CachedReadsDBRef<'a, DB> {
+impl<DB: DatabaseRef> DatabaseRef for CachedReadsDBRef<'_, DB> {
     type Error = <DB as DatabaseRef>::Error;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -148,7 +145,7 @@ impl<'a, DB: DatabaseRef> DatabaseRef for CachedReadsDBRef<'a, DB> {
         self.inner.borrow_mut().storage(address, index)
     }
 
-    fn block_hash_ref(&self, number: U256) -> Result<B256, Self::Error> {
+    fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
         self.inner.borrow_mut().block_hash(number)
     }
 }
@@ -161,6 +158,6 @@ struct CachedAccount {
 
 impl CachedAccount {
     fn new(info: Option<AccountInfo>) -> Self {
-        Self { info, storage: HashMap::new() }
+        Self { info, storage: HashMap::default() }
     }
 }

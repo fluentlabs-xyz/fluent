@@ -3,8 +3,8 @@ use crate::{
     table::{Decode, Encode},
     DatabaseError,
 };
+use alloy_primitives::{Address, BlockNumber, B256};
 use derive_more::AsRef;
-use reth_primitives::{Address, BlockNumber, B256};
 use serde::{Deserialize, Serialize};
 
 use super::ShardedKey;
@@ -15,7 +15,7 @@ pub const NUM_OF_INDICES_IN_SHARD: usize = 2_000;
 /// Sometimes data can be too big to be saved for a single key. This helps out by dividing the data
 /// into different shards. Example:
 ///
-/// `Address | Storagekey | 200` -> data is from transition 0 to 200.
+/// `Address | StorageKey | 200` -> data is from transition 0 to 200.
 ///
 /// `Address | StorageKey | 300` -> data is from transition 201 to 300.
 #[derive(
@@ -61,8 +61,7 @@ impl Encode for StorageShardedKey {
 }
 
 impl Decode for StorageShardedKey {
-    fn decode<B: AsRef<[u8]>>(value: B) -> Result<Self, DatabaseError> {
-        let value = value.as_ref();
+    fn decode(value: &[u8]) -> Result<Self, DatabaseError> {
         let tx_num_index = value.len() - 8;
 
         let highest_tx_number = u64::from_be_bytes(

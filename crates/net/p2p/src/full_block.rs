@@ -3,13 +3,13 @@ use crate::{
     bodies::client::{BodiesClient, SingleBodyRequest},
     error::PeerRequestResult,
     headers::client::{HeadersClient, SingleHeaderRequest},
+    BlockClient,
 };
-use futures::Stream;
+use alloy_primitives::{Sealable, B256};
 use reth_consensus::{Consensus, ConsensusError};
+use reth_eth_wire_types::HeadersDirection;
 use reth_network_peers::WithPeerId;
-use reth_primitives::{
-    BlockBody, GotExpected, Header, HeadersDirection, SealedBlock, SealedHeader, B256,
-};
+use reth_primitives::{BlockBody, GotExpected, Header, SealedBlock, SealedHeader};
 use std::{
     cmp::Reverse,
     collections::{HashMap, VecDeque},
@@ -43,7 +43,7 @@ impl<Client> FullBlockClient<Client> {
 
 impl<Client> FullBlockClient<Client>
 where
-    Client: BodiesClient + HeadersClient + Clone,
+    Client: BlockClient,
 {
     /// Returns a future that fetches the [`SealedBlock`] for the given hash.
     ///
@@ -94,7 +94,7 @@ where
             client,
             headers: None,
             pending_headers: VecDeque::new(),
-            bodies: HashMap::new(),
+            bodies: HashMap::default(),
             consensus: Arc::clone(&self.consensus),
         }
     }
@@ -107,7 +107,7 @@ where
 #[must_use = "futures do nothing unless polled"]
 pub struct FetchFullBlockFuture<Client>
 where
-    Client: BodiesClient + HeadersClient,
+    Client: BlockClient,
 {
     client: Client,
     hash: B256,
@@ -118,7 +118,7 @@ where
 
 impl<Client> FetchFullBlockFuture<Client>
 where
-    Client: BodiesClient + HeadersClient,
+    Client: BlockClient,
 {
     /// Returns the hash of the block being requested.
     pub const fn hash(&self) -> &B256 {
@@ -170,27 +170,37 @@ where
 
 impl<Client> Future for FetchFullBlockFuture<Client>
 where
-    Client: BodiesClient + HeadersClient + Unpin + 'static,
+    Client: BlockClient + 'static,
 {
     type Output = SealedBlock;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
+        // preemptive yield point
+        let mut budget = 4;
+
         loop {
             match ready!(this.request.poll(cx)) {
                 ResponseResult::Header(res) => {
                     match res {
                         Ok(maybe_header) => {
-                            let (peer, maybe_header) =
-                                maybe_header.map(|h| h.map(|h| h.seal_slow())).split();
+                            let (peer, maybe_header) = maybe_header
+                                .map(|h| {
+                                    h.map(|h| {
+                                        let sealed = h.seal_slow();
+                                        let (header, seal) = sealed.into_parts();
+                                        SealedHeader::new(header, seal)
+                                    })
+                                })
+                                .split();
                             if let Some(header) = maybe_header {
-                                if header.hash() != this.hash {
+                                if header.hash() == this.hash {
+                                    this.header = Some(header);
+                                } else {
                                     debug!(target: "downloaders", expected=?this.hash, received=?header.hash(), "Received wrong header");
                                     // received a different header than requested
                                     this.client.report_bad_message(peer)
-                                } else {
-                                    this.header = Some(header);
                                 }
                             }
                         }
@@ -225,13 +235,21 @@ where
             if let Some(res) = this.take_block() {
                 return Poll::Ready(res)
             }
+
+            // ensure we still have enough budget for another iteration
+            budget -= 1;
+            if budget == 0 {
+                // make sure we're woken up again
+                cx.waker().wake_by_ref();
+                return Poll::Pending
+            }
         }
     }
 }
 
 impl<Client> Debug for FetchFullBlockFuture<Client>
 where
-    Client: BodiesClient + HeadersClient,
+    Client: BlockClient,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FetchFullBlockFuture")
@@ -244,7 +262,7 @@ where
 
 struct FullBlockRequest<Client>
 where
-    Client: BodiesClient + HeadersClient,
+    Client: BlockClient,
 {
     header: Option<SingleHeaderRequest<<Client as HeadersClient>::Output>>,
     body: Option<SingleBodyRequest<<Client as BodiesClient>::Output>>,
@@ -252,7 +270,7 @@ where
 
 impl<Client> FullBlockRequest<Client>
 where
-    Client: BodiesClient + HeadersClient,
+    Client: BlockClient,
 {
     fn poll(&mut self, cx: &mut Context<'_>) -> Poll<ResponseResult> {
         if let Some(fut) = Pin::new(&mut self.header).as_pin_mut() {
@@ -364,7 +382,7 @@ fn ensure_valid_body_response(
 #[allow(missing_debug_implementations)]
 pub struct FetchFullBlockRangeFuture<Client>
 where
-    Client: BodiesClient + HeadersClient,
+    Client: BlockClient,
 {
     /// The client used to fetch headers and bodies.
     client: Client,
@@ -386,7 +404,7 @@ where
 
 impl<Client> FetchFullBlockRangeFuture<Client>
 where
-    Client: BodiesClient + HeadersClient,
+    Client: BlockClient,
 {
     /// Returns the block hashes for the given range, if they are available.
     pub fn range_block_hashes(&self) -> Option<Vec<B256>> {
@@ -483,8 +501,17 @@ where
     }
 
     fn on_headers_response(&mut self, headers: WithPeerId<Vec<Header>>) {
-        let (peer, mut headers_falling) =
-            headers.map(|h| h.into_iter().map(|h| h.seal_slow()).collect::<Vec<_>>()).split();
+        let (peer, mut headers_falling) = headers
+            .map(|h| {
+                h.into_iter()
+                    .map(|h| {
+                        let sealed = h.seal_slow();
+                        let (header, seal) = sealed.into_parts();
+                        SealedHeader::new(header, seal)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .split();
 
         // fill in the response if it's the correct length
         if headers_falling.len() == self.count as usize {
@@ -492,16 +519,12 @@ where
             headers_falling.sort_unstable_by_key(|h| Reverse(h.number));
 
             // check the starting hash
-            if headers_falling[0].hash() != self.start_hash {
-                // received a different header than requested
-                self.client.report_bad_message(peer);
-            } else {
+            if headers_falling[0].hash() == self.start_hash {
                 let headers_rising = headers_falling.iter().rev().cloned().collect::<Vec<_>>();
-                // ensure the downloaded headers are valid
+                // check if the downloaded headers are valid
                 if let Err(err) = self.consensus.validate_header_range(&headers_rising) {
                     debug!(target: "downloaders", %err, ?self.start_hash, "Received bad header response");
                     self.client.report_bad_message(peer);
-                    return
                 }
 
                 // get the bodies request so it can be polled later
@@ -518,6 +541,9 @@ where
 
                 // set the headers response
                 self.headers = Some(headers_falling);
+            } else {
+                // received a different header than requested
+                self.client.report_bad_message(peer);
             }
         }
     }
@@ -541,7 +567,7 @@ where
 
 impl<Client> Future for FetchFullBlockRangeFuture<Client>
 where
-    Client: BodiesClient + HeadersClient + Unpin + 'static,
+    Client: BlockClient + 'static,
 {
     type Output = Vec<SealedBlock>;
 
@@ -635,75 +661,12 @@ where
     }
 }
 
-/// A type that buffers the result of a range request so we can return it as a `Stream`.
-struct FullBlockRangeStream<Client>
-where
-    Client: BodiesClient + HeadersClient,
-{
-    /// The inner [`FetchFullBlockRangeFuture`] that is polled.
-    inner: FetchFullBlockRangeFuture<Client>,
-    /// The blocks that have been received so far.
-    ///
-    /// If this is `None` then the request is still in progress. If the vec is empty, then all of
-    /// the response values have been consumed.
-    blocks: Option<Vec<SealedBlock>>,
-}
-
-impl<Client> From<FetchFullBlockRangeFuture<Client>> for FullBlockRangeStream<Client>
-where
-    Client: BodiesClient + HeadersClient,
-{
-    fn from(inner: FetchFullBlockRangeFuture<Client>) -> Self {
-        Self { inner, blocks: None }
-    }
-}
-
-impl<Client> Stream for FullBlockRangeStream<Client>
-where
-    Client: BodiesClient + HeadersClient + Unpin + 'static,
-{
-    type Item = SealedBlock;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-
-        // If all blocks have been consumed, then return `None`.
-        if let Some(blocks) = &mut this.blocks {
-            if blocks.is_empty() {
-                // Stream is finished
-                return Poll::Ready(None)
-            }
-
-            // return the next block if it's ready - the vec should be in ascending order since it
-            // is reversed right after it is received from the future, so we can just pop() the
-            // elements to return them from the stream in descending order
-            return Poll::Ready(blocks.pop())
-        }
-
-        // poll the inner future if the blocks are not yet ready
-        let mut blocks = ready!(Pin::new(&mut this.inner).poll(cx));
-
-        // the blocks are returned in descending order, reverse the list so we can just pop() the
-        // vec to yield the next block in the stream
-        blocks.reverse();
-
-        // pop the first block from the vec as the first stream element and store the rest
-        let first_result = blocks.pop();
-
-        // if the inner future is ready, then we can return the blocks
-        this.blocks = Some(blocks);
-
-        // return the first block
-        Poll::Ready(first_result)
-    }
-}
-
 /// A request for a range of full blocks. Polling this will poll the inner headers and bodies
 /// futures until they return responses. It will return either the header or body result, depending
 /// on which future successfully returned.
 struct FullBlockRangeRequest<Client>
 where
-    Client: BodiesClient + HeadersClient,
+    Client: BlockClient,
 {
     headers: Option<<Client as HeadersClient>::Output>,
     bodies: Option<<Client as BodiesClient>::Output>,
@@ -711,7 +674,7 @@ where
 
 impl<Client> FullBlockRangeRequest<Client>
 where
-    Client: BodiesClient + HeadersClient,
+    Client: BlockClient,
 {
     fn poll(&mut self, cx: &mut Context<'_>) -> Poll<RangeResponseResult> {
         if let Some(fut) = Pin::new(&mut self.headers).as_pin_mut() {
@@ -743,7 +706,6 @@ enum RangeResponseResult {
 mod tests {
     use super::*;
     use crate::test_utils::TestFullBlockClient;
-    use futures::StreamExt;
     use std::ops::Range;
 
     #[tokio::test]
@@ -784,7 +746,10 @@ mod tests {
             header.parent_hash = hash;
             header.number += 1;
 
-            sealed_header = header.seal_slow();
+            let sealed = header.seal_slow();
+            let (header, seal) = sealed.into_parts();
+            sealed_header = SealedHeader::new(header, seal);
+
             client.insert(sealed_header.clone(), body.clone());
         }
 
@@ -810,43 +775,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn download_full_block_range_stream() {
-        let client = TestFullBlockClient::default();
-        let (header, body) = insert_headers_into_client(&client, 0..50);
-        let client = FullBlockClient::test_client(client);
-
-        let future = client.get_full_block_range(header.hash(), 1);
-        let mut stream = FullBlockRangeStream::from(future);
-
-        // ensure only block in the stream is the one we requested
-        let received = stream.next().await.expect("response should not be None");
-        assert_eq!(received, SealedBlock::new(header.clone(), body.clone()));
-
-        // stream should be done now
-        assert_eq!(stream.next().await, None);
-
-        // there are 11 total blocks
-        let future = client.get_full_block_range(header.hash(), 11);
-        let mut stream = FullBlockRangeStream::from(future);
-
-        // check first header
-        let received = stream.next().await.expect("response should not be None");
-        let mut curr_number = received.number;
-        assert_eq!(received, SealedBlock::new(header.clone(), body.clone()));
-
-        // check the rest of the headers
-        for _ in 0..10 {
-            let received = stream.next().await.expect("response should not be None");
-            assert_eq!(received.number, curr_number - 1);
-            curr_number = received.number;
-        }
-
-        // ensure stream is done
-        let received = stream.next().await;
-        assert!(received.is_none());
-    }
-
-    #[tokio::test]
     async fn download_full_block_range_over_soft_limit() {
         // default soft limit is 20, so we will request 50 blocks
         let client = TestFullBlockClient::default();
@@ -859,6 +787,25 @@ mod tests {
 
         let received = client.get_full_block_range(header.hash(), 50).await;
         assert_eq!(received.len(), 50);
+        for (i, block) in received.iter().enumerate() {
+            let expected_number = header.number - i as u64;
+            assert_eq!(block.header.number, expected_number);
+        }
+    }
+
+    #[tokio::test]
+    async fn download_full_block_range_with_invalid_header() {
+        let client = TestFullBlockClient::default();
+        let range_length: usize = 3;
+        let (header, _) = insert_headers_into_client(&client, 0..range_length);
+
+        let test_consensus = reth_consensus::test_utils::TestConsensus::default();
+        test_consensus.set_fail_validation(true);
+        let client = FullBlockClient::new(client, Arc::new(test_consensus));
+
+        let received = client.get_full_block_range(header.hash(), range_length as u64).await;
+
+        assert_eq!(received.len(), range_length);
         for (i, block) in received.iter().enumerate() {
             let expected_number = header.number - i as u64;
             assert_eq!(block.header.number, expected_number);

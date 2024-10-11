@@ -7,7 +7,7 @@ use alloy_primitives::Bytes;
 use bytes::BufMut;
 
 impl Compact for Request {
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: BufMut + AsMut<[u8]>,
     {
@@ -26,10 +26,11 @@ impl Compact for Request {
 mod tests {
     use super::*;
     use proptest::proptest;
+    use proptest_arbitrary_interop::arb;
 
     proptest! {
         #[test]
-        fn roundtrip(request: Request) {
+        fn roundtrip(request in arb::<Request>()) {
             let mut buf = Vec::<u8>::new();
             request.to_compact(&mut buf);
             let (decoded, _) = Request::from_compact(&buf, buf.len());

@@ -1,48 +1,48 @@
 //! Command for debugging execution.
 
-use crate::{
-    args::{get_secret_key, NetworkArgs},
-    commands::common::{AccessRights, Environment, EnvironmentArgs},
-    macros::block_executor,
-    utils::get_single_header,
-};
+use crate::{args::NetworkArgs, utils::get_single_header};
+use alloy_primitives::{BlockNumber, B256};
 use clap::Parser;
 use futures::{stream::select as stream_select, StreamExt};
 use reth_beacon_consensus::EthBeaconConsensus;
+use reth_chainspec::ChainSpec;
+use reth_cli::chainspec::ChainSpecParser;
+use reth_cli_commands::common::{AccessRights, Environment, EnvironmentArgs};
 use reth_cli_runner::CliContext;
+use reth_cli_util::get_secret_key;
 use reth_config::Config;
 use reth_consensus::Consensus;
 use reth_db::DatabaseEnv;
-use reth_db_api::database::Database;
 use reth_downloaders::{
     bodies::bodies::BodiesDownloaderBuilder,
     headers::reverse_headers::ReverseHeadersDownloaderBuilder,
 };
 use reth_exex::ExExManagerHandle;
-use reth_network::{NetworkEvents, NetworkHandle};
+use reth_network::{BlockDownloaderProvider, NetworkEventListenerProvider, NetworkHandle};
 use reth_network_api::NetworkInfo;
-use reth_network_p2p::{bodies::client::BodiesClient, headers::client::HeadersClient};
-use reth_primitives::{BlockHashOrNumber, BlockNumber, B256};
+use reth_network_p2p::{headers::client::HeadersClient, BlockClient};
+use reth_node_api::{NodeTypesWithDB, NodeTypesWithDBAdapter, NodeTypesWithEngine};
+use reth_node_ethereum::EthExecutorProvider;
+use reth_primitives::BlockHashOrNumber;
 use reth_provider::{
     BlockExecutionWriter, ChainSpecProvider, ProviderFactory, StageCheckpointReader,
 };
-use reth_prune_types::PruneModes;
+use reth_prune::PruneModes;
 use reth_stages::{
-    sets::DefaultStages,
-    stages::{ExecutionStage, ExecutionStageThresholds},
-    Pipeline, StageId, StageSet,
+    sets::DefaultStages, stages::ExecutionStage, ExecutionStageThresholds, Pipeline, StageId,
+    StageSet,
 };
 use reth_static_file::StaticFileProducer;
 use reth_tasks::TaskExecutor;
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::watch;
 use tracing::*;
 
 /// `reth debug execution` command
 #[derive(Debug, Parser)]
-pub struct Command {
+pub struct Command<C: ChainSpecParser> {
     #[command(flatten)]
-    env: EnvironmentArgs,
+    env: EnvironmentArgs<C>,
 
     #[command(flatten)]
     network: NetworkArgs,
@@ -57,19 +57,18 @@ pub struct Command {
     pub interval: u64,
 }
 
-impl Command {
-    fn build_pipeline<DB, Client>(
+impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
+    fn build_pipeline<N: NodeTypesWithDB<ChainSpec = C::ChainSpec>, Client>(
         &self,
         config: &Config,
         client: Client,
         consensus: Arc<dyn Consensus>,
-        provider_factory: ProviderFactory<DB>,
+        provider_factory: ProviderFactory<N>,
         task_executor: &TaskExecutor,
-        static_file_producer: StaticFileProducer<DB>,
-    ) -> eyre::Result<Pipeline<DB>>
+        static_file_producer: StaticFileProducer<ProviderFactory<N>>,
+    ) -> eyre::Result<Pipeline<N>>
     where
-        DB: Database + Unpin + Clone + 'static,
-        Client: HeadersClient + BodiesClient + Clone + 'static,
+        Client: BlockClient + 'static,
     {
         // building network downloaders using the fetch client
         let header_downloader = ReverseHeadersDownloaderBuilder::new(config.stages.headers)
@@ -84,9 +83,9 @@ impl Command {
         let prune_modes = config.prune.clone().map(|prune| prune.segments).unwrap_or_default();
 
         let (tip_tx, tip_rx) = watch::channel(B256::ZERO);
-        let executor = block_executor!(provider_factory.chain_spec());
+        let executor = EthExecutorProvider::ethereum(provider_factory.chain_spec());
 
-        let pipeline = Pipeline::builder()
+        let pipeline = Pipeline::<N>::builder()
             .with_tip_sender(tip_tx)
             .add_stages(
                 DefaultStages::new(
@@ -117,11 +116,11 @@ impl Command {
         Ok(pipeline)
     }
 
-    async fn build_network(
+    async fn build_network<N: NodeTypesWithEngine<ChainSpec = C::ChainSpec>>(
         &self,
         config: &Config,
         task_executor: TaskExecutor,
-        provider_factory: ProviderFactory<Arc<DatabaseEnv>>,
+        provider_factory: ProviderFactory<NodeTypesWithDBAdapter<N, Arc<DatabaseEnv>>>,
         network_secret_path: PathBuf,
         default_peers_path: PathBuf,
     ) -> eyre::Result<NetworkHandle> {
@@ -130,11 +129,6 @@ impl Command {
             .network
             .network_config(config, provider_factory.chain_spec(), secret_key, default_peers_path)
             .with_task_executor(Box::new(task_executor))
-            .listener_addr(SocketAddr::new(self.network.addr, self.network.port))
-            .discovery_addr(SocketAddr::new(
-                self.network.discovery.addr,
-                self.network.discovery.port,
-            ))
             .build(provider_factory)
             .start_network()
             .await?;
@@ -163,8 +157,12 @@ impl Command {
     }
 
     /// Execute `execution-debug` command
-    pub async fn execute(self, ctx: CliContext) -> eyre::Result<()> {
-        let Environment { provider_factory, config, data_dir } = self.env.init(AccessRights::RW)?;
+    pub async fn execute<N: NodeTypesWithEngine<ChainSpec = C::ChainSpec>>(
+        self,
+        ctx: CliContext,
+    ) -> eyre::Result<()> {
+        let Environment { provider_factory, config, data_dir } =
+            self.env.init::<N>(AccessRights::RW)?;
 
         let consensus: Arc<dyn Consensus> =
             Arc::new(EthBeaconConsensus::new(provider_factory.chain_spec()));
@@ -213,10 +211,9 @@ impl Command {
         ctx.task_executor.spawn_critical(
             "events task",
             reth_node_events::node::handle_events(
-                Some(network.clone()),
+                Some(Box::new(network)),
                 latest_block_number,
                 events,
-                provider_factory.db_ref().clone(),
             ),
         );
 

@@ -1,20 +1,5 @@
 //! Discovery support for the network.
 
-use crate::{
-    cache::LruMap,
-    error::{NetworkError, ServiceKind},
-    manager::DiscoveredEvent,
-};
-use enr::Enr;
-use futures::StreamExt;
-use reth_discv4::{DiscoveryUpdate, Discv4, Discv4Config};
-use reth_discv5::{DiscoveredPeer, Discv5};
-use reth_dns_discovery::{
-    DnsDiscoveryConfig, DnsDiscoveryHandle, DnsDiscoveryService, DnsNodeRecordUpdate, DnsResolver,
-};
-use reth_network_peers::{NodeRecord, PeerId};
-use reth_primitives::{EnrForkIdEntry, ForkId};
-use secp256k1::SecretKey;
 use std::{
     collections::VecDeque,
     net::{IpAddr, SocketAddr},
@@ -22,9 +7,27 @@ use std::{
     sync::Arc,
     task::{ready, Context, Poll},
 };
+
+use enr::Enr;
+use futures::StreamExt;
+use reth_discv4::{DiscoveryUpdate, Discv4, Discv4Config};
+use reth_discv5::{DiscoveredPeer, Discv5};
+use reth_dns_discovery::{
+    DnsDiscoveryConfig, DnsDiscoveryHandle, DnsDiscoveryService, DnsNodeRecordUpdate, DnsResolver,
+};
+use reth_network_api::{DiscoveredEvent, DiscoveryEvent};
+use reth_network_peers::{NodeRecord, PeerId};
+use reth_network_types::PeerAddr;
+use reth_primitives::{EnrForkIdEntry, ForkId};
+use secp256k1::SecretKey;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::{wrappers::ReceiverStream, Stream};
 use tracing::trace;
+
+use crate::{
+    cache::LruMap,
+    error::{NetworkError, ServiceKind},
+};
 
 /// Default max capacity for cache of discovered peers.
 ///
@@ -40,7 +43,7 @@ pub struct Discovery {
     /// All nodes discovered via discovery protocol.
     ///
     /// These nodes can be ephemeral and are updated via the discovery protocol.
-    discovered_nodes: LruMap<PeerId, SocketAddr>,
+    discovered_nodes: LruMap<PeerId, PeerAddr>,
     /// Local ENR of the discovery v4 service (discv5 ENR has same [`PeerId`]).
     local_enr: NodeRecord,
     /// Handler to interact with the Discovery v4 service
@@ -193,6 +196,11 @@ impl Discovery {
         }
     }
 
+    /// Returns discv5 handle.
+    pub fn discv5(&self) -> Option<Discv5> {
+        self.discv5.clone()
+    }
+
     /// Add a node to the discv4 table.
     pub(crate) fn add_discv5_node(&self, enr: Enr<SecretKey>) -> Result<(), NetworkError> {
         if let Some(discv5) = &self.discv5 {
@@ -204,12 +212,14 @@ impl Discovery {
 
     /// Processes an incoming [`NodeRecord`] update from a discovery service
     fn on_node_record_update(&mut self, record: NodeRecord, fork_id: Option<ForkId>) {
-        let id = record.id;
-        let addr = record.tcp_addr();
+        let peer_id = record.id;
+        let tcp_addr = record.tcp_addr();
+        let udp_addr = record.udp_addr();
+        let addr = PeerAddr::new(tcp_addr, Some(udp_addr));
         _ =
-            self.discovered_nodes.get_or_insert(id, || {
+            self.discovered_nodes.get_or_insert(peer_id, || {
                 self.queued_events.push_back(DiscoveryEvent::NewNode(
-                    DiscoveredEvent::EventQueued { peer_id: id, socket_addr: addr, fork_id },
+                    DiscoveredEvent::EventQueued { peer_id, addr, fork_id },
                 ));
 
                 addr
@@ -224,8 +234,8 @@ impl Discovery {
             DiscoveryUpdate::EnrForkId(node, fork_id) => {
                 self.queued_events.push_back(DiscoveryEvent::EnrForkId(node.id, fork_id))
             }
-            DiscoveryUpdate::Removed(node) => {
-                self.discovered_nodes.remove(&node);
+            DiscoveryUpdate::Removed(peer_id) => {
+                self.discovered_nodes.remove(&peer_id);
             }
             DiscoveryUpdate::Batch(updates) => {
                 for update in updates {
@@ -323,15 +333,6 @@ impl Discovery {
     }
 }
 
-/// Events produced by the [`Discovery`] manager.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DiscoveryEvent {
-    /// Discovered a node
-    NewNode(DiscoveredEvent),
-    /// Retrieved a [`ForkId`] from the peer via ENR request, See <https://eips.ethereum.org/EIPS/eip-868>
-    EnrForkId(PeerId, ForkId),
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,7 +428,7 @@ mod tests {
         assert_eq!(
             DiscoveryEvent::NewNode(DiscoveredEvent::EventQueued {
                 peer_id: discv4_id_2,
-                socket_addr: discv4_enr_2.tcp_addr(),
+                addr: PeerAddr::new(discv4_enr_2.tcp_addr(), Some(discv4_enr_2.udp_addr())),
                 fork_id: None
             }),
             event_node_1
@@ -435,7 +436,7 @@ mod tests {
         assert_eq!(
             DiscoveryEvent::NewNode(DiscoveredEvent::EventQueued {
                 peer_id: discv4_id_1,
-                socket_addr: discv4_enr_1.tcp_addr(),
+                addr: PeerAddr::new(discv4_enr_1.tcp_addr(), Some(discv4_enr_1.udp_addr())),
                 fork_id: None
             }),
             event_node_2

@@ -34,6 +34,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
+mod backfill;
+pub use backfill::*;
+
 mod context;
 pub use context::*;
 
@@ -43,8 +46,11 @@ pub use event::*;
 mod manager;
 pub use manager::*;
 
-mod notification;
-pub use notification::*;
+mod notifications;
+pub use notifications::*;
+
+mod wal;
+pub use wal::*;
 
 // Re-export exex types
 #[doc(inline)]

@@ -14,18 +14,22 @@
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
-// TODO: remove when https://github.com/proptest-rs/proptest/pull/427 is merged
-#![allow(unknown_lints, non_local_definitions)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use reth_codecs_derive::*;
 
 use alloy_primitives::{Address, Bloom, Bytes, FixedBytes, U256};
-use bytes::Buf;
+use bytes::{Buf, BufMut};
+
+extern crate alloc;
+use alloc::vec::Vec;
 
 #[cfg(any(test, feature = "alloy"))]
 mod alloy;
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils;
 
 /// Trait that implements the `Compact` codec.
 ///
@@ -46,7 +50,7 @@ mod alloy;
 /// size array like `Vec<B256>`.
 pub trait Compact: Sized {
     /// Takes a buffer which can be written to. *Ideally*, it returns the length written to.
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>;
 
@@ -60,7 +64,7 @@ pub trait Compact: Sized {
 
     /// "Optional": If there's no good reason to use it, don't.
     #[inline]
-    fn specialized_to_compact<B>(self, buf: &mut B) -> usize
+    fn specialized_to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
@@ -74,12 +78,25 @@ pub trait Compact: Sized {
     }
 }
 
+impl<T: Compact> Compact for &T {
+    fn to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: BufMut + AsMut<[u8]>,
+    {
+        (*self).to_compact(buf)
+    }
+
+    fn from_compact(_: &[u8], _: usize) -> (Self, &[u8]) {
+        unimplemented!()
+    }
+}
+
 /// To be used with `Option<CompactPlaceholder>` to place or replace one bit on the bitflag struct.
 pub type CompactPlaceholder = ();
 
 impl Compact for CompactPlaceholder {
     #[inline]
-    fn to_compact<B>(self, _: &mut B) -> usize
+    fn to_compact<B>(&self, _: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
@@ -97,7 +114,7 @@ macro_rules! impl_uint_compact {
         $(
             impl Compact for $name {
                 #[inline]
-                fn to_compact<B>(self, buf: &mut B) -> usize
+                fn to_compact<B>(&self, buf: &mut B) -> usize
                     where B: bytes::BufMut + AsMut<[u8]>
                 {
                     let leading = self.leading_zeros() as usize / 8;
@@ -129,25 +146,11 @@ where
 {
     /// Returns 0 since we won't include it in the `StructFlags`.
     #[inline]
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
-        encode_varuint(self.len(), buf);
-
-        let mut tmp: Vec<u8> = Vec::with_capacity(64);
-
-        for element in self {
-            tmp.clear();
-
-            // We don't know the length until we compact it
-            let length = element.to_compact(&mut tmp);
-            encode_varuint(length, buf);
-
-            buf.put_slice(&tmp);
-        }
-
-        0
+        self.as_slice().to_compact(buf)
     }
 
     #[inline]
@@ -169,15 +172,11 @@ where
 
     /// To be used by fixed sized types like `Vec<B256>`.
     #[inline]
-    fn specialized_to_compact<B>(self, buf: &mut B) -> usize
+    fn specialized_to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
-        encode_varuint(self.len(), buf);
-        for element in self {
-            element.to_compact(buf);
-        }
-        0
+        self.as_slice().specialized_to_compact(buf)
     }
 
     /// To be used by fixed sized types like `Vec<B256>`.
@@ -196,13 +195,64 @@ where
     }
 }
 
+impl<T> Compact for &[T]
+where
+    T: Compact,
+{
+    /// Returns 0 since we won't include it in the `StructFlags`.
+    #[inline]
+    fn to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: bytes::BufMut + AsMut<[u8]>,
+    {
+        encode_varuint(self.len(), buf);
+
+        let mut tmp: Vec<u8> = Vec::with_capacity(64);
+
+        for element in *self {
+            tmp.clear();
+
+            // We don't know the length until we compact it
+            let length = element.to_compact(&mut tmp);
+            encode_varuint(length, buf);
+
+            buf.put_slice(&tmp);
+        }
+
+        0
+    }
+
+    #[inline]
+    fn from_compact(_: &[u8], _: usize) -> (Self, &[u8]) {
+        unimplemented!()
+    }
+
+    /// To be used by fixed sized types like `&[B256]`.
+    #[inline]
+    fn specialized_to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: bytes::BufMut + AsMut<[u8]>,
+    {
+        encode_varuint(self.len(), buf);
+        for element in *self {
+            element.to_compact(buf);
+        }
+        0
+    }
+
+    #[inline]
+    fn specialized_from_compact(_: &[u8], _: usize) -> (Self, &[u8]) {
+        unimplemented!()
+    }
+}
+
 impl<T> Compact for Option<T>
 where
     T: Compact,
 {
     /// Returns 0 for `None` and 1 for `Some(_)`.
     #[inline]
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
@@ -235,7 +285,7 @@ where
 
     /// To be used by fixed sized types like `Option<B256>`.
     #[inline]
-    fn specialized_to_compact<B>(self, buf: &mut B) -> usize
+    fn specialized_to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
@@ -261,7 +311,7 @@ where
 
 impl Compact for U256 {
     #[inline]
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
@@ -286,12 +336,12 @@ impl Compact for U256 {
 
 impl Compact for Bytes {
     #[inline]
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
         let len = self.len();
-        buf.put(self.0);
+        buf.put_slice(&self.0);
         len
     }
 
@@ -303,11 +353,11 @@ impl Compact for Bytes {
 
 impl<const N: usize> Compact for [u8; N] {
     #[inline]
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
-        buf.put_slice(&self);
+        buf.put_slice(&self[..]);
         N
     }
 
@@ -330,7 +380,7 @@ macro_rules! impl_compact_for_wrapped_bytes {
         $(
             impl Compact for $name {
                 #[inline]
-                fn to_compact<B>(self, buf: &mut B) -> usize
+                fn to_compact<B>(&self, buf: &mut B) -> usize
                 where
                     B: bytes::BufMut + AsMut<[u8]>
                 {
@@ -350,7 +400,7 @@ impl_compact_for_wrapped_bytes!(Address, Bloom);
 
 impl<const N: usize> Compact for FixedBytes<N> {
     #[inline]
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
@@ -367,11 +417,11 @@ impl<const N: usize> Compact for FixedBytes<N> {
 impl Compact for bool {
     /// `bool` vars go directly to the `StructFlags` and are not written to the buffer.
     #[inline]
-    fn to_compact<B>(self, _: &mut B) -> usize
+    fn to_compact<B>(&self, _: &mut B) -> usize
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
-        self as usize
+        *self as usize
     }
 
     /// `bool` expects the real value to come in `len`, and does not advance the cursor.
@@ -416,13 +466,14 @@ const fn decode_varuint_panic() -> ! {
 mod tests {
     use super::*;
     use alloy_primitives::B256;
+    use serde::{Deserialize, Serialize};
 
     #[test]
     fn compact_bytes() {
         let arr = [1, 2, 3, 4, 5];
         let list = Bytes::copy_from_slice(&arr);
-        let mut buf = vec![];
-        assert_eq!(list.clone().to_compact(&mut buf), list.len());
+        let mut buf = Vec::with_capacity(list.len() + 1);
+        assert_eq!(list.to_compact(&mut buf), list.len());
 
         // Add some noise data.
         buf.push(1);
@@ -446,7 +497,7 @@ mod tests {
 
     #[test]
     fn compact_b256() {
-        let mut buf = vec![];
+        let mut buf = Vec::with_capacity(32 + 1);
         assert_eq!(B256::ZERO.to_compact(&mut buf), 32);
         assert_eq!(buf, vec![0; 32]);
 
@@ -479,7 +530,7 @@ mod tests {
     #[test]
     fn compact_option() {
         let opt = Some(B256::ZERO);
-        let mut buf = vec![];
+        let mut buf = Vec::with_capacity(1 + 32);
 
         assert_eq!(None::<B256>.to_compact(&mut buf), 0);
         assert_eq!(opt.to_compact(&mut buf), 1);
@@ -490,7 +541,7 @@ mod tests {
         // If `None`, it returns the slice at the same cursor position.
         assert_eq!(Option::<B256>::from_compact(&buf, 0), (None, buf.as_slice()));
 
-        let mut buf = vec![];
+        let mut buf = Vec::with_capacity(32);
         assert_eq!(opt.specialized_to_compact(&mut buf), 1);
         assert_eq!(buf.len(), 32);
         assert_eq!(Option::<B256>::specialized_from_compact(&buf, 1), (opt, vec![].as_slice()));
@@ -502,7 +553,7 @@ mod tests {
         let mut buf = vec![];
 
         // Vec doesn't return a total length
-        assert_eq!(list.clone().to_compact(&mut buf), 0);
+        assert_eq!(list.to_compact(&mut buf), 0);
 
         // Add some noise data in the end that should be returned by `from_compact`.
         buf.extend([1u8, 2]);
@@ -539,7 +590,7 @@ mod tests {
         assert_eq!(buf, vec![2u8]);
         assert_eq!(u64::from_compact(&buf, 1), (2u64, vec![].as_slice()));
 
-        let mut buf = vec![];
+        let mut buf = Vec::with_capacity(8);
 
         assert_eq!(0xffffffffffffffffu64.to_compact(&mut buf), 8);
         assert_eq!(&buf, &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
@@ -557,8 +608,35 @@ mod tests {
         });
     }
 
-    #[main_codec]
-    #[derive(Debug, PartialEq, Clone)]
+    #[test]
+    fn compact_slice() {
+        let vec_list = vec![B256::ZERO, B256::random(), B256::random(), B256::ZERO];
+
+        // to_compact
+        {
+            let mut vec_buf = vec![];
+            assert_eq!(vec_list.to_compact(&mut vec_buf), 0);
+
+            let mut slice_buf = vec![];
+            assert_eq!(vec_list.as_slice().to_compact(&mut slice_buf), 0);
+
+            assert_eq!(vec_buf, slice_buf);
+        }
+
+        // specialized_to_compact
+        {
+            let mut vec_buf = vec![];
+            assert_eq!(vec_list.specialized_to_compact(&mut vec_buf), 0);
+
+            let mut slice_buf = vec![];
+            assert_eq!(vec_list.as_slice().specialized_to_compact(&mut slice_buf), 0);
+
+            assert_eq!(vec_buf, slice_buf);
+        }
+    }
+
+    #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Compact, arbitrary::Arbitrary)]
+    #[add_arbitrary_tests(compact)]
     struct TestStruct {
         f_u64: u64,
         f_u256: U256,
@@ -590,18 +668,16 @@ mod tests {
     #[test]
     fn compact_test_struct() {
         let test = TestStruct::default();
-        let mut buf = vec![];
-        assert_eq!(
-            test.to_compact(&mut buf),
-            2 + // TestStructFlags
+        const EXPECTED_SIZE: usize = 2 + // TestStructFlags
             1 +
             1 +
             // 0 + 0 + 0 +
             32 +
             1 + 2 +
             1 +
-            1 + 20 * 2
-        );
+            1 + 20 * 2;
+        let mut buf = Vec::with_capacity(EXPECTED_SIZE);
+        assert_eq!(test.to_compact(&mut buf), EXPECTED_SIZE);
 
         assert_eq!(
             TestStruct::from_compact(&buf, buf.len()),
@@ -609,8 +685,10 @@ mod tests {
         );
     }
 
-    #[main_codec]
-    #[derive(Debug, PartialEq, Clone, Default)]
+    #[derive(
+        Debug, PartialEq, Clone, Default, Serialize, Deserialize, Compact, arbitrary::Arbitrary,
+    )]
+    #[add_arbitrary_tests(compact)]
     enum TestEnum {
         #[default]
         Var0,
@@ -623,15 +701,15 @@ mod tests {
     #[test_fuzz::test_fuzz]
     fn compact_test_enum_all_variants(var0: TestEnum, var1: TestEnum, var2: TestEnum) {
         let mut buf = vec![];
-        var0.clone().to_compact(&mut buf);
+        var0.to_compact(&mut buf);
         assert_eq!(TestEnum::from_compact(&buf, buf.len()).0, var0);
 
         let mut buf = vec![];
-        var1.clone().to_compact(&mut buf);
+        var1.to_compact(&mut buf);
         assert_eq!(TestEnum::from_compact(&buf, buf.len()).0, var1);
 
         let mut buf = vec![];
-        var2.clone().to_compact(&mut buf);
+        var2.to_compact(&mut buf);
         assert_eq!(TestEnum::from_compact(&buf, buf.len()).0, var2);
     }
 

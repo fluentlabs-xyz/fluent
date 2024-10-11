@@ -1,102 +1,61 @@
 //! Traits for configuring a node.
 
-use crate::{primitives::NodePrimitives, ConfigureEvm, EngineTypes};
-use reth_db_api::{
-    database::Database,
-    database_metrics::{DatabaseMetadata, DatabaseMetrics},
-};
-use reth_evm::execute::BlockExecutorProvider;
-use reth_network::NetworkHandle;
-use reth_payload_builder::PayloadBuilderHandle;
-use reth_provider::FullProvider;
-use reth_tasks::TaskExecutor;
-use reth_transaction_pool::TransactionPool;
 use std::marker::PhantomData;
 
-/// The type that configures the essential types of an ethereum like node.
-///
-/// This includes the primitive types of a node, the engine API types for communication with the
-/// consensus layer.
-///
-/// This trait is intended to be stateless and only define the types of the node.
-pub trait NodeTypes: Send + Sync + Unpin + 'static {
-    /// The node's primitive types, defining basic operations and structures.
-    type Primitives: NodePrimitives;
-    /// The node's engine types, defining the interaction with the consensus engine.
-    type Engine: EngineTypes;
-}
+use reth_evm::execute::BlockExecutorProvider;
+use reth_network_api::FullNetwork;
+use reth_node_types::{NodeTypesWithDB, NodeTypesWithEngine};
+use reth_payload_builder::PayloadBuilderHandle;
+use reth_primitives::Header;
+use reth_provider::FullProvider;
+use reth_rpc_eth_api::EthApiTypes;
+use reth_tasks::TaskExecutor;
+use reth_transaction_pool::TransactionPool;
 
-/// A helper trait that is downstream of the [`NodeTypes`] trait and adds stateful components to the
-/// node.
+use crate::ConfigureEvm;
+
+/// A helper trait that is downstream of the [`NodeTypesWithEngine`] trait and adds stateful
+/// components to the node.
 ///
 /// Its types are configured by node internally and are not intended to be user configurable.
-pub trait FullNodeTypes: NodeTypes + 'static {
-    /// Underlying database type used by the node to store and retrieve data.
-    type DB: Database + DatabaseMetrics + DatabaseMetadata + Clone + Unpin + 'static;
+pub trait FullNodeTypes: Send + Sync + Unpin + 'static {
+    /// Node's types with the database.
+    type Types: NodeTypesWithDB + NodeTypesWithEngine;
     /// The provider type used to interact with the node.
-    type Provider: FullProvider<Self::DB>;
+    type Provider: FullProvider<Self::Types>;
 }
 
 /// An adapter type that adds the builtin provider type to the user configured node types.
 #[derive(Debug)]
-pub struct FullNodeTypesAdapter<Types, DB, Provider> {
+pub struct FullNodeTypesAdapter<Types, Provider> {
     /// An instance of the user configured node types.
     pub types: PhantomData<Types>,
-    /// The database type used by the node.
-    pub db: PhantomData<DB>,
     /// The provider type used by the node.
     pub provider: PhantomData<Provider>,
 }
 
-impl<Types, DB, Provider> FullNodeTypesAdapter<Types, DB, Provider> {
-    /// Create a new adapter with the configured types.
-    pub fn new() -> Self {
-        Self { types: Default::default(), db: Default::default(), provider: Default::default() }
-    }
-}
-
-impl<Types, DB, Provider> Default for FullNodeTypesAdapter<Types, DB, Provider> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<Types, DB, Provider> Clone for FullNodeTypesAdapter<Types, DB, Provider> {
-    fn clone(&self) -> Self {
-        Self { types: self.types, db: self.db, provider: self.provider }
-    }
-}
-
-impl<Types, DB, Provider> NodeTypes for FullNodeTypesAdapter<Types, DB, Provider>
+impl<Types, Provider> FullNodeTypes for FullNodeTypesAdapter<Types, Provider>
 where
-    Types: NodeTypes,
-    DB: Send + Sync + Unpin + 'static,
-    Provider: Send + Sync + Unpin + 'static,
+    Types: NodeTypesWithDB + NodeTypesWithEngine,
+    Provider: FullProvider<Types>,
 {
-    type Primitives = Types::Primitives;
-    type Engine = Types::Engine;
-}
-
-impl<Types, DB, Provider> FullNodeTypes for FullNodeTypesAdapter<Types, DB, Provider>
-where
-    Types: NodeTypes,
-    Provider: FullProvider<DB>,
-    DB: Database + DatabaseMetrics + DatabaseMetadata + Clone + Unpin + 'static,
-{
-    type DB = DB;
+    type Types = Types;
     type Provider = Provider;
 }
 
 /// Encapsulates all types and components of the node.
-pub trait FullNodeComponents: FullNodeTypes + 'static {
+pub trait FullNodeComponents: FullNodeTypes + Clone + 'static {
     /// The transaction pool of the node.
     type Pool: TransactionPool + Unpin;
 
     /// The node's EVM configuration, defining settings for the Ethereum Virtual Machine.
-    type Evm: ConfigureEvm;
+    type Evm: ConfigureEvm<Header = Header>;
 
     /// The type that knows how to execute blocks.
     type Executor: BlockExecutorProvider;
+
+    /// Network API.
+    type Network: FullNetwork;
 
     /// Returns the transaction pool of the node.
     fn pool(&self) -> &Self::Pool;
@@ -111,11 +70,44 @@ pub trait FullNodeComponents: FullNodeTypes + 'static {
     fn provider(&self) -> &Self::Provider;
 
     /// Returns the handle to the network
-    fn network(&self) -> &NetworkHandle;
+    fn network(&self) -> &Self::Network;
 
     /// Returns the handle to the payload builder service.
-    fn payload_builder(&self) -> &PayloadBuilderHandle<Self::Engine>;
+    fn payload_builder(
+        &self,
+    ) -> &PayloadBuilderHandle<<Self::Types as NodeTypesWithEngine>::Engine>;
 
-    /// Returns the task executor.
+    /// Returns handle to runtime.
     fn task_executor(&self) -> &TaskExecutor;
 }
+
+/// Customizable node add-on types.
+pub trait NodeAddOns<N: FullNodeComponents>: Send + Sync + Unpin + Clone + 'static {
+    /// The core `eth` namespace API type to install on the RPC server (see
+    /// `reth_rpc_eth_api::EthApiServer`).
+    type EthApi: EthApiTypes + Send + Clone;
+}
+
+impl<N: FullNodeComponents> NodeAddOns<N> for () {
+    type EthApi = ();
+}
+
+/// Returns the builder for type.
+pub trait BuilderProvider<N: FullNodeComponents>: Send {
+    /// Context required to build type.
+    type Ctx<'a>;
+
+    /// Returns builder for type.
+    #[allow(clippy::type_complexity)]
+    fn builder() -> Box<dyn for<'a> Fn(Self::Ctx<'a>) -> Self + Send>;
+}
+
+impl<N: FullNodeComponents> BuilderProvider<N> for () {
+    type Ctx<'a> = ();
+
+    fn builder() -> Box<dyn for<'a> Fn(Self::Ctx<'a>) -> Self + Send> {
+        Box::new(noop_builder)
+    }
+}
+
+const fn noop_builder(_: ()) {}

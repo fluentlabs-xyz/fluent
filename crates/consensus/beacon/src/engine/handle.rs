@@ -4,12 +4,12 @@ use crate::{
     engine::message::OnForkChoiceUpdated, BeaconConsensusEngineEvent, BeaconEngineMessage,
     BeaconForkChoiceUpdateError, BeaconOnNewPayloadError,
 };
+use alloy_rpc_types_engine::{
+    CancunPayloadFields, ExecutionPayload, ForkchoiceState, ForkchoiceUpdated, PayloadStatus,
+};
 use futures::TryFutureExt;
 use reth_engine_primitives::EngineTypes;
 use reth_errors::RethResult;
-use reth_rpc_types::engine::{
-    CancunPayloadFields, ExecutionPayload, ForkchoiceState, ForkchoiceUpdated, PayloadStatus,
-};
 use reth_tokio_util::{EventSender, EventStream};
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
@@ -87,7 +87,10 @@ where
     /// Sends a transition configuration exchange message to the beacon consensus engine.
     ///
     /// See also <https://github.com/ethereum/execution-apis/blob/3d627c95a4d3510a8187dd02e0250ecb4331d27e/src/engine/paris.md#engine_exchangetransitionconfigurationv1>
-    pub async fn transition_configuration_exchanged(&self) {
+    ///
+    /// This only notifies about the exchange. The actual exchange is done by the engine API impl
+    /// itself.
+    pub fn transition_configuration_exchanged(&self) {
         let _ = self.to_engine.send(BeaconEngineMessage::TransitionConfigurationExchanged);
     }
 

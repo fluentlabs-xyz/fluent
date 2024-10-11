@@ -7,32 +7,39 @@
 )]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-pub use alloy_chains::{Chain, ChainKind, NamedChain};
-pub use info::ChainInfo;
-pub use spec::{
-    AllGenesisFormats, BaseFeeParams, BaseFeeParamsKind, ChainSpec, ChainSpecBuilder,
-    DepositContract, ForkBaseFeeParams, DEV, GOERLI, HOLESKY, MAINNET, SEPOLIA, DEVELOPER_PREVIEW,
-};
-#[cfg(feature = "optimism")]
-pub use spec::{BASE_MAINNET, BASE_SEPOLIA, OP_MAINNET, OP_SEPOLIA};
-
-// /// The config info module namely spec id.
-// pub mod config;
-/// The chain info module.
-mod info;
-
-/// Network related constants
-pub mod net;
-
-/// The chain spec module.
-mod spec;
+extern crate alloc;
 
 /// Chain specific constants
 pub(crate) mod constants;
+pub use constants::MIN_TRANSACTION_GAS;
 
+mod api;
+/// The chain info module.
+mod info;
+/// The chain spec module.
+mod spec;
+
+pub use alloy_chains::{Chain, ChainKind, NamedChain};
 /// Re-export for convenience
 pub use reth_ethereum_forks::*;
+
+pub use api::EthChainSpec;
+pub use info::ChainInfo;
+#[cfg(feature = "test-utils")]
+pub use spec::test_fork_ids;
+pub use spec::{
+    BaseFeeParams, BaseFeeParamsKind, ChainSpec, ChainSpecBuilder, ChainSpecProvider,
+    DepositContract, ForkBaseFeeParams, DEV, HOLESKY, MAINNET, SEPOLIA,
+};
+
+/// Simple utility to create a `OnceCell` with a value set.
+pub fn once_cell_set<T>(value: T) -> once_cell::sync::OnceCell<T> {
+    let once = once_cell::sync::OnceCell::new();
+    let _ = once.set(value);
+    once
+}
 
 #[cfg(test)]
 mod tests {
@@ -49,8 +56,8 @@ mod tests {
 
     #[test]
     fn test_named_id() {
-        let chain = Chain::from_named(NamedChain::Goerli);
-        assert_eq!(chain.id(), 5);
+        let chain = Chain::from_named(NamedChain::Holesky);
+        assert_eq!(chain.id(), 17000);
     }
 
     #[test]
@@ -76,9 +83,9 @@ mod tests {
 
     #[test]
     fn test_into_u256() {
-        let chain = Chain::from_named(NamedChain::Goerli);
+        let chain = Chain::from_named(NamedChain::Holesky);
         let n: U256 = U256::from(chain.id());
-        let expected = U256::from(5);
+        let expected = U256::from(17000);
 
         assert_eq!(n, expected);
     }

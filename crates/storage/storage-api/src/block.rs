@@ -1,11 +1,12 @@
 use crate::{
-    BlockIdReader, BlockNumReader, HeaderProvider, ReceiptProvider, ReceiptProviderIdExt,
-    RequestsProvider, TransactionVariant, TransactionsProvider, WithdrawalsProvider,
+    BlockNumReader, HeaderProvider, ReceiptProvider, ReceiptProviderIdExt, RequestsProvider,
+    TransactionVariant, TransactionsProvider, WithdrawalsProvider,
 };
-use reth_db_api::models::StoredBlockBodyIndices;
+use alloy_eips::{BlockHashOrNumber, BlockId, BlockNumberOrTag};
+use alloy_primitives::{BlockNumber, Sealable, B256};
+use reth_db_models::StoredBlockBodyIndices;
 use reth_primitives::{
-    Block, BlockHashOrNumber, BlockId, BlockNumber, BlockNumberOrTag, BlockWithSenders, Header,
-    Receipt, SealedBlock, SealedBlockWithSenders, SealedHeader, B256,
+    Block, BlockWithSenders, Header, Receipt, SealedBlock, SealedBlockWithSenders, SealedHeader,
 };
 use reth_storage_errors::provider::ProviderResult;
 use std::ops::RangeInclusive;
@@ -23,10 +24,10 @@ pub enum BlockSource {
     #[default]
     Any,
     /// The block was fetched from the pending block source, the blockchain tree that buffers
-    /// blocks that are not yet finalized.
+    /// blocks that are not yet part of the canonical chain.
     Pending,
-    /// The block was fetched from the database.
-    Database,
+    /// The block must be part of the canonical chain.
+    Canonical,
 }
 
 impl BlockSource {
@@ -35,9 +36,9 @@ impl BlockSource {
         matches!(self, Self::Pending | Self::Any)
     }
 
-    /// Returns `true` if the block source is `Database` or `Any`.
-    pub const fn is_database(&self) -> bool {
-        matches!(self, Self::Database | Self::Any)
+    /// Returns `true` if the block source is `Canonical` or `Any`.
+    pub const fn is_canonical(&self) -> bool {
+        matches!(self, Self::Canonical | Self::Any)
     }
 }
 
@@ -118,6 +119,17 @@ pub trait BlockReader:
         transaction_kind: TransactionVariant,
     ) -> ProviderResult<Option<BlockWithSenders>>;
 
+    /// Returns the sealed block with senders with matching number or hash from database.
+    ///
+    /// Returns the block's transactions in the requested variant.
+    ///
+    /// Returns `None` if block is not found.
+    fn sealed_block_with_senders(
+        &self,
+        id: BlockHashOrNumber,
+        transaction_kind: TransactionVariant,
+    ) -> ProviderResult<Option<SealedBlockWithSenders>>;
+
     /// Returns all blocks in the given inclusive range.
     ///
     /// Note: returns only available blocks
@@ -149,7 +161,7 @@ pub trait BlockReader:
 /// `BlockIdReader` methods should be used to resolve `BlockId`s to block numbers or hashes, and
 /// retrieving the block should be done using the type's `BlockReader` methods.
 #[auto_impl::auto_impl(&, Arc)]
-pub trait BlockReaderIdExt: BlockReader + BlockIdReader + ReceiptProviderIdExt {
+pub trait BlockReaderIdExt: BlockReader + ReceiptProviderIdExt {
     /// Returns the block with matching tag from the database
     ///
     /// Returns `None` if block is not found.
@@ -189,12 +201,12 @@ pub trait BlockReaderIdExt: BlockReader + BlockIdReader + ReceiptProviderIdExt {
         self.sealed_header_by_id(BlockNumberOrTag::Finalized.into())
     }
 
-    /// Returns the block with the matching [BlockId] from the database.
+    /// Returns the block with the matching [`BlockId`] from the database.
     ///
     /// Returns `None` if block is not found.
     fn block_by_id(&self, id: BlockId) -> ProviderResult<Option<Block>>;
 
-    /// Returns the block with senders with matching [BlockId].
+    /// Returns the block with senders with matching [`BlockId`].
     ///
     /// Returns the block's transactions in the requested variant.
     ///
@@ -232,7 +244,14 @@ pub trait BlockReaderIdExt: BlockReader + BlockIdReader + ReceiptProviderIdExt {
     ) -> ProviderResult<Option<SealedHeader>> {
         self.convert_block_number(id)?
             .map_or_else(|| Ok(None), |num| self.header_by_hash_or_number(num.into()))?
-            .map_or_else(|| Ok(None), |h| Ok(Some(h.seal_slow())))
+            .map_or_else(
+                || Ok(None),
+                |h| {
+                    let sealed = h.seal_slow();
+                    let (header, seal) = sealed.into_parts();
+                    Ok(Some(SealedHeader::new(header, seal)))
+                },
+            )
     }
 
     /// Returns the sealed header with the matching `BlockId` from the database.

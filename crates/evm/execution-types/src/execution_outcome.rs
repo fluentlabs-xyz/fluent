@@ -1,9 +1,6 @@
-use reth_primitives::{
-    logs_bloom,
-    revm::compat::{into_reth_acc, into_revm_acc},
-    Account, Address, BlockNumber, Bloom, Bytecode, Log, Receipt, Receipts, Requests, StorageEntry,
-    B256, U256,
-};
+use crate::BlockExecutionOutput;
+use alloy_primitives::{Address, BlockNumber, Bloom, Log, B256, U256};
+use reth_primitives::{logs_bloom, Account, Bytecode, Receipt, Receipts, Requests, StorageEntry};
 use reth_trie::HashedPostState;
 use revm::{
     db::{states::BundleState, BundleAccount},
@@ -11,11 +8,30 @@ use revm::{
 };
 use std::collections::HashMap;
 
+/// Represents a changed account
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChangedAccount {
+    /// The address of the account.
+    pub address: Address,
+    /// Account nonce.
+    pub nonce: u64,
+    /// Account balance.
+    pub balance: U256,
+}
+
+impl ChangedAccount {
+    /// Creates a new [`ChangedAccount`] with the given address and 0 balance and nonce.
+    pub const fn empty(address: Address) -> Self {
+        Self { address, nonce: 0, balance: U256::ZERO }
+    }
+}
+
 /// Represents the outcome of block execution, including post-execution changes and reverts.
 ///
 /// The `ExecutionOutcome` structure aggregates the state changes over an arbitrary number of
 /// blocks, capturing the resulting state, receipts, and requests following the execution.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExecutionOutcome {
     /// Bundle state with reverts.
     pub bundle: BundleState,
@@ -67,7 +83,7 @@ impl ExecutionOutcome {
     pub fn new_init(
         state_init: BundleStateInit,
         revert_init: RevertsInit,
-        contracts_init: Vec<(B256, Bytecode)>,
+        contracts_init: impl IntoIterator<Item = (B256, Bytecode)>,
         receipts: Receipts,
         first_block: BlockNumber,
         requests: Vec<Requests>,
@@ -81,8 +97,8 @@ impl ExecutionOutcome {
             state_init.into_iter().map(|(address, (original, present, storage))| {
                 (
                     address,
-                    original.map(into_revm_acc),
-                    present.map(into_revm_acc),
+                    original.map(Into::into),
+                    present.map(Into::into),
                     storage.into_iter().map(|(k, s)| (k.into(), s)).collect(),
                 )
             }),
@@ -91,7 +107,7 @@ impl ExecutionOutcome {
                 reverts.into_iter().map(|(address, (original, storage))| {
                     (
                         address,
-                        original.map(|i| i.map(into_revm_acc)),
+                        original.map(|i| i.map(Into::into)),
                         storage.into_iter().map(|entry| (entry.key.into(), entry.value)),
                     )
                 })
@@ -129,7 +145,7 @@ impl ExecutionOutcome {
 
     /// Get account if account is known.
     pub fn account(&self, address: &Address) -> Option<Option<Account>> {
-        self.bundle.account(address).map(|a| a.info.clone().map(into_reth_acc))
+        self.bundle.account(address).map(|a| a.info.clone().map(Into::into))
     }
 
     /// Get storage if value is known.
@@ -180,24 +196,21 @@ impl ExecutionOutcome {
         #[cfg(feature = "optimism")]
         panic!("This should not be called in optimism mode. Use `optimism_receipts_root_slow` instead.");
         #[cfg(not(feature = "optimism"))]
-        self.receipts.root_slow(self.block_number_to_index(_block_number)?)
+        self.receipts.root_slow(
+            self.block_number_to_index(_block_number)?,
+            reth_primitives::proofs::calculate_receipt_root_no_memo,
+        )
     }
 
     /// Returns the receipt root for all recorded receipts.
     /// Note: this function calculated Bloom filters for every receipt and created merkle trees
     /// of receipt. This is a expensive operation.
-    #[cfg(feature = "optimism")]
-    pub fn optimism_receipts_root_slow(
+    pub fn generic_receipts_root_slow(
         &self,
         block_number: BlockNumber,
-        chain_spec: &reth_chainspec::ChainSpec,
-        timestamp: u64,
+        f: impl FnOnce(&[&Receipt]) -> B256,
     ) -> Option<B256> {
-        self.receipts.optimism_root_slow(
-            self.block_number_to_index(block_number)?,
-            chain_spec,
-            timestamp,
-        )
+        self.receipts.root_slow(self.block_number_to_index(block_number)?, f)
     }
 
     /// Returns reference to receipts.
@@ -325,14 +338,36 @@ impl ExecutionOutcome {
         self.requests = requests;
         self
     }
+
+    /// Returns an iterator over all changed accounts from the `ExecutionOutcome`.
+    ///
+    /// This method filters the accounts to return only those that have undergone changes
+    /// and maps them into `ChangedAccount` instances, which include the address, nonce, and
+    /// balance.
+    pub fn changed_accounts(&self) -> impl Iterator<Item = ChangedAccount> + '_ {
+        self.accounts_iter().filter_map(|(addr, acc)| acc.map(|acc| (addr, acc))).map(
+            |(address, acc)| ChangedAccount { address, nonce: acc.nonce, balance: acc.balance },
+        )
+    }
+}
+
+impl From<(BlockExecutionOutput<Receipt>, BlockNumber)> for ExecutionOutcome {
+    fn from(value: (BlockExecutionOutput<Receipt>, BlockNumber)) -> Self {
+        Self {
+            bundle: value.0.state,
+            receipts: Receipts::from(value.0.receipts),
+            first_block: value.1,
+            requests: vec![Requests::from(value.0.requests)],
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloy_eips::{eip6110::DepositRequest, eip7002::WithdrawalRequest};
-    use alloy_primitives::{FixedBytes, LogData};
-    use reth_primitives::{Address, Receipts, Request, Requests, TxType, B256};
+    use alloy_primitives::{Address, FixedBytes, LogData, B256};
+    use reth_primitives::{Receipts, Request, Requests, TxType};
     use std::collections::HashMap;
 
     #[test]
@@ -401,16 +436,16 @@ mod tests {
         );
 
         // Create a BundleStateInit object and insert initial data
-        let mut state_init: BundleStateInit = HashMap::new();
+        let mut state_init: BundleStateInit = HashMap::default();
         state_init
             .insert(Address::new([2; 20]), (None, Some(Account::default()), HashMap::default()));
 
         // Create a HashMap for account reverts and insert initial data
-        let mut revert_inner: HashMap<Address, AccountRevertInit> = HashMap::new();
+        let mut revert_inner: HashMap<Address, AccountRevertInit> = HashMap::default();
         revert_inner.insert(Address::new([2; 20]), (None, vec![]));
 
         // Create a RevertsInit object and insert the revert_inner data
-        let mut revert_init: RevertsInit = HashMap::new();
+        let mut revert_init: RevertsInit = HashMap::default();
         revert_init.insert(123, revert_inner);
 
         // Assert that creating a new ExecutionOutcome using the new_init method matches
@@ -781,5 +816,76 @@ mod tests {
 
         // Assert that splitting at the first block number returns None for the lower outcome
         assert_eq!(exec_res.clone().split_at(123), (None, exec_res));
+    }
+
+    #[test]
+    fn test_changed_accounts() {
+        // Set up some sample accounts
+        let address1 = Address::random();
+        let address2 = Address::random();
+        let address3 = Address::random();
+
+        // Set up account info with some changes
+        let account_info1 =
+            AccountInfo { nonce: 1, balance: U256::from(100), code_hash: B256::ZERO, code: None };
+        let account_info2 =
+            AccountInfo { nonce: 2, balance: U256::from(200), code_hash: B256::ZERO, code: None };
+
+        // Set up the bundle state with these accounts
+        let mut bundle_state = BundleState::default();
+        bundle_state.state.insert(
+            address1,
+            BundleAccount {
+                info: Some(account_info1),
+                storage: Default::default(),
+                original_info: Default::default(),
+                status: Default::default(),
+            },
+        );
+        bundle_state.state.insert(
+            address2,
+            BundleAccount {
+                info: Some(account_info2),
+                storage: Default::default(),
+                original_info: Default::default(),
+                status: Default::default(),
+            },
+        );
+
+        // Unchanged account
+        bundle_state.state.insert(
+            address3,
+            BundleAccount {
+                info: None,
+                storage: Default::default(),
+                original_info: Default::default(),
+                status: Default::default(),
+            },
+        );
+
+        let execution_outcome = ExecutionOutcome {
+            bundle: bundle_state,
+            receipts: Receipts::default(),
+            first_block: 0,
+            requests: vec![],
+        };
+
+        // Get the changed accounts
+        let changed_accounts: Vec<ChangedAccount> = execution_outcome.changed_accounts().collect();
+
+        // Assert that the changed accounts match the expected ones
+        assert_eq!(changed_accounts.len(), 2);
+
+        assert!(changed_accounts.contains(&ChangedAccount {
+            address: address1,
+            nonce: 1,
+            balance: U256::from(100)
+        }));
+
+        assert!(changed_accounts.contains(&ChangedAccount {
+            address: address2,
+            nonce: 2,
+            balance: U256::from(200)
+        }));
     }
 }

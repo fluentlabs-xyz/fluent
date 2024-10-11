@@ -1,9 +1,9 @@
-use reth_primitives::B256;
-use reth_rpc_types::engine::{ForkchoiceState, PayloadStatusEnum};
+use alloy_primitives::B256;
+use alloy_rpc_types_engine::{ForkchoiceState, PayloadStatusEnum};
 
 /// The struct that keeps track of the received forkchoice state and their status.
 #[derive(Debug, Clone, Default)]
-pub(crate) struct ForkchoiceStateTracker {
+pub struct ForkchoiceStateTracker {
     /// The latest forkchoice state that we received.
     ///
     /// Caution: this can be invalid.
@@ -20,7 +20,7 @@ impl ForkchoiceStateTracker {
     ///
     /// If the status is `VALID`, we also update the last valid forkchoice state and set the
     /// `sync_target` to `None`, since we're now fully synced.
-    pub(crate) fn set_latest(&mut self, state: ForkchoiceState, status: ForkchoiceStatus) {
+    pub fn set_latest(&mut self, state: ForkchoiceState, status: ForkchoiceStatus) {
         if status.is_valid() {
             self.set_valid(state);
         } else if status.is_syncing() {
@@ -75,13 +75,57 @@ impl ForkchoiceStateTracker {
         self.last_syncing.as_ref().map(|s| s.head_block_hash)
     }
 
+    /// Returns the latest received `ForkchoiceState`.
+    ///
+    /// Caution: this can be invalid.
+    pub const fn latest_state(&self) -> Option<ForkchoiceState> {
+        self.last_valid
+    }
+
+    /// Returns the last valid `ForkchoiceState`.
+    pub const fn last_valid_state(&self) -> Option<ForkchoiceState> {
+        self.last_valid
+    }
+
+    /// Returns the last valid finalized hash.
+    ///
+    /// This will return [`None`], if either there is no valid finalized forkchoice state, or the
+    /// finalized hash for the latest valid forkchoice state is zero.
+    #[inline]
+    pub fn last_valid_finalized(&self) -> Option<B256> {
+        self.last_valid.and_then(|state| {
+            // if the hash is zero then we should act like there is no finalized hash
+            if state.finalized_block_hash.is_zero() {
+                None
+            } else {
+                Some(state.finalized_block_hash)
+            }
+        })
+    }
+
     /// Returns the last received `ForkchoiceState` to which we need to sync.
-    pub(crate) const fn sync_target_state(&self) -> Option<ForkchoiceState> {
+    pub const fn sync_target_state(&self) -> Option<ForkchoiceState> {
         self.last_syncing
     }
 
+    /// Returns the sync target finalized hash.
+    ///
+    /// This will return [`None`], if either there is no sync target forkchoice state, or the
+    /// finalized hash for the sync target forkchoice state is zero.
+    #[inline]
+    pub fn sync_target_finalized(&self) -> Option<B256> {
+        self.last_syncing.and_then(|state| {
+            // if the hash is zero then we should act like there is no finalized hash
+            if state.finalized_block_hash.is_zero() {
+                None
+            } else {
+                Some(state.finalized_block_hash)
+            }
+        })
+    }
+
     /// Returns true if no forkchoice state has been received yet.
-    pub(crate) const fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.latest.is_none()
     }
 }
@@ -139,9 +183,12 @@ impl From<PayloadStatusEnum> for ForkchoiceStatus {
 
 /// A helper type to check represent hashes of a [`ForkchoiceState`]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ForkchoiceStateHash {
+pub enum ForkchoiceStateHash {
+    /// Head hash of the [`ForkchoiceState`].
     Head(B256),
+    /// Safe hash of the [`ForkchoiceState`].
     Safe(B256),
+    /// Finalized hash of the [`ForkchoiceState`].
     Finalized(B256),
 }
 

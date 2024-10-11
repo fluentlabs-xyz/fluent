@@ -78,14 +78,17 @@ use crate::{
         PoolTransaction, PropagatedTransactions, TransactionOrigin,
     },
     validate::{TransactionValidationOutcome, ValidPoolTransaction},
-    CanonicalStateUpdate, ChangedAccount, PoolConfig, TransactionOrdering, TransactionValidator,
+    CanonicalStateUpdate, PoolConfig, TransactionOrdering, TransactionValidator,
 };
+use alloy_primitives::{Address, TxHash, B256};
 use best::BestTransactions;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use reth_eth_wire_types::HandleMempoolData;
+use reth_execution_types::ChangedAccount;
+
 use reth_primitives::{
-    Address, BlobTransaction, BlobTransactionSidecar, IntoRecoveredTransaction,
-    PooledTransactionsElement, TransactionSigned, TxHash, B256,
+    BlobTransaction, BlobTransactionSidecar, PooledTransactionsElement, TransactionSigned,
+    TransactionSignedEcRecovered,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -120,8 +123,11 @@ pub(crate) mod state;
 pub mod txpool;
 mod update;
 
-const PENDING_TX_LISTENER_BUFFER_SIZE: usize = 2048;
-const NEW_TX_LISTENER_BUFFER_SIZE: usize = 1024;
+/// Bound on number of pending transactions from `reth_network::TransactionsManager` to buffer.
+pub const PENDING_TX_LISTENER_BUFFER_SIZE: usize = 2048;
+/// Bound on number of new transactions from `reth_network::TransactionsManager` to buffer.
+pub const NEW_TX_LISTENER_BUFFER_SIZE: usize = 1024;
+
 const BLOB_SIDECAR_LISTENER_BUFFER_SIZE: usize = 512;
 
 /// Transaction pool internals.
@@ -194,7 +200,7 @@ where
         self.pool.write().set_block_info(info)
     }
 
-    /// Returns the internal `SenderId` for this address
+    /// Returns the internal [`SenderId`] for this address
     pub(crate) fn get_sender_id(&self, addr: Address) -> SenderId {
         self.identifiers.write().sender_id_or_create(addr)
     }
@@ -233,7 +239,7 @@ where
     /// Adds a new transaction listener to the pool that gets notified about every new _pending_
     /// transaction inserted into the pool
     pub fn add_pending_listener(&self, kind: TransactionListenerKind) -> mpsc::Receiver<TxHash> {
-        let (sender, rx) = mpsc::channel(PENDING_TX_LISTENER_BUFFER_SIZE);
+        let (sender, rx) = mpsc::channel(self.config.pending_tx_listener_buffer_size);
         let listener = PendingTransactionHashListener { sender, kind };
         self.pending_transaction_listener.lock().push(listener);
         rx
@@ -244,7 +250,7 @@ where
         &self,
         kind: TransactionListenerKind,
     ) -> mpsc::Receiver<NewTransactionEvent<T::Transaction>> {
-        let (sender, rx) = mpsc::channel(NEW_TX_LISTENER_BUFFER_SIZE);
+        let (sender, rx) = mpsc::channel(self.config.new_tx_listener_buffer_size);
         let listener = TransactionListener { sender, kind };
         self.transaction_listener.lock().push(listener);
         rx
@@ -313,13 +319,19 @@ where
         &self,
         tx_hashes: Vec<TxHash>,
         limit: GetPooledTransactionLimit,
-    ) -> Vec<PooledTransactionsElement> {
+    ) -> Vec<PooledTransactionsElement>
+    where
+        <V as TransactionValidator>::Transaction:
+            PoolTransaction<Consensus: Into<TransactionSignedEcRecovered>>,
+    {
         let transactions = self.get_all(tx_hashes);
         let mut elements = Vec::with_capacity(transactions.len());
         let mut size = 0;
         for transaction in transactions {
             let encoded_len = transaction.encoded_length();
-            let tx = transaction.to_recovered_transaction().into_signed();
+            let recovered: TransactionSignedEcRecovered =
+                transaction.transaction.clone().into_consensus().into();
+            let tx = recovered.into_signed();
             let pooled = if tx.is_eip4844() {
                 // for EIP-4844 transactions, we need to fetch the blob sidecar from the blob store
                 if let Some(blob) = self.get_blob_transaction(tx) {
@@ -355,9 +367,15 @@ where
     pub(crate) fn get_pooled_transaction_element(
         &self,
         tx_hash: TxHash,
-    ) -> Option<PooledTransactionsElement> {
+    ) -> Option<PooledTransactionsElement>
+    where
+        <V as TransactionValidator>::Transaction:
+            PoolTransaction<Consensus: Into<TransactionSignedEcRecovered>>,
+    {
         self.get(&tx_hash).and_then(|transaction| {
-            let tx = transaction.to_recovered_transaction().into_signed();
+            let recovered: TransactionSignedEcRecovered =
+                transaction.transaction.clone().into_consensus().into();
+            let tx = recovered.into_signed();
             if tx.is_eip4844() {
                 self.get_blob_transaction(tx).map(PooledTransactionsElement::BlobTransaction)
             } else {
@@ -458,6 +476,7 @@ where
                 }
 
                 if let Some(replaced) = added.replaced_blob_transaction() {
+                    debug!(target: "txpool", "[{:?}] delete replaced blob sidecar", replaced);
                     // delete the replaced transaction from the blob store
                     self.delete_blob(replaced);
                 }
@@ -574,9 +593,11 @@ where
 
     /// Notify all listeners about a blob sidecar for a newly inserted blob (eip4844) transaction.
     fn on_new_blob_sidecar(&self, tx_hash: &TxHash, sidecar: &BlobTransactionSidecar) {
-        let sidecar = Arc::new(sidecar.clone());
-
         let mut sidecar_listeners = self.blob_transaction_sidecar_listener.lock();
+        if sidecar_listeners.is_empty() {
+            return
+        }
+        let sidecar = Arc::new(sidecar.clone());
         sidecar_listeners.retain_mut(|listener| {
             let new_blob_event = NewBlobSidecar { tx_hash: *tx_hash, sidecar: sidecar.clone() };
             match listener.sender.try_send(new_blob_event) {
@@ -599,20 +620,18 @@ where
 
     /// Notifies transaction listeners about changes once a block was processed.
     fn notify_on_new_state(&self, outcome: OnNewCanonicalStateOutcome<T::Transaction>) {
-        // notify about promoted pending transactions
-        {
-            // emit hashes
-            let mut transaction_hash_listeners = self.pending_transaction_listener.lock();
-            transaction_hash_listeners.retain_mut(|listener| {
-                listener.send_all(outcome.pending_transactions(listener.kind))
-            });
+        trace!(target: "txpool", promoted=outcome.promoted.len(), discarded= outcome.discarded.len() ,"notifying listeners on state change");
 
-            // emit full transactions
-            let mut transaction_full_listeners = self.transaction_listener.lock();
-            transaction_full_listeners.retain_mut(|listener| {
-                listener.send_all(outcome.full_pending_transactions(listener.kind))
-            })
-        }
+        // notify about promoted pending transactions
+        // emit hashes
+        self.pending_transaction_listener
+            .lock()
+            .retain_mut(|listener| listener.send_all(outcome.pending_transactions(listener.kind)));
+
+        // emit full transactions
+        self.transaction_listener.lock().retain_mut(|listener| {
+            listener.send_all(outcome.full_pending_transactions(listener.kind))
+        });
 
         let OnNewCanonicalStateOutcome { mined, promoted, discarded, block_hash } = outcome;
 
@@ -725,12 +744,29 @@ where
         self.get_pool_data().get_transactions_by_sender(sender_id)
     }
 
+    /// Returns the highest transaction of the address
+    pub(crate) fn get_highest_transaction_by_sender(
+        &self,
+        sender: Address,
+    ) -> Option<Arc<ValidPoolTransaction<T::Transaction>>> {
+        let sender_id = self.get_sender_id(sender);
+        self.get_pool_data().get_highest_transaction_by_sender(sender_id)
+    }
+
     /// Returns all transactions that where submitted with the given [`TransactionOrigin`]
     pub(crate) fn get_transactions_by_origin(
         &self,
         origin: TransactionOrigin,
     ) -> Vec<Arc<ValidPoolTransaction<T::Transaction>>> {
         self.get_pool_data().all().transactions_iter().filter(|tx| tx.origin == origin).collect()
+    }
+
+    /// Returns all pending transactions filted by [`TransactionOrigin`]
+    pub(crate) fn get_pending_transactions_by_origin(
+        &self,
+        origin: TransactionOrigin,
+    ) -> Vec<Arc<ValidPoolTransaction<T::Transaction>>> {
+        self.get_pool_data().pending_transactions_iter().filter(|tx| tx.origin == origin).collect()
     }
 
     /// Returns all the transactions belonging to the hashes.
@@ -787,6 +823,7 @@ where
 
     /// Inserts a blob transaction into the blob store
     fn insert_blob(&self, hash: TxHash, blob: BlobTransactionSidecar) {
+        debug!(target: "txpool", "[{:?}] storing blob sidecar", hash);
         if let Err(err) = self.blob_store.insert(hash, blob) {
             warn!(target: "txpool", %err, "[{:?}] failed to insert blob", hash);
             self.blob_store_metrics.blobstore_failed_inserts.increment(1);

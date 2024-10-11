@@ -24,13 +24,13 @@ pub fn discv4_id_to_discv5_id(peer_id: PeerId) -> Result<NodeId, secp256k1::Erro
     Ok(id2pk(peer_id)?.into())
 }
 
-/// Converts a [`PeerId`] to a [`libp2p_identity::PeerId `].
+/// Converts a [`PeerId`] to a [`reth_network_peers::PeerId`].
 pub fn discv4_id_to_multiaddr_id(
     peer_id: PeerId,
-) -> Result<libp2p_identity::PeerId, secp256k1::Error> {
+) -> Result<discv5::libp2p_identity::PeerId, secp256k1::Error> {
     let pk = id2pk(peer_id)?.encode();
-    let pk: libp2p_identity::PublicKey =
-        libp2p_identity::secp256k1::PublicKey::try_from_bytes(&pk).unwrap().into();
+    let pk: discv5::libp2p_identity::PublicKey =
+        discv5::libp2p_identity::secp256k1::PublicKey::try_from_bytes(&pk).unwrap().into();
 
     Ok(pk.to_peer_id())
 }
@@ -58,7 +58,7 @@ mod tests {
     use super::*;
     use alloy_rlp::Encodable;
     use discv5::enr::{CombinedKey, EnrKey};
-    use reth_chainspec::{Hardfork, MAINNET};
+    use reth_chainspec::{EthereumHardfork, MAINNET};
     use reth_network_peers::NodeRecord;
 
     #[test]
@@ -84,7 +84,7 @@ mod tests {
         let key = CombinedKey::generate_secp256k1();
 
         let mut buf = Vec::new();
-        let fork_id = MAINNET.hardfork_fork_id(Hardfork::Frontier);
+        let fork_id = MAINNET.hardfork_fork_id(EthereumHardfork::Frontier);
         fork_id.unwrap().encode(&mut buf);
 
         let enr = Enr::builder()

@@ -13,10 +13,8 @@ use super::{
 };
 use crate::{EthVersion, SharedTransactions};
 
+use alloy_primitives::bytes::{Buf, BufMut};
 use alloy_rlp::{length_of_length, Decodable, Encodable, Header};
-use reth_primitives::bytes::{Buf, BufMut};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
 /// [`MAX_MESSAGE_SIZE`] is the maximum cap on the size of a protocol message.
@@ -36,7 +34,7 @@ pub enum MessageError {
 
 /// An `eth` protocol message, containing a message ID and payload.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProtocolMessage {
     /// The unique identifier representing the type of the Ethereum message.
     pub message_type: EthMessageID,
@@ -182,7 +180,7 @@ impl From<EthBroadcastMessage> for ProtocolBroadcastMessage {
 /// it, `NewPooledTransactionHashes` is renamed as [`NewPooledTransactionHashes66`] and
 /// [`NewPooledTransactionHashes68`] is defined.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EthMessage {
     /// Represents a Status message required for the protocol handshake.
     Status(Status),
@@ -333,7 +331,7 @@ impl Encodable for EthBroadcastMessage {
 /// Represents message IDs for eth protocol messages.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EthMessageID {
     /// Status message.
     Status = 0x00,
@@ -437,7 +435,7 @@ impl TryFrom<usize> for EthMessageID {
 /// This can represent either a request or a response, since both include a message payload and
 /// request id.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RequestPair<T> {
     /// id for the contained request or response message
     pub request_id: u64,
@@ -498,8 +496,8 @@ mod tests {
     use crate::{
         message::RequestPair, EthMessage, EthMessageID, GetNodeData, NodeData, ProtocolMessage,
     };
+    use alloy_primitives::hex;
     use alloy_rlp::{Decodable, Encodable, Error};
-    use reth_primitives::hex;
 
     fn encode<T: Encodable>(value: T) -> Vec<u8> {
         let mut buf = vec![];

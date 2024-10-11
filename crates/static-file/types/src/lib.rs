@@ -9,18 +9,16 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 mod compression;
-mod filters;
 mod segment;
 
 use alloy_primitives::BlockNumber;
 pub use compression::Compression;
-pub use filters::{Filters, InclusionFilter, PerfectHashingFunction};
 pub use segment::{SegmentConfig, SegmentHeader, SegmentRangeInclusive, StaticFileSegment};
 
 /// Default static file block count.
-pub const BLOCKS_PER_STATIC_FILE: u64 = 500_000;
+pub const DEFAULT_BLOCKS_PER_STATIC_FILE: u64 = 500_000;
 
-/// Highest static file block numbers, per data part.
+/// Highest static file block numbers, per data segment.
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub struct HighestStaticFiles {
     /// Highest static file block of headers, inclusive.
@@ -53,6 +51,11 @@ impl HighestStaticFiles {
         }
     }
 
+    /// Returns the minimum block of all segments.
+    pub fn min(&self) -> Option<u64> {
+        [self.headers, self.transactions, self.receipts].iter().filter_map(|&option| option).min()
+    }
+
     /// Returns the maximum block of all segments.
     pub fn max(&self) -> Option<u64> {
         [self.headers, self.transactions, self.receipts].iter().filter_map(|&option| option).max()
@@ -61,7 +64,10 @@ impl HighestStaticFiles {
 
 /// Each static file has a fixed number of blocks. This gives out the range where the requested
 /// block is positioned. Used for segment filename.
-pub const fn find_fixed_range(block: BlockNumber) -> SegmentRangeInclusive {
-    let start = (block / BLOCKS_PER_STATIC_FILE) * BLOCKS_PER_STATIC_FILE;
-    SegmentRangeInclusive::new(start, start + BLOCKS_PER_STATIC_FILE - 1)
+pub const fn find_fixed_range(
+    block: BlockNumber,
+    blocks_per_static_file: u64,
+) -> SegmentRangeInclusive {
+    let start = (block / blocks_per_static_file) * blocks_per_static_file;
+    SegmentRangeInclusive::new(start, start + blocks_per_static_file - 1)
 }

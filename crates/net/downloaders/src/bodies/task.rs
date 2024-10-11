@@ -1,3 +1,4 @@
+use alloy_primitives::BlockNumber;
 use futures::Stream;
 use futures_util::{FutureExt, StreamExt};
 use pin_project::pin_project;
@@ -5,7 +6,6 @@ use reth_network_p2p::{
     bodies::downloader::{BodyDownloader, BodyDownloaderResult},
     error::DownloadResult,
 };
-use reth_primitives::BlockNumber;
 use reth_tasks::{TaskSpawner, TokioTaskExecutor};
 use std::{
     future::Future,
@@ -45,7 +45,7 @@ impl TaskDownloader {
     /// use reth_consensus::Consensus;
     /// use reth_downloaders::bodies::{bodies::BodiesDownloaderBuilder, task::TaskDownloader};
     /// use reth_network_p2p::bodies::client::BodiesClient;
-    /// use reth_provider::HeaderProvider;
+    /// use reth_storage_api::HeaderProvider;
     /// use std::sync::Arc;
     ///
     /// fn t<B: BodiesClient + 'static, Provider: HeaderProvider + Unpin + 'static>(

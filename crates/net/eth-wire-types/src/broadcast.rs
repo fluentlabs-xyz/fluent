@@ -5,11 +5,10 @@ use alloy_rlp::{
     Decodable, Encodable, RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
 };
 
+use alloy_primitives::{Bytes, TxHash, B256, U128};
 use derive_more::{Constructor, Deref, DerefMut, From, IntoIterator};
-use reth_codecs_derive::derive_arbitrary;
-use reth_primitives::{
-    Block, Bytes, PooledTransactionsElement, TransactionSigned, TxHash, B256, U128,
-};
+use reth_codecs_derive::add_arbitrary_tests;
+use reth_primitives::{Block, PooledTransactionsElement, TransactionSigned};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -19,14 +18,14 @@ use std::{
 
 #[cfg(feature = "arbitrary")]
 use proptest::{collection::vec, prelude::*};
-
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+#[cfg(feature = "arbitrary")]
+use proptest_arbitrary_interop::arb;
 
 /// This informs peers of new blocks that have appeared on the network.
-#[derive_arbitrary(rlp)]
 #[derive(Clone, Debug, PartialEq, Eq, RlpEncodableWrapper, RlpDecodableWrapper, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+#[add_arbitrary_tests(rlp)]
 pub struct NewBlockHashes(
     /// New block hashes and the block number for each blockhash.
     /// Clients should request blocks using a [`GetBlockBodies`](crate::GetBlockBodies) message.
@@ -48,9 +47,10 @@ impl NewBlockHashes {
 }
 
 /// A block hash _and_ a block number.
-#[derive_arbitrary(rlp)]
 #[derive(Clone, Debug, PartialEq, Eq, RlpEncodable, RlpDecodable, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+#[add_arbitrary_tests(rlp)]
 pub struct BlockHashNumber {
     /// The block hash
     pub hash: B256,
@@ -73,8 +73,9 @@ impl From<NewBlockHashes> for Vec<BlockHashNumber> {
 /// A new block with the current total difficulty, which includes the difficulty of the returned
 /// block.
 #[derive(Clone, Debug, PartialEq, Eq, RlpEncodable, RlpDecodable, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive_arbitrary(rlp, 25)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+#[add_arbitrary_tests(rlp, 25)]
 pub struct NewBlock {
     /// A new block.
     pub block: Block,
@@ -84,9 +85,10 @@ pub struct NewBlock {
 
 /// This informs peers of transactions that have appeared on the network and are not yet included
 /// in a block.
-#[derive_arbitrary(rlp, 10)]
 #[derive(Clone, Debug, PartialEq, Eq, RlpEncodableWrapper, RlpDecodableWrapper, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+#[add_arbitrary_tests(rlp, 10)]
 pub struct Transactions(
     /// New transactions for the peer to include in its mempool.
     pub Vec<TransactionSigned>,
@@ -115,8 +117,9 @@ impl From<Transactions> for Vec<TransactionSigned> {
 ///
 /// The list of transactions is constructed on per-peers basis, but the underlying transaction
 /// objects are shared.
-#[derive_arbitrary(rlp, 20)]
 #[derive(Clone, Debug, PartialEq, Eq, RlpEncodableWrapper, RlpDecodableWrapper)]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+#[add_arbitrary_tests(rlp, 20)]
 pub struct SharedTransactions(
     /// New transactions for the peer to include in its mempool.
     pub Vec<Arc<TransactionSigned>>,
@@ -289,9 +292,10 @@ impl From<NewPooledTransactionHashes68> for NewPooledTransactionHashes {
 
 /// This informs peers of transaction hashes for transactions that have appeared on the network,
 /// but have not been included in a block.
-#[derive_arbitrary(rlp)]
 #[derive(Clone, Debug, PartialEq, Eq, RlpEncodableWrapper, RlpDecodableWrapper, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+#[add_arbitrary_tests(rlp)]
 pub struct NewPooledTransactionHashes66(
     /// Transaction hashes for new transactions that have appeared on the network.
     /// Clients should request the transactions with the given hashes using a
@@ -308,7 +312,7 @@ impl From<Vec<B256>> for NewPooledTransactionHashes66 {
 /// Same as [`NewPooledTransactionHashes66`] but extends that that beside the transaction hashes,
 /// the node sends the transaction types and their sizes (as defined in EIP-2718) as well.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NewPooledTransactionHashes68 {
     /// Transaction types for new transactions that have appeared on the network.
     ///
@@ -351,7 +355,7 @@ impl Arbitrary for NewPooledTransactionHashes68 {
             .prop_flat_map(|len| {
                 // Use the generated length to create vectors of TxType, usize, and B256
                 let types_vec =
-                    vec(any::<reth_primitives::TxType>().prop_map(|ty| ty as u8), len..=len);
+                    vec(arb::<reth_primitives::TxType>().prop_map(|ty| ty as u8), len..=len);
 
                 // Map the usize values to the range 0..131072(0x20000)
                 let sizes_vec = vec(proptest::num::usize::ANY.prop_map(|x| x % 131072), len..=len);
@@ -614,13 +618,13 @@ impl<V> PartiallyValidData<V> {
     /// Returns a new [`PartiallyValidData`] with empty data from an [`Eth68`](EthVersion::Eth68)
     /// announcement.
     pub fn empty_eth68() -> Self {
-        Self::from_raw_data_eth68(HashMap::new())
+        Self::from_raw_data_eth68(HashMap::default())
     }
 
     /// Returns a new [`PartiallyValidData`] with empty data from an [`Eth66`](EthVersion::Eth66)
     /// announcement.
     pub fn empty_eth66() -> Self {
-        Self::from_raw_data_eth66(HashMap::new())
+        Self::from_raw_data_eth66(HashMap::default())
     }
 
     /// Returns the version of the message this data was received in if different versions of the
@@ -638,7 +642,6 @@ impl<V> PartiallyValidData<V> {
 /// Partially validated data from an announcement or a
 /// [`PooledTransactions`](crate::PooledTransactions) response.
 #[derive(Debug, Deref, DerefMut, IntoIterator, From)]
-#[from(PartiallyValidData<Eth68TxMetadata>)]
 pub struct ValidAnnouncementData {
     #[deref]
     #[deref_mut]
@@ -701,7 +704,7 @@ impl RequestTxHashes {
 
     /// Returns an new empty instance.
     fn empty() -> Self {
-        Self::new(HashSet::new())
+        Self::new(HashSet::default())
     }
 
     /// Retains the given number of elements, returning and iterator over the rest.
@@ -736,7 +739,7 @@ impl FromIterator<(TxHash, Eth68TxMetadata)> for RequestTxHashes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reth_primitives::{b256, hex};
+    use alloy_primitives::{b256, hex};
     use std::str::FromStr;
 
     /// Takes as input a struct / encoded hex message pair, ensuring that we encode to the exact hex

@@ -1,18 +1,20 @@
 //! Standalone Conversion Functions for Handling Different Versions of Execution Payloads in
 //! Ethereum's Engine
 
+use alloy_eips::eip2718::{Decodable2718, Encodable2718};
+use alloy_primitives::{B256, U256};
+use alloy_rpc_types_engine::{
+    payload::{ExecutionPayloadBodyV1, ExecutionPayloadFieldV2, ExecutionPayloadInputV2},
+    ExecutionPayload, ExecutionPayloadBodyV2, ExecutionPayloadV1, ExecutionPayloadV2,
+    ExecutionPayloadV3, ExecutionPayloadV4, PayloadError,
+};
 use reth_primitives::{
     constants::{EMPTY_OMMER_ROOT_HASH, MAXIMUM_EXTRA_DATA_SIZE},
     proofs::{self},
-    Block, Header, Request, SealedBlock, TransactionSigned, UintTryTo, Withdrawals, B256, U256,
-};
-use reth_rpc_types::engine::{
-    payload::{ExecutionPayloadBodyV1, ExecutionPayloadFieldV2, ExecutionPayloadInputV2},
-    ExecutionPayload, ExecutionPayloadV1, ExecutionPayloadV2, ExecutionPayloadV3,
-    ExecutionPayloadV4, PayloadError,
+    Block, BlockBody, Header, Request, SealedBlock, TransactionSigned, Withdrawals,
 };
 
-/// Converts [`ExecutionPayloadV1`] to [Block]
+/// Converts [`ExecutionPayloadV1`] to [`Block`]
 pub fn try_payload_v1_to_block(payload: ExecutionPayloadV1) -> Result<Block, PayloadError> {
     if payload.extra_data.len() > MAXIMUM_EXTRA_DATA_SIZE {
         return Err(PayloadError::ExtraData(payload.extra_data))
@@ -24,8 +26,18 @@ pub fn try_payload_v1_to_block(payload: ExecutionPayloadV1) -> Result<Block, Pay
 
     let transactions = payload
         .transactions
-        .into_iter()
-        .map(|tx| TransactionSigned::decode_enveloped(&mut tx.as_ref()))
+        .iter()
+        .map(|tx| {
+            let mut buf = tx.as_ref();
+
+            let tx = TransactionSigned::decode_2718(&mut buf).map_err(alloy_rlp::Error::from)?;
+
+            if !buf.is_empty() {
+                return Err(alloy_rlp::Error::UnexpectedLength);
+            }
+
+            Ok(tx)
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let transactions_root = proofs::calculate_transaction_root(&transactions);
 
@@ -49,7 +61,7 @@ pub fn try_payload_v1_to_block(payload: ExecutionPayloadV1) -> Result<Block, Pay
         base_fee_per_gas: Some(
             payload
                 .base_fee_per_gas
-                .uint_try_to()
+                .try_into()
                 .map_err(|_| PayloadError::BaseFee(payload.base_fee_per_gas))?,
         ),
         blob_gas_used: None,
@@ -63,27 +75,21 @@ pub fn try_payload_v1_to_block(payload: ExecutionPayloadV1) -> Result<Block, Pay
         nonce: Default::default(),
     };
 
-    Ok(Block {
-        header,
-        body: transactions,
-        ommers: Default::default(),
-        withdrawals: None,
-        requests: None,
-    })
+    Ok(Block { header, body: BlockBody { transactions, ..Default::default() } })
 }
 
-/// Converts [`ExecutionPayloadV2`] to [Block]
+/// Converts [`ExecutionPayloadV2`] to [`Block`]
 pub fn try_payload_v2_to_block(payload: ExecutionPayloadV2) -> Result<Block, PayloadError> {
     // this performs the same conversion as the underlying V1 payload, but calculates the
     // withdrawals root and adds withdrawals
     let mut base_sealed_block = try_payload_v1_to_block(payload.payload_inner)?;
     let withdrawals_root = proofs::calculate_withdrawals_root(&payload.withdrawals);
-    base_sealed_block.withdrawals = Some(payload.withdrawals.into());
+    base_sealed_block.body.withdrawals = Some(payload.withdrawals.into());
     base_sealed_block.header.withdrawals_root = Some(withdrawals_root);
     Ok(base_sealed_block)
 }
 
-/// Converts [`ExecutionPayloadV3`] to [Block]
+/// Converts [`ExecutionPayloadV3`] to [`Block`]
 pub fn try_payload_v3_to_block(payload: ExecutionPayloadV3) -> Result<Block, PayloadError> {
     // this performs the same conversion as the underlying V2 payload, but inserts the blob gas
     // used and excess blob gas
@@ -95,9 +101,14 @@ pub fn try_payload_v3_to_block(payload: ExecutionPayloadV3) -> Result<Block, Pay
     Ok(base_block)
 }
 
-/// Converts [`ExecutionPayloadV4`] to [Block]
+/// Converts [`ExecutionPayloadV4`] to [`Block`]
 pub fn try_payload_v4_to_block(payload: ExecutionPayloadV4) -> Result<Block, PayloadError> {
-    let ExecutionPayloadV4 { payload_inner, deposit_requests, withdrawal_requests } = payload;
+    let ExecutionPayloadV4 {
+        payload_inner,
+        deposit_requests,
+        withdrawal_requests,
+        consolidation_requests,
+    } = payload;
     let mut block = try_payload_v3_to_block(payload_inner)?;
 
     // attach requests with asc type identifiers
@@ -105,29 +116,30 @@ pub fn try_payload_v4_to_block(payload: ExecutionPayloadV4) -> Result<Block, Pay
         .into_iter()
         .map(Request::DepositRequest)
         .chain(withdrawal_requests.into_iter().map(Request::WithdrawalRequest))
+        .chain(consolidation_requests.into_iter().map(Request::ConsolidationRequest))
         .collect::<Vec<_>>();
 
     let requests_root = proofs::calculate_requests_root(&requests);
     block.header.requests_root = Some(requests_root);
-    block.requests = Some(requests.into());
+    block.body.requests = Some(requests.into());
 
     Ok(block)
 }
 
 /// Converts [`SealedBlock`] to [`ExecutionPayload`]
-pub fn block_to_payload(value: SealedBlock) -> (ExecutionPayload, Option<B256>) {
+pub fn block_to_payload(value: SealedBlock) -> ExecutionPayload {
     if value.header.requests_root.is_some() {
-        (ExecutionPayload::V4(block_to_payload_v4(value)), None)
+        // block with requests root: V3
+        ExecutionPayload::V4(block_to_payload_v4(value))
     } else if value.header.parent_beacon_block_root.is_some() {
         // block with parent beacon block root: V3
-        let (payload, beacon_block_root) = block_to_payload_v3(value);
-        (ExecutionPayload::V3(payload), beacon_block_root)
-    } else if value.withdrawals.is_some() {
+        ExecutionPayload::V3(block_to_payload_v3(value))
+    } else if value.body.withdrawals.is_some() {
         // block with withdrawals: V2
-        (ExecutionPayload::V2(block_to_payload_v2(value)), None)
+        ExecutionPayload::V2(block_to_payload_v2(value))
     } else {
         // otherwise V1
-        (ExecutionPayload::V1(block_to_payload_v1(value)), None)
+        ExecutionPayload::V1(block_to_payload_v1(value))
     }
 }
 
@@ -173,16 +185,14 @@ pub fn block_to_payload_v2(value: SealedBlock) -> ExecutionPayloadV2 {
             block_hash: value.hash(),
             transactions,
         },
-        withdrawals: value.withdrawals.unwrap_or_default().into_inner(),
+        withdrawals: value.body.withdrawals.unwrap_or_default().into_inner(),
     }
 }
 
 /// Converts [`SealedBlock`] to [`ExecutionPayloadV3`], and returns the parent beacon block root.
-pub fn block_to_payload_v3(value: SealedBlock) -> (ExecutionPayloadV3, Option<B256>) {
+pub fn block_to_payload_v3(value: SealedBlock) -> ExecutionPayloadV3 {
     let transactions = value.raw_transactions();
-
-    let parent_beacon_block_root = value.header.parent_beacon_block_root;
-    let payload = ExecutionPayloadV3 {
+    ExecutionPayloadV3 {
         blob_gas_used: value.blob_gas_used.unwrap_or_default(),
         excess_blob_gas: value.excess_blob_gas.unwrap_or_default(),
         payload_inner: ExecutionPayloadV2 {
@@ -202,19 +212,17 @@ pub fn block_to_payload_v3(value: SealedBlock) -> (ExecutionPayloadV3, Option<B2
                 block_hash: value.hash(),
                 transactions,
             },
-            withdrawals: value.withdrawals.unwrap_or_default().into_inner(),
+            withdrawals: value.body.withdrawals.unwrap_or_default().into_inner(),
         },
-    };
-
-    (payload, parent_beacon_block_root)
+    }
 }
 
 /// Converts [`SealedBlock`] to [`ExecutionPayloadV4`]
 pub fn block_to_payload_v4(mut value: SealedBlock) -> ExecutionPayloadV4 {
-    let (deposit_requests, withdrawal_requests) =
-        value.requests.take().unwrap_or_default().into_iter().fold(
-            (Vec::new(), Vec::new()),
-            |(mut deposits, mut withdrawals), request| {
+    let (deposit_requests, withdrawal_requests, consolidation_requests) =
+        value.body.requests.take().unwrap_or_default().into_iter().fold(
+            (Vec::new(), Vec::new(), Vec::new()),
+            |(mut deposits, mut withdrawals, mut consolidation_requests), request| {
                 match request {
                     Request::DepositRequest(r) => {
                         deposits.push(r);
@@ -222,24 +230,28 @@ pub fn block_to_payload_v4(mut value: SealedBlock) -> ExecutionPayloadV4 {
                     Request::WithdrawalRequest(r) => {
                         withdrawals.push(r);
                     }
+                    Request::ConsolidationRequest(r) => {
+                        consolidation_requests.push(r);
+                    }
                     _ => {}
                 };
 
-                (deposits, withdrawals)
+                (deposits, withdrawals, consolidation_requests)
             },
         );
 
     ExecutionPayloadV4 {
         deposit_requests,
         withdrawal_requests,
-        payload_inner: block_to_payload_v3(value).0,
+        consolidation_requests,
+        payload_inner: block_to_payload_v3(value),
     }
 }
 
 /// Converts [`SealedBlock`] to [`ExecutionPayloadFieldV2`]
 pub fn convert_block_to_payload_field_v2(value: SealedBlock) -> ExecutionPayloadFieldV2 {
     // if there are withdrawals, return V2
-    if value.withdrawals.is_some() {
+    if value.body.withdrawals.is_some() {
         ExecutionPayloadFieldV2::V2(block_to_payload_v2(value))
     } else {
         ExecutionPayloadFieldV2::V1(block_to_payload_v1(value))
@@ -285,7 +297,7 @@ pub fn convert_payload_input_v2_to_payload(value: ExecutionPayloadInputV2) -> Ex
 /// Converts [`SealedBlock`] to [`ExecutionPayloadInputV2`]
 pub fn convert_block_to_payload_input_v2(value: SealedBlock) -> ExecutionPayloadInputV2 {
     ExecutionPayloadInputV2 {
-        withdrawals: value.withdrawals.clone().map(Withdrawals::into_inner),
+        withdrawals: value.body.withdrawals.clone().map(Withdrawals::into_inner),
         execution_payload: block_to_payload_v1(value),
     }
 }
@@ -318,8 +330,8 @@ pub fn try_into_block(
 /// NOTE: Empty ommers, nonce and difficulty values are validated upon computing block hash and
 /// comparing the value with `payload.block_hash`.
 ///
-/// Uses [`try_into_block`] to convert from the [`ExecutionPayload`] to [Block] and seals the block
-/// with its hash.
+/// Uses [`try_into_block`] to convert from the [`ExecutionPayload`] to [`Block`] and seals the
+/// block with its hash.
 ///
 /// Uses [`validate_block_hash`] to validate the payload block hash and ultimately return the
 /// [`SealedBlock`].
@@ -334,7 +346,7 @@ pub fn try_into_sealed_block(
     validate_block_hash(block_hash, base_payload)
 }
 
-/// Takes the expected block hash and [Block], validating the block and converting it into a
+/// Takes the expected block hash and [`Block`], validating the block and converting it into a
 /// [`SealedBlock`].
 ///
 /// If the provided block hash does not match the block hash computed from the provided block, this
@@ -355,17 +367,63 @@ pub fn validate_block_hash(
     Ok(sealed_block)
 }
 
-/// Converts [Block] to [`ExecutionPayloadBodyV1`]
+/// Converts [`Block`] to [`ExecutionPayloadBodyV1`]
 pub fn convert_to_payload_body_v1(value: Block) -> ExecutionPayloadBodyV1 {
-    let transactions = value.body.into_iter().map(|tx| {
+    let transactions = value.body.transactions.into_iter().map(|tx| {
         let mut out = Vec::new();
-        tx.encode_enveloped(&mut out);
+        tx.encode_2718(&mut out);
         out.into()
     });
     ExecutionPayloadBodyV1 {
         transactions: transactions.collect(),
-        withdrawals: value.withdrawals.map(Withdrawals::into_inner),
+        withdrawals: value.body.withdrawals.map(Withdrawals::into_inner),
     }
+}
+
+/// Converts [`Block`] to [`ExecutionPayloadBodyV2`]
+pub fn convert_to_payload_body_v2(value: Block) -> ExecutionPayloadBodyV2 {
+    let transactions = value.body.transactions.into_iter().map(|tx| {
+        let mut out = Vec::new();
+        tx.encode_2718(&mut out);
+        out.into()
+    });
+
+    let mut payload = ExecutionPayloadBodyV2 {
+        transactions: transactions.collect(),
+        withdrawals: value.body.withdrawals.map(Withdrawals::into_inner),
+        deposit_requests: None,
+        withdrawal_requests: None,
+        consolidation_requests: None,
+    };
+
+    if let Some(requests) = value.body.requests {
+        let (deposit_requests, withdrawal_requests, consolidation_requests) =
+            requests.into_iter().fold(
+                (Vec::new(), Vec::new(), Vec::new()),
+                |(mut deposits, mut withdrawals, mut consolidation_requests), request| {
+                    match request {
+                        Request::DepositRequest(r) => {
+                            deposits.push(r);
+                        }
+                        Request::WithdrawalRequest(r) => {
+                            withdrawals.push(r);
+                        }
+                        Request::ConsolidationRequest(r) => {
+                            consolidation_requests.push(r);
+                        }
+                        _ => {}
+                    };
+
+                    (deposits, withdrawals, consolidation_requests)
+                },
+            );
+
+        payload.deposit_requests = Some(deposit_requests);
+        payload.withdrawal_requests = Some(withdrawal_requests);
+        payload.consolidation_requests = Some(consolidation_requests);
+    }
+
+    payload
 }
 
 /// Transforms a [`SealedBlock`] into a [`ExecutionPayloadV1`]
@@ -395,10 +453,10 @@ mod tests {
         block_to_payload_v3, try_into_block, try_payload_v3_to_block, try_payload_v4_to_block,
         validate_block_hash,
     };
-    use reth_primitives::{b256, hex, Bytes, U256};
-    use reth_rpc_types::{
-        engine::{CancunPayloadFields, ExecutionPayloadV3, ExecutionPayloadV4},
-        ExecutionPayload, ExecutionPayloadV1, ExecutionPayloadV2,
+    use alloy_primitives::{b256, hex, Bytes, U256};
+    use alloy_rpc_types_engine::{
+        CancunPayloadFields, ExecutionPayload, ExecutionPayloadV1, ExecutionPayloadV2,
+        ExecutionPayloadV3, ExecutionPayloadV4,
     };
 
     #[test]
@@ -441,7 +499,7 @@ mod tests {
         let converted_payload = block_to_payload_v3(block.seal_slow());
 
         // ensure the payloads are the same
-        assert_eq!((new_payload, Some(parent_beacon_block_root)), converted_payload);
+        assert_eq!(new_payload, converted_payload);
     }
 
     #[test]
@@ -661,7 +719,8 @@ mod tests {
         "0x02f9021e8330182401843b9aca0085174876e80083030d40944242424242424242424242424242424242424242893635c9adc5dea00000b901a422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000120d694d6a0b0103651aafd87db6c88297175d7317c6e6da53ccf706c3c991c91fd0000000000000000000000000000000000000000000000000000000000000030b0b1b3b51cf688ead965a954c5cc206ba4e76f3f8efac60656ae708a9aad63487a2ca1fb30ccaf2ebe1028a2b2886b1b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020002d2b75f4a27f78e585a4735a40ab2437eceb12ec39938a94dc785a54d625130000000000000000000000000000000000000000000000000000000000000060b9759766e9bb191b1c457ae1da6cdf71a23fb9d8bc9f845eaa49ee4af280b3b9720ac4d81e64b1b50a65db7b8b4e76f1176a12e19d293d75574600e99fbdfecc1ab48edaeeffb3226cd47691d24473821dad0c6ff3973f03e4aa89f418933a56c080a099dc5b94a51e9b91a6425b1fed9792863006496ab71a4178524819d7db0c5e88a0119748e62700234079d91ae80f4676f9e0f71b260e9b46ef9b4aff331d3c2318"
       ],
       "withdrawalRequests": [],
-      "withdrawals": []
+      "withdrawals": [],
+      "consolidationRequests": []
     }"#;
 
         let payload = serde_json::from_str::<ExecutionPayloadV4>(s).unwrap();

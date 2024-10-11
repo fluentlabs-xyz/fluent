@@ -1,12 +1,16 @@
 //! Possible errors when interacting with the network.
 
-use crate::session::PendingSessionHandshakeError;
+use std::{fmt, io, io::ErrorKind, net::SocketAddr};
+
 use reth_dns_discovery::resolver::ResolveError;
+use reth_ecies::ECIESErrorImpl;
 use reth_eth_wire::{
     errors::{EthHandshakeError, EthStreamError, P2PHandshakeError, P2PStreamError},
     DisconnectReason,
 };
-use std::{fmt, io, io::ErrorKind, net::SocketAddr};
+use reth_network_types::BackoffKind;
+
+use crate::session::PendingSessionHandshakeError;
 
 /// Service kind.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -104,41 +108,11 @@ pub(crate) trait SessionError: fmt::Debug + fmt::Display {
     fn should_backoff(&self) -> Option<BackoffKind>;
 }
 
-/// Describes the type of backoff should be applied.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BackoffKind {
-    /// Use the lowest configured backoff duration.
-    ///
-    /// This applies to connection problems where there is a chance that they will be resolved
-    /// after the short duration.
-    Low,
-    /// Use a slightly higher duration to put a peer in timeout
-    ///
-    /// This applies to more severe connection problems where there is a lower chance that they
-    /// will be resolved.
-    Medium,
-    /// Use the max configured backoff duration.
-    ///
-    /// This is intended for spammers, or bad peers in general.
-    High,
-}
-
-// === impl BackoffKind ===
-
-impl BackoffKind {
-    /// Returns true if the backoff is considered severe.
-    pub(crate) const fn is_severe(&self) -> bool {
-        matches!(self, Self::Medium | Self::High)
-    }
-}
-
 impl SessionError for EthStreamError {
     fn merits_discovery_ban(&self) -> bool {
         match self {
             Self::P2PStreamError(P2PStreamError::HandshakeError(
-                P2PHandshakeError::HelloNotInHandshake,
-            )) |
-            Self::P2PStreamError(P2PStreamError::HandshakeError(
+                P2PHandshakeError::HelloNotInHandshake |
                 P2PHandshakeError::NonHelloMessageInHandshake,
             )) => true,
             Self::EthHandshakeError(err) => !matches!(err, EthHandshakeError::NoResponse),
@@ -151,29 +125,24 @@ impl SessionError for EthStreamError {
             Self::P2PStreamError(err) => {
                 matches!(
                     err,
-                    P2PStreamError::HandshakeError(P2PHandshakeError::NoSharedCapabilities) |
-                        P2PStreamError::HandshakeError(P2PHandshakeError::HelloNotInHandshake) |
-                        P2PStreamError::HandshakeError(
-                            P2PHandshakeError::NonHelloMessageInHandshake
-                        ) |
-                        P2PStreamError::HandshakeError(P2PHandshakeError::Disconnected(
-                            DisconnectReason::UselessPeer
-                        )) |
-                        P2PStreamError::HandshakeError(P2PHandshakeError::Disconnected(
-                            DisconnectReason::IncompatibleP2PProtocolVersion
-                        )) |
-                        P2PStreamError::HandshakeError(P2PHandshakeError::Disconnected(
-                            DisconnectReason::ProtocolBreach
-                        )) |
-                        P2PStreamError::UnknownReservedMessageId(_) |
+                    P2PStreamError::HandshakeError(
+                        P2PHandshakeError::NoSharedCapabilities |
+                            P2PHandshakeError::HelloNotInHandshake |
+                            P2PHandshakeError::NonHelloMessageInHandshake |
+                            P2PHandshakeError::Disconnected(
+                                DisconnectReason::UselessPeer |
+                                    DisconnectReason::IncompatibleP2PProtocolVersion |
+                                    DisconnectReason::ProtocolBreach
+                            )
+                    ) | P2PStreamError::UnknownReservedMessageId(_) |
                         P2PStreamError::EmptyProtocolMessage |
                         P2PStreamError::ParseSharedCapability(_) |
                         P2PStreamError::CapabilityNotShared |
-                        P2PStreamError::Disconnected(DisconnectReason::UselessPeer) |
                         P2PStreamError::Disconnected(
-                            DisconnectReason::IncompatibleP2PProtocolVersion
+                            DisconnectReason::UselessPeer |
+                                DisconnectReason::IncompatibleP2PProtocolVersion |
+                                DisconnectReason::ProtocolBreach
                         ) |
-                        P2PStreamError::Disconnected(DisconnectReason::ProtocolBreach) |
                         P2PStreamError::MismatchedProtocolVersion { .. }
                 )
             }
@@ -215,16 +184,20 @@ impl SessionError for EthStreamError {
         match self {
             // timeouts
             Self::EthHandshakeError(EthHandshakeError::NoResponse) |
-            Self::P2PStreamError(P2PStreamError::HandshakeError(P2PHandshakeError::NoResponse)) |
-            Self::P2PStreamError(P2PStreamError::PingTimeout) => Some(BackoffKind::Low),
+            Self::P2PStreamError(
+                P2PStreamError::HandshakeError(P2PHandshakeError::NoResponse) |
+                P2PStreamError::PingTimeout,
+            ) => Some(BackoffKind::Low),
             // malformed messages
-            Self::P2PStreamError(P2PStreamError::Rlp(_)) |
-            Self::P2PStreamError(P2PStreamError::UnknownReservedMessageId(_)) |
-            Self::P2PStreamError(P2PStreamError::UnknownDisconnectReason(_)) |
-            Self::P2PStreamError(P2PStreamError::MessageTooBig { .. }) |
-            Self::P2PStreamError(P2PStreamError::EmptyProtocolMessage) |
-            Self::P2PStreamError(P2PStreamError::PingerError(_)) |
-            Self::P2PStreamError(P2PStreamError::Snap(_)) => Some(BackoffKind::Medium),
+            Self::P2PStreamError(
+                P2PStreamError::Rlp(_) |
+                P2PStreamError::UnknownReservedMessageId(_) |
+                P2PStreamError::UnknownDisconnectReason(_) |
+                P2PStreamError::MessageTooBig { .. } |
+                P2PStreamError::EmptyProtocolMessage |
+                P2PStreamError::PingerError(_) |
+                P2PStreamError::Snap(_),
+            ) => Some(BackoffKind::Medium),
             _ => None,
         }
     }
@@ -234,7 +207,17 @@ impl SessionError for PendingSessionHandshakeError {
     fn merits_discovery_ban(&self) -> bool {
         match self {
             Self::Eth(eth) => eth.merits_discovery_ban(),
-            Self::Ecies(_) => true,
+            Self::Ecies(err) => matches!(
+                err.inner(),
+                ECIESErrorImpl::TagCheckDecryptFailed |
+                    ECIESErrorImpl::TagCheckHeaderFailed |
+                    ECIESErrorImpl::TagCheckBodyFailed |
+                    ECIESErrorImpl::InvalidAuthData |
+                    ECIESErrorImpl::InvalidAckData |
+                    ECIESErrorImpl::InvalidHeader |
+                    ECIESErrorImpl::Secp256k1(_) |
+                    ECIESErrorImpl::InvalidHandshake { .. }
+            ),
             Self::Timeout => false,
         }
     }
@@ -242,7 +225,17 @@ impl SessionError for PendingSessionHandshakeError {
     fn is_fatal_protocol_error(&self) -> bool {
         match self {
             Self::Eth(eth) => eth.is_fatal_protocol_error(),
-            Self::Ecies(_) => true,
+            Self::Ecies(err) => matches!(
+                err.inner(),
+                ECIESErrorImpl::TagCheckDecryptFailed |
+                    ECIESErrorImpl::TagCheckHeaderFailed |
+                    ECIESErrorImpl::TagCheckBodyFailed |
+                    ECIESErrorImpl::InvalidAuthData |
+                    ECIESErrorImpl::InvalidAckData |
+                    ECIESErrorImpl::InvalidHeader |
+                    ECIESErrorImpl::Secp256k1(_) |
+                    ECIESErrorImpl::InvalidHandshake { .. }
+            ),
             Self::Timeout => false,
         }
     }

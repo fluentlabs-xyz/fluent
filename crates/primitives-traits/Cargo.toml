@@ -12,46 +12,57 @@ description = "Common types in reth."
 workspace = true
 
 [dependencies]
-# fluentbase
-fluentbase-poseidon.workspace = true
-
 reth-codecs.workspace = true
 
-alloy-consensus.workspace = true
+alloy-consensus = { workspace = true, features = ["serde"] }
 alloy-eips.workspace = true
 alloy-genesis.workspace = true
 alloy-primitives.workspace = true
 alloy-rlp.workspace = true
-alloy-rpc-types-eth = { workspace = true, optional = true } 
 
+revm-primitives = { workspace = true, features = ["serde"] }
+
+# misc
+byteorder = "1"
 derive_more.workspace = true
-revm-primitives.workspace = true
+roaring = "0.10.2"
+serde_with = { workspace = true, optional = true }
 
 # required by reth-codecs
-modular-bitfield.workspace = true
 bytes.workspace = true
+modular-bitfield.workspace = true
 serde.workspace = true
 
 # arbitrary utils
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 proptest = { workspace = true, optional = true }
-proptest-derive = { workspace = true, optional = true }
+proptest-arbitrary-interop = { workspace = true, optional = true }
 
 [dev-dependencies]
+reth-testing-utils.workspace = true
+
+alloy-primitives = { workspace = true, features = ["arbitrary"] }
+alloy-consensus = { workspace = true, features = ["arbitrary"] }
+
 arbitrary = { workspace = true, features = ["derive"] }
+bincode.workspace = true
+proptest-arbitrary-interop.workspace = true
 proptest.workspace = true
-proptest-derive.workspace = true
-test-fuzz.workspace = true
 rand.workspace = true
+serde_json.workspace = true
+test-fuzz.workspace = true
 
 [features]
 default = ["std"]
 std = []
 test-utils = ["arbitrary"]
 arbitrary = [
+    "std",
+    "alloy-consensus/arbitrary",
+    "alloy-primitives/arbitrary",
     "dep:arbitrary",
     "dep:proptest",
-    "dep:proptest-derive"
+    "dep:proptest-arbitrary-interop",
 ]
-alloy-compat = ["alloy-rpc-types-eth"]
+serde-bincode-compat = ["serde_with", "alloy-consensus/serde-bincode-compat"]
 rwasm = []

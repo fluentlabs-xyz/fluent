@@ -33,10 +33,10 @@ use enr::Enr;
 pub struct NodeRecord {
     /// The Address of a node.
     pub address: IpAddr,
-    /// TCP port of the port that accepts connections.
-    pub tcp_port: u16,
     /// UDP discovery port.
     pub udp_port: u16,
+    /// TCP port of the port that accepts connections.
+    pub tcp_port: u16,
     /// Public key of the discovery service
     pub id: PeerId,
 }
@@ -90,6 +90,17 @@ impl NodeRecord {
     /// Creates a new record from a socket addr and peer id.
     pub const fn new(addr: SocketAddr, id: PeerId) -> Self {
         Self { address: addr.ip(), tcp_port: addr.port(), udp_port: addr.port(), id }
+    }
+
+    /// Creates a new record from an ip address and ports.
+    pub fn new_with_ports(
+        ip_addr: IpAddr,
+        tcp_port: u16,
+        udp_port: Option<u16>,
+        id: PeerId,
+    ) -> Self {
+        let udp_port = udp_port.unwrap_or(tcp_port);
+        Self { address: ip_addr, tcp_port, udp_port, id }
     }
 
     /// The TCP socket address of this node
@@ -182,6 +193,15 @@ impl FromStr for NodeRecord {
             .map_err(|e| NodeRecordParseError::InvalidId(e.to_string()))?;
 
         Ok(Self { address, id, tcp_port: port, udp_port })
+    }
+}
+
+#[cfg(feature = "secp256k1")]
+impl TryFrom<Enr<secp256k1::SecretKey>> for NodeRecord {
+    type Error = NodeRecordParseError;
+
+    fn try_from(enr: Enr<secp256k1::SecretKey>) -> Result<Self, Self::Error> {
+        (&enr).try_into()
     }
 }
 

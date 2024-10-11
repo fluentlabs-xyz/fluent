@@ -5,6 +5,7 @@ use reth_errors::{BlockExecutionError, DatabaseError, RethError};
 use reth_network_p2p::error::DownloadError;
 use reth_primitives_traits::SealedHeader;
 use reth_provider::ProviderError;
+use reth_prune::{PruneSegment, PruneSegmentError, PrunerError};
 use reth_static_file_types::StaticFileSegment;
 use thiserror::Error;
 use tokio::sync::broadcast::error::SendError;
@@ -70,7 +71,10 @@ pub enum StageError {
     Database(#[from] DatabaseError),
     /// Invalid pruning configuration
     #[error(transparent)]
-    PruningConfiguration(#[from] reth_prune::PruneSegmentError),
+    PruningConfiguration(#[from] PruneSegmentError),
+    /// Pruner error
+    #[error(transparent)]
+    Pruner(#[from] PrunerError),
     /// Invalid checkpoint passed to the stage
     #[error("invalid stage checkpoint: {0}")]
     StageCheckpoint(u64),
@@ -118,6 +122,12 @@ pub enum StageError {
         /// Expected static file block number.
         static_file: BlockNumber,
     },
+    /// The prune checkpoint for the given segment is missing.
+    #[error("missing prune checkpoint for {0}")]
+    MissingPruneCheckpoint(PruneSegment),
+    /// Post Execute Commit error
+    #[error("post execute commit error occurred: {_0}")]
+    PostExecuteCommit(&'static str),
     /// Internal error
     #[error(transparent)]
     Internal(#[from] RethError),
@@ -126,12 +136,12 @@ pub enum StageError {
     /// These types of errors are caught by the [Pipeline][crate::Pipeline] and trigger a restart
     /// of the stage.
     #[error(transparent)]
-    Recoverable(Box<dyn std::error::Error + Send + Sync>),
+    Recoverable(Box<dyn core::error::Error + Send + Sync>),
     /// The stage encountered a fatal error.
     ///
     /// These types of errors stop the pipeline.
     #[error(transparent)]
-    Fatal(Box<dyn std::error::Error + Send + Sync>),
+    Fatal(Box<dyn core::error::Error + Send + Sync>),
 }
 
 impl StageError {

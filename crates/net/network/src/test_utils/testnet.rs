@@ -1,24 +1,24 @@
 //! A network implementation for testing purposes.
 
-use crate::{
-    builder::ETH_REQUEST_CHANNEL_CAPACITY,
-    error::NetworkError,
-    eth_requests::EthRequestHandler,
-    peers::PeersHandle,
-    protocol::IntoRlpxSubProtocol,
-    transactions::{TransactionsHandle, TransactionsManager, TransactionsManagerConfig},
-    NetworkConfig, NetworkConfigBuilder, NetworkEvent, NetworkEvents, NetworkHandle,
-    NetworkManager,
+use std::{
+    fmt,
+    future::Future,
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    pin::Pin,
+    task::{Context, Poll},
 };
+
 use futures::{FutureExt, StreamExt};
 use pin_project::pin_project;
-use reth_chainspec::MAINNET;
+use reth_chainspec::{Hardforks, MAINNET};
 use reth_eth_wire::{protocol::Protocol, DisconnectReason, HelloMessageWithProtocols};
-use reth_network_api::{NetworkInfo, Peers};
-use reth_network_peers::PeerId;
-use reth_provider::{
-    test_utils::NoopProvider, BlockReader, BlockReaderIdExt, HeaderProvider, StateProviderFactory,
+use reth_network_api::{
+    test_utils::{PeersHandle, PeersHandleProvider},
+    NetworkEvent, NetworkEventListenerProvider, NetworkInfo, Peers,
 };
+use reth_network_peers::PeerId;
+use reth_provider::{test_utils::NoopProvider, ChainSpecProvider};
+use reth_storage_api::{BlockReader, BlockReaderIdExt, HeaderProvider, StateProviderFactory};
 use reth_tasks::TokioTaskExecutor;
 use reth_tokio_util::EventStream;
 use reth_transaction_pool::{
@@ -27,19 +27,21 @@ use reth_transaction_pool::{
     EthTransactionPool, TransactionPool, TransactionValidationTaskExecutor,
 };
 use secp256k1::SecretKey;
-use std::{
-    fmt,
-    future::Future,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    pin::Pin,
-    task::{Context, Poll},
-};
 use tokio::{
     sync::{
         mpsc::{channel, unbounded_channel},
         oneshot,
     },
     task::JoinHandle,
+};
+
+use crate::{
+    builder::ETH_REQUEST_CHANNEL_CAPACITY,
+    error::NetworkError,
+    eth_requests::EthRequestHandler,
+    protocol::IntoRlpxSubProtocol,
+    transactions::{TransactionsHandle, TransactionsManager, TransactionsManagerConfig},
+    NetworkConfig, NetworkConfigBuilder, NetworkHandle, NetworkManager,
 };
 
 /// A test network consisting of multiple peers.
@@ -52,7 +54,7 @@ pub struct Testnet<C, Pool> {
 
 impl<C> Testnet<C, TestPool>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static + ChainSpecProvider<ChainSpec: Hardforks>,
 {
     /// Same as [`Self::try_create_with`] but panics on error
     pub async fn create_with(num_peers: usize, provider: C) -> Self {
@@ -86,7 +88,7 @@ where
 
 impl<C, Pool> Testnet<C, Pool>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static,
     Pool: TransactionPool,
 {
     /// Return a mutable slice of all peers.
@@ -253,7 +255,7 @@ impl<C, Pool> fmt::Debug for Testnet<C, Pool> {
 
 impl<C, Pool> Future for Testnet<C, Pool>
 where
-    C: BlockReader + HeaderProvider + Unpin,
+    C: BlockReader + HeaderProvider + Unpin + 'static,
     Pool: TransactionPool + Unpin + 'static,
 {
     type Output = ();
@@ -327,7 +329,7 @@ impl<C, Pool> TestnetHandle<C, Pool> {
 #[derive(Debug)]
 pub struct Peer<C, Pool = TestPool> {
     #[pin]
-    network: NetworkManager<C>,
+    network: NetworkManager,
     #[pin]
     request_handler: Option<EthRequestHandler<C>>,
     #[pin]
@@ -341,7 +343,7 @@ pub struct Peer<C, Pool = TestPool> {
 
 impl<C, Pool> Peer<C, Pool>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static,
     Pool: TransactionPool,
 {
     /// Returns the number of connected peers.
@@ -374,7 +376,7 @@ where
     }
 
     /// Returns mutable access to the network.
-    pub fn network_mut(&mut self) -> &mut NetworkManager<C> {
+    pub fn network_mut(&mut self) -> &mut NetworkManager {
         &mut self.network
     }
 
@@ -438,7 +440,7 @@ where
 
 impl<C> Peer<C>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static,
 {
     /// Installs a new [`TestPool`]
     pub fn install_test_pool(&mut self) {
@@ -448,7 +450,7 @@ where
 
 impl<C, Pool> Future for Peer<C, Pool>
 where
-    C: BlockReader + HeaderProvider + Unpin,
+    C: BlockReader + HeaderProvider + Unpin + 'static,
     Pool: TransactionPool + Unpin + 'static,
 {
     type Output = ();
@@ -527,7 +529,7 @@ impl<Pool> PeerHandle<Pool> {
 
 impl<C> PeerConfig<C>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static,
 {
     /// Launches the network and returns the [Peer] that manages it
     pub async fn launch(self) -> Result<Peer<C>, NetworkError> {
@@ -546,7 +548,10 @@ where
 
     /// Initialize the network with a random secret key, allowing the devp2p and discovery to bind
     /// to any available IP and port.
-    pub fn new(client: C) -> Self {
+    pub fn new(client: C) -> Self
+    where
+        C: ChainSpecProvider<ChainSpec: Hardforks>,
+    {
         let secret_key = SecretKey::new(&mut rand::thread_rng());
         let config = Self::network_config_builder(secret_key).build(client.clone());
         Self { config, client, secret_key }
@@ -554,13 +559,19 @@ where
 
     /// Initialize the network with a given secret key, allowing devp2p and discovery to bind any
     /// available IP and port.
-    pub fn with_secret_key(client: C, secret_key: SecretKey) -> Self {
+    pub fn with_secret_key(client: C, secret_key: SecretKey) -> Self
+    where
+        C: ChainSpecProvider<ChainSpec: Hardforks>,
+    {
         let config = Self::network_config_builder(secret_key).build(client.clone());
         Self { config, client, secret_key }
     }
 
     /// Initialize the network with a given capabilities.
-    pub fn with_protocols(client: C, protocols: impl IntoIterator<Item = Protocol>) -> Self {
+    pub fn with_protocols(client: C, protocols: impl IntoIterator<Item = Protocol>) -> Self
+    where
+        C: ChainSpecProvider<ChainSpec: Hardforks>,
+    {
         let secret_key = SecretKey::new(&mut rand::thread_rng());
 
         let builder = Self::network_config_builder(secret_key);

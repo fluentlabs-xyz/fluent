@@ -1,22 +1,24 @@
 //! Session handles.
 
+use std::{io, net::SocketAddr, sync::Arc, time::Instant};
+
+use reth_ecies::ECIESError;
+use reth_eth_wire::{
+    capability::CapabilityMessage, errors::EthStreamError, Capabilities, DisconnectReason,
+    EthVersion, Status,
+};
+use reth_network_api::PeerInfo;
+use reth_network_peers::{NodeRecord, PeerId};
+use reth_network_types::PeerKind;
+use tokio::sync::{
+    mpsc::{self, error::SendError},
+    oneshot,
+};
+
 use crate::{
     message::PeerMessage,
     session::{conn::EthRlpxConnection, Direction, SessionId},
     PendingSessionHandshakeError,
-};
-use reth_ecies::ECIESError;
-use reth_eth_wire::{
-    capability::{Capabilities, CapabilityMessage},
-    errors::EthStreamError,
-    DisconnectReason, EthVersion, Status,
-};
-use reth_network_api::PeerInfo;
-use reth_network_peers::PeerId;
-use std::{io, net::SocketAddr, sync::Arc, time::Instant};
-use tokio::sync::{
-    mpsc::{self, error::SendError},
-    oneshot,
 };
 
 /// A handler attached to a peer session that's not authenticated yet, pending Handshake and hello
@@ -136,10 +138,12 @@ impl ActiveSessionHandle {
     }
 
     /// Extracts the [`PeerInfo`] from the session handle.
-    pub(crate) fn peer_info(&self) -> PeerInfo {
+    pub(crate) fn peer_info(&self, record: &NodeRecord, kind: PeerKind) -> PeerInfo {
         PeerInfo {
             remote_id: self.remote_id,
             direction: self.direction,
+            enode: record.to_string(),
+            enr: None,
             remote_addr: self.remote_addr,
             local_addr: self.local_addr,
             capabilities: self.capabilities.clone(),
@@ -147,6 +151,7 @@ impl ActiveSessionHandle {
             eth_version: self.version,
             status: self.status.clone(),
             session_established: self.established,
+            kind,
         }
     }
 }

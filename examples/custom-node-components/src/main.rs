@@ -3,14 +3,16 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 use reth::{
+    api::NodeTypes,
     builder::{components::PoolBuilder, BuilderContext, FullNodeTypes},
+    chainspec::ChainSpec,
     cli::Cli,
     providers::CanonStateSubscriptions,
     transaction_pool::{
         blobstore::InMemoryBlobStore, EthTransactionPool, TransactionValidationTaskExecutor,
     },
 };
-use reth_node_ethereum::EthereumNode;
+use reth_node_ethereum::{node::EthereumAddOns, EthereumNode};
 use reth_tracing::tracing::{debug, info};
 use reth_transaction_pool::PoolConfig;
 
@@ -23,6 +25,7 @@ fn main() {
                 // Configure the components of the node
                 // use default ethereum components but use our custom pool
                 .with_components(EthereumNode::components().pool(CustomPoolBuilder::default()))
+                .with_add_ons(EthereumAddOns::default())
                 .launch()
                 .await?;
 
@@ -39,12 +42,12 @@ pub struct CustomPoolBuilder {
     pool_config: PoolConfig,
 }
 
-/// Implement the `PoolBuilder` trait for the custom pool builder
+/// Implement the [`PoolBuilder`] trait for the custom pool builder
 ///
 /// This will be used to build the transaction pool and its maintenance tasks during launch.
 impl<Node> PoolBuilder<Node> for CustomPoolBuilder
 where
-    Node: FullNodeTypes,
+    Node: FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec>>,
 {
     type Pool = EthTransactionPool<Node::Provider, InMemoryBlobStore>;
 
@@ -54,7 +57,7 @@ where
         let validator = TransactionValidationTaskExecutor::eth_builder(ctx.chain_spec())
             .with_head_timestamp(ctx.head().timestamp)
             .kzg_settings(ctx.kzg_settings()?)
-            .with_additional_tasks(5)
+            .with_additional_tasks(ctx.config().txpool.additional_validation_tasks)
             .build_with_tasks(
                 ctx.provider().clone(),
                 ctx.task_executor().clone(),

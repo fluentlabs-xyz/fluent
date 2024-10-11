@@ -9,31 +9,25 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 use crate::metrics::PayloadBuilderMetrics;
+use alloy_primitives::{Bytes, B256, U256};
 use futures_core::ready;
 use futures_util::FutureExt;
-use reth_chainspec::ChainSpec;
+use reth_chainspec::{ChainSpec, EthereumHardforks};
 use reth_payload_builder::{
-    database::CachedReads, error::PayloadBuilderError, KeepPayloadJobAlive, PayloadId, PayloadJob,
-    PayloadJobGenerator,
+    database::CachedReads, KeepPayloadJobAlive, PayloadId, PayloadJob, PayloadJobGenerator,
 };
-use reth_payload_primitives::{BuiltPayload, PayloadBuilderAttributes};
+use reth_payload_primitives::{BuiltPayload, PayloadBuilderAttributes, PayloadBuilderError};
 use reth_primitives::{
     constants::{EMPTY_WITHDRAWALS, RETH_CLIENT_VERSION, SLOT_DURATION},
-    proofs, BlockNumberOrTag, Bytes, Request, SealedBlock, Withdrawals, B256, U256,
+    proofs, BlockNumberOrTag, SealedBlock, Withdrawals,
 };
 use reth_provider::{
     BlockReaderIdExt, BlockSource, CanonStateNotification, ProviderError, StateProviderFactory,
 };
-use reth_revm::state_change::{
-    apply_beacon_root_contract_call, apply_withdrawal_requests_contract_call,
-    post_block_withdrawals_balance_increments,
-};
+use reth_revm::state_change::post_block_withdrawals_balance_increments;
 use reth_tasks::TaskSpawner;
 use reth_transaction_pool::TransactionPool;
-use revm::{
-    primitives::{BlockEnv, CfgEnvWithHandlerCfg, EnvWithHandlerCfg},
-    Database, DatabaseCommit, Evm, State,
-};
+use revm::{Database, State};
 use std::{
     fmt,
     future::Future,
@@ -64,8 +58,6 @@ pub struct BasicPayloadJobGenerator<Client, Pool, Tasks, Builder> {
     config: BasicPayloadJobGeneratorConfig,
     /// Restricts how many generator tasks can be executed at once.
     payload_task_guard: PayloadTaskGuard,
-    /// The chain spec.
-    chain_spec: Arc<ChainSpec>,
     /// The type responsible for building payloads.
     ///
     /// See [`PayloadBuilder`]
@@ -84,7 +76,6 @@ impl<Client, Pool, Tasks, Builder> BasicPayloadJobGenerator<Client, Pool, Tasks,
         pool: Pool,
         executor: Tasks,
         config: BasicPayloadJobGeneratorConfig,
-        chain_spec: Arc<ChainSpec>,
         builder: Builder,
     ) -> Self {
         Self {
@@ -93,7 +84,6 @@ impl<Client, Pool, Tasks, Builder> BasicPayloadJobGenerator<Client, Pool, Tasks,
             executor,
             payload_task_guard: PayloadTaskGuard::new(config.max_payload_tasks),
             config,
-            chain_spec,
             builder,
             pre_cached: None,
         }
@@ -169,12 +159,8 @@ where
             block.seal(attributes.parent())
         };
 
-        let config = PayloadConfig::new(
-            Arc::new(parent_block),
-            self.config.extradata.clone(),
-            attributes,
-            Arc::clone(&self.chain_spec),
-        );
+        let config =
+            PayloadConfig::new(Arc::new(parent_block), self.config.extradata.clone(), attributes);
 
         let until = self.job_deadline(config.attributes.timestamp());
         let deadline = Box::pin(tokio::time::sleep_until(until));
@@ -187,6 +173,7 @@ where
             pool: self.pool.clone(),
             executor: self.executor.clone(),
             deadline,
+            // ticks immediately
             interval: tokio::time::interval(self.config.interval),
             best_payload: None,
             pending_block: None,
@@ -364,7 +351,7 @@ where
 {
     /// Spawns a new payload build task.
     fn spawn_build_job(&mut self) {
-        trace!(target: "payload_builder", "spawn new payload build task");
+        trace!(target: "payload_builder", id = %self.config.payload_id(), "spawn new payload build task");
         let (tx, rx) = oneshot::channel();
         let client = self.client.clone();
         let pool = self.pool.clone();
@@ -426,23 +413,20 @@ where
         // poll the pending block
         if let Some(mut fut) = this.pending_block.take() {
             match fut.poll_unpin(cx) {
-                Poll::Ready(Ok(outcome)) => {
-                    this.interval.reset();
-                    match outcome {
-                        BuildOutcome::Better { payload, cached_reads } => {
-                            this.cached_reads = Some(cached_reads);
-                            debug!(target: "payload_builder", value = %payload.fees(), "built better payload");
-                            this.best_payload = Some(payload);
-                        }
-                        BuildOutcome::Aborted { fees, cached_reads } => {
-                            this.cached_reads = Some(cached_reads);
-                            trace!(target: "payload_builder", worse_fees = %fees, "skipped payload build of worse block");
-                        }
-                        BuildOutcome::Cancelled => {
-                            unreachable!("the cancel signal never fired")
-                        }
+                Poll::Ready(Ok(outcome)) => match outcome {
+                    BuildOutcome::Better { payload, cached_reads } => {
+                        this.cached_reads = Some(cached_reads);
+                        debug!(target: "payload_builder", value = %payload.fees(), "built better payload");
+                        this.best_payload = Some(payload);
                     }
-                }
+                    BuildOutcome::Aborted { fees, cached_reads } => {
+                        this.cached_reads = Some(cached_reads);
+                        trace!(target: "payload_builder", worse_fees = %fees, "skipped payload build of worse block");
+                    }
+                    BuildOutcome::Cancelled => {
+                        unreachable!("the cancel signal never fired")
+                    }
+                },
                 Poll::Ready(Err(error)) => {
                     // job failed, but we simply try again next interval
                     debug!(target: "payload_builder", %error, "payload build attempt failed");
@@ -678,18 +662,12 @@ impl Drop for Cancelled {
 /// Static config for how to build a payload.
 #[derive(Clone, Debug)]
 pub struct PayloadConfig<Attributes> {
-    /// Pre-configured block environment.
-    pub initialized_block_env: BlockEnv,
-    /// Configuration for the environment.
-    pub initialized_cfg: CfgEnvWithHandlerCfg,
     /// The parent block.
     pub parent_block: Arc<SealedBlock>,
     /// Block extra data.
     pub extra_data: Bytes,
     /// Requested attributes for the payload.
     pub attributes: Attributes,
-    /// The chain spec.
-    pub chain_spec: Arc<ChainSpec>,
 }
 
 impl<Attributes> PayloadConfig<Attributes> {
@@ -704,24 +682,12 @@ where
     Attributes: PayloadBuilderAttributes,
 {
     /// Create new payload config.
-    pub fn new(
+    pub const fn new(
         parent_block: Arc<SealedBlock>,
         extra_data: Bytes,
         attributes: Attributes,
-        chain_spec: Arc<ChainSpec>,
     ) -> Self {
-        // configure evm env based on parent block
-        let (initialized_cfg, initialized_block_env) =
-            attributes.cfg_and_block_env(&chain_spec, &parent_block);
-
-        Self {
-            initialized_block_env,
-            initialized_cfg,
-            parent_block,
-            extra_data,
-            attributes,
-            chain_spec,
-        }
+        Self { parent_block, extra_data, attributes }
     }
 
     /// Returns the payload id.
@@ -751,6 +717,31 @@ pub enum BuildOutcome<Payload> {
     Cancelled,
 }
 
+impl<Payload> BuildOutcome<Payload> {
+    /// Consumes the type and returns the payload if the outcome is `Better`.
+    pub fn into_payload(self) -> Option<Payload> {
+        match self {
+            Self::Better { payload, .. } => Some(payload),
+            _ => None,
+        }
+    }
+
+    /// Returns true if the outcome is `Better`.
+    pub const fn is_better(&self) -> bool {
+        matches!(self, Self::Better { .. })
+    }
+
+    /// Returns true if the outcome is `Aborted`.
+    pub const fn is_aborted(&self) -> bool {
+        matches!(self, Self::Aborted { .. })
+    }
+
+    /// Returns true if the outcome is `Cancelled`.
+    pub const fn is_cancelled(&self) -> bool {
+        matches!(self, Self::Cancelled)
+    }
+}
+
 /// A collection of arguments used for building payloads.
 ///
 /// This struct encapsulates the essential components and configuration required for the payload
@@ -761,6 +752,8 @@ pub struct BuildArguments<Pool, Client, Attributes, Payload> {
     /// How to interact with the chain.
     pub client: Client,
     /// The transaction pool.
+    ///
+    /// Or the type that provides the transactions to build the payload.
     pub pool: Pool,
     /// Previously cached disk reads
     pub cached_reads: CachedReads,
@@ -783,6 +776,18 @@ impl<Pool, Client, Attributes, Payload> BuildArguments<Pool, Client, Attributes,
         best_payload: Option<Payload>,
     ) -> Self {
         Self { client, pool, cached_reads, config, cancel, best_payload }
+    }
+
+    /// Maps the transaction pool to a new type.
+    pub fn with_pool<P>(self, pool: P) -> BuildArguments<P, Client, Attributes, Payload> {
+        BuildArguments {
+            client: self.client,
+            pool,
+            cached_reads: self.cached_reads,
+            config: self.config,
+            cancel: self.cancel,
+            best_payload: self.best_payload,
+        }
     }
 }
 
@@ -921,79 +926,6 @@ pub fn commit_withdrawals<DB: Database<Error = ProviderError>>(
         withdrawals: Some(withdrawals),
         withdrawals_root: Some(withdrawals_root),
     })
-}
-
-/// Apply the [EIP-4788](https://eips.ethereum.org/EIPS/eip-4788) pre block contract call.
-///
-/// This constructs a new [Evm] with the given DB, and environment
-/// ([`CfgEnvWithHandlerCfg`] and [`BlockEnv`]) to execute the pre block contract call.
-///
-/// The parent beacon block root used for the call is gathered from the given
-/// [`PayloadBuilderAttributes`].
-///
-/// This uses [`apply_beacon_root_contract_call`] to ultimately apply the beacon root contract state
-/// change.
-pub fn pre_block_beacon_root_contract_call<DB: Database + DatabaseCommit, Attributes>(
-    db: &mut DB,
-    chain_spec: &ChainSpec,
-    block_number: u64,
-    initialized_cfg: &CfgEnvWithHandlerCfg,
-    initialized_block_env: &BlockEnv,
-    attributes: &Attributes,
-) -> Result<(), PayloadBuilderError>
-where
-    DB::Error: std::fmt::Display,
-    Attributes: PayloadBuilderAttributes,
-{
-    // apply pre-block EIP-4788 contract call
-    let mut evm_pre_block = Evm::builder()
-        .with_db(db)
-        .with_env_with_handler_cfg(EnvWithHandlerCfg::new_with_cfg_env(
-            initialized_cfg.clone(),
-            initialized_block_env.clone(),
-            Default::default(),
-        ))
-        .build();
-
-    // initialize a block from the env, because the pre block call needs the block itself
-    apply_beacon_root_contract_call(
-        chain_spec,
-        attributes.timestamp(),
-        block_number,
-        attributes.parent_beacon_block_root(),
-        &mut evm_pre_block,
-    )
-    .map_err(|err| PayloadBuilderError::Internal(err.into()))
-}
-
-/// Apply the [EIP-7002](https://eips.ethereum.org/EIPS/eip-7002) post block contract call.
-///
-/// This constructs a new [Evm] with the given DB, and environment
-/// ([`CfgEnvWithHandlerCfg`] and [`BlockEnv`]) to execute the post block contract call.
-///
-/// This uses [`apply_withdrawal_requests_contract_call`] to ultimately calculate the
-/// [requests](Request).
-pub fn post_block_withdrawal_requests_contract_call<DB: Database + DatabaseCommit>(
-    db: &mut DB,
-    initialized_cfg: &CfgEnvWithHandlerCfg,
-    initialized_block_env: &BlockEnv,
-) -> Result<Vec<Request>, PayloadBuilderError>
-where
-    DB::Error: std::fmt::Display,
-{
-    // apply post-block EIP-7002 contract call
-    let mut evm_post_block = Evm::builder()
-        .with_db(db)
-        .with_env_with_handler_cfg(EnvWithHandlerCfg::new_with_cfg_env(
-            initialized_cfg.clone(),
-            initialized_block_env.clone(),
-            Default::default(),
-        ))
-        .build();
-
-    // initialize a block from the env, because the post block call needs the block itself
-    apply_withdrawal_requests_contract_call(&mut evm_post_block)
-        .map_err(|err| PayloadBuilderError::Internal(err.into()))
 }
 
 /// Checks if the new payload is better than the current best.

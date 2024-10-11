@@ -1,19 +1,28 @@
-use super::{AccountReader, BlockHashReader, BlockIdReader, StateRootProvider};
+use super::{
+    AccountReader, BlockHashReader, BlockIdReader, StateProofProvider, StateRootProvider,
+    StorageRootProvider,
+};
+use alloy_eips::{BlockId, BlockNumHash, BlockNumberOrTag};
+use alloy_primitives::{Address, BlockHash, BlockNumber, StorageKey, StorageValue, B256, U256};
 use auto_impl::auto_impl;
 use reth_execution_types::ExecutionOutcome;
-use reth_primitives::{
-    Address, BlockHash, BlockId, BlockNumHash, BlockNumber, BlockNumberOrTag, Bytecode, StorageKey,
-    StorageValue, B256, KECCAK_EMPTY, U256,
-};
+use reth_primitives::{Bytecode, KECCAK_EMPTY};
 use reth_storage_errors::provider::{ProviderError, ProviderResult};
-use reth_trie::AccountProof;
 
 /// Type alias of boxed [`StateProvider`].
 pub type StateProviderBox = Box<dyn StateProvider>;
 
 /// An abstraction for a type that provides state data.
 #[auto_impl(&, Arc, Box)]
-pub trait StateProvider: BlockHashReader + AccountReader + StateRootProvider + Send + Sync {
+pub trait StateProvider:
+    BlockHashReader
+    + AccountReader
+    + StateRootProvider
+    + StorageRootProvider
+    + StateProofProvider
+    + Send
+    + Sync
+{
     /// Get storage of given account.
     fn storage(
         &self,
@@ -23,9 +32,6 @@ pub trait StateProvider: BlockHashReader + AccountReader + StateRootProvider + S
 
     /// Get account code by its hash
     fn bytecode_by_hash(&self, code_hash: B256) -> ProviderResult<Option<Bytecode>>;
-
-    /// Get account and storage proofs.
-    fn proof(&self, address: Address, keys: &[B256]) -> ProviderResult<AccountProof>;
 
     /// Get account code by its address.
     ///
@@ -75,6 +81,15 @@ pub trait StateProvider: BlockHashReader + AccountReader + StateRootProvider + S
     }
 }
 
+/// Trait implemented for database providers that can be converted into a historical state provider.
+pub trait TryIntoHistoricalStateProvider {
+    /// Returns a historical [`StateProvider`] indexed by the given historic block number.
+    fn try_into_history_at_block(
+        self,
+        block_number: BlockNumber,
+    ) -> ProviderResult<StateProviderBox>;
+}
+
 /// Light wrapper that returns `StateProvider` implementations that correspond to the given
 /// `BlockNumber`, the latest state, or the pending state.
 ///
@@ -103,7 +118,7 @@ pub trait StateProviderFactory: BlockIdReader + Send + Sync {
     /// Storage provider for latest block.
     fn latest(&self) -> ProviderResult<StateProviderBox>;
 
-    /// Returns a [StateProvider] indexed by the given [BlockId].
+    /// Returns a [`StateProvider`] indexed by the given [`BlockId`].
     ///
     /// Note: if a number or hash is provided this will __only__ look at historical(canonical)
     /// state.
@@ -120,31 +135,7 @@ pub trait StateProviderFactory: BlockIdReader + Send + Sync {
     fn state_by_block_number_or_tag(
         &self,
         number_or_tag: BlockNumberOrTag,
-    ) -> ProviderResult<StateProviderBox> {
-        match number_or_tag {
-            BlockNumberOrTag::Latest => self.latest(),
-            BlockNumberOrTag::Finalized => {
-                // we can only get the finalized state by hash, not by num
-                let hash =
-                    self.finalized_block_hash()?.ok_or(ProviderError::FinalizedBlockNotFound)?;
-
-                // only look at historical state
-                self.history_by_block_hash(hash)
-            }
-            BlockNumberOrTag::Safe => {
-                // we can only get the safe state by hash, not by num
-                let hash = self.safe_block_hash()?.ok_or(ProviderError::SafeBlockNotFound)?;
-
-                self.history_by_block_hash(hash)
-            }
-            BlockNumberOrTag::Earliest => self.history_by_block_number(0),
-            BlockNumberOrTag::Pending => self.pending(),
-            BlockNumberOrTag::Number(num) => {
-                // Note: The `BlockchainProvider` could also lookup the tree for the given block number, if for example the block number is `latest + 1`, however this should only support canonical state: <https://github.com/paradigmxyz/reth/issues/4515>
-                self.history_by_block_number(num)
-            }
-        }
-    }
+    ) -> ProviderResult<StateProviderBox>;
 
     /// Returns a historical [StateProvider] indexed by the given historic block number.
     ///
@@ -157,7 +148,7 @@ pub trait StateProviderFactory: BlockIdReader + Send + Sync {
     /// Note: this only looks at historical blocks, not pending blocks.
     fn history_by_block_hash(&self, block: BlockHash) -> ProviderResult<StateProviderBox>;
 
-    /// Returns _any_[StateProvider] with matching block hash.
+    /// Returns _any_ [StateProvider] with matching block hash.
     ///
     /// This will return a [StateProvider] for either a historical or pending block.
     fn state_by_block_hash(&self, block: BlockHash) -> ProviderResult<StateProviderBox>;
@@ -174,13 +165,6 @@ pub trait StateProviderFactory: BlockIdReader + Send + Sync {
     ///
     /// If the block couldn't be found, returns `None`.
     fn pending_state_by_hash(&self, block_hash: B256) -> ProviderResult<Option<StateProviderBox>>;
-
-    /// Return a [StateProvider] that contains bundle state data provider.
-    /// Used to inspect or execute transaction on the pending state.
-    fn pending_with_provider(
-        &self,
-        bundle_state_data: Box<dyn FullExecutionDataProvider>,
-    ) -> ProviderResult<StateProviderBox>;
 }
 
 /// Blockchain trait provider that gives access to the blockchain state that is not yet committed

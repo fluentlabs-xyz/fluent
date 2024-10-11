@@ -1,9 +1,11 @@
 //! A simple diskstore for blobs
 
 use crate::blobstore::{BlobStore, BlobStoreCleanupStat, BlobStoreError, BlobStoreSize};
+use alloy_eips::eip4844::BlobAndProofV1;
+use alloy_primitives::{TxHash, B256};
 use alloy_rlp::{Decodable, Encodable};
 use parking_lot::{Mutex, RwLock};
-use reth_primitives::{BlobTransactionSidecar, TxHash, B256};
+use reth_primitives::BlobTransactionSidecar;
 use schnellru::{ByLength, LruMap};
 use std::{collections::HashSet, fmt, fs, io, path::PathBuf, sync::Arc};
 use tracing::{debug, trace};
@@ -62,11 +64,14 @@ impl BlobStore for DiskFileBlobStore {
     }
 
     fn delete(&self, tx: B256) -> Result<(), BlobStoreError> {
-        self.inner.txs_to_delete.write().insert(tx);
+        if self.inner.contains(tx)? {
+            self.inner.txs_to_delete.write().insert(tx);
+        }
         Ok(())
     }
 
     fn delete_all(&self, txs: Vec<B256>) -> Result<(), BlobStoreError> {
+        let txs = self.inner.retain_existing(txs)?;
         self.inner.txs_to_delete.write().extend(txs);
         Ok(())
     }
@@ -122,6 +127,31 @@ impl BlobStore for DiskFileBlobStore {
             return Ok(Vec::new())
         }
         self.inner.get_exact(txs)
+    }
+
+    fn get_by_versioned_hashes(
+        &self,
+        versioned_hashes: &[B256],
+    ) -> Result<Vec<Option<BlobAndProofV1>>, BlobStoreError> {
+        let mut result = vec![None; versioned_hashes.len()];
+        for (_tx_hash, blob_sidecar) in self.inner.blob_cache.lock().iter() {
+            for (i, blob_versioned_hash) in blob_sidecar.versioned_hashes().enumerate() {
+                for (j, target_versioned_hash) in versioned_hashes.iter().enumerate() {
+                    if blob_versioned_hash == *target_versioned_hash {
+                        result[j].get_or_insert_with(|| BlobAndProofV1 {
+                            blob: Box::new(blob_sidecar.blobs[i]),
+                            proof: blob_sidecar.proofs[i],
+                        });
+                    }
+                }
+            }
+
+            // Return early if all blobs are found.
+            if result.iter().all(|blob| blob.is_some()) {
+                break;
+            }
+        }
+        Ok(result)
     }
 
     fn data_size_hint(&self) -> Option<usize> {
@@ -229,6 +259,23 @@ impl DiskFileBlobStoreInner {
         }
         // we only check if the file exists and assume it's valid
         Ok(self.blob_disk_file(tx).is_file())
+    }
+
+    /// Returns all the blob transactions which are in the cache or on the disk.
+    fn retain_existing(&self, txs: Vec<B256>) -> Result<Vec<B256>, BlobStoreError> {
+        let (in_cache, not_in_cache): (Vec<B256>, Vec<B256>) = {
+            let mut cache = self.blob_cache.lock();
+            txs.into_iter().partition(|tx| cache.get(tx).is_some())
+        };
+
+        let mut existing = in_cache;
+        for tx in not_in_cache {
+            if self.blob_disk_file(tx).is_file() {
+                existing.push(tx);
+            }
+        }
+
+        Ok(existing)
     }
 
     /// Retrieves the blob for the given transaction hash from the blob cache or disk.

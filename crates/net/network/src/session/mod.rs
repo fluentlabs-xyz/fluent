@@ -1,24 +1,18 @@
 //! Support for handling peer sessions.
 
-use crate::{
-    message::PeerMessage,
-    metrics::SessionManagerMetrics,
-    session::{active::ActiveSession, config::SessionCounter},
+mod active;
+mod conn;
+mod counter;
+mod handle;
+
+pub use conn::EthRlpxConnection;
+pub use handle::{
+    ActiveSessionHandle, ActiveSessionMessage, PendingSessionEvent, PendingSessionHandle,
+    SessionCommand,
 };
-use fnv::FnvHashMap;
-use futures::{future::Either, io, FutureExt, StreamExt};
-use reth_ecies::{stream::ECIESStream, ECIESError};
-use reth_eth_wire::{
-    capability::{Capabilities, CapabilityMessage},
-    errors::EthStreamError,
-    DisconnectReason, EthVersion, HelloMessageWithProtocols, Status, UnauthedEthStream,
-    UnauthedP2PStream,
-};
-use reth_metrics::common::mpsc::MeteredPollSender;
-use reth_network_peers::PeerId;
-use reth_primitives::{ForkFilter, ForkId, ForkTransition, Head};
-use reth_tasks::TaskSpawner;
-use secp256k1::SecretKey;
+
+pub use reth_network_api::{Direction, PeerInfo};
+
 use std::{
     collections::HashMap,
     future::Future,
@@ -27,28 +21,38 @@ use std::{
     task::{Context, Poll},
     time::{Duration, Instant},
 };
+
+use counter::SessionCounter;
+use futures::{future::Either, io, FutureExt, StreamExt};
+use reth_ecies::{stream::ECIESStream, ECIESError};
+use reth_eth_wire::{
+    capability::CapabilityMessage, errors::EthStreamError, multiplex::RlpxProtocolMultiplexer,
+    Capabilities, DisconnectReason, EthVersion, HelloMessageWithProtocols, Status,
+    UnauthedEthStream, UnauthedP2PStream,
+};
+use reth_metrics::common::mpsc::MeteredPollSender;
+use reth_network_api::PeerRequestSender;
+use reth_network_peers::PeerId;
+use reth_network_types::SessionsConfig;
+use reth_primitives::{ForkFilter, ForkId, ForkTransition, Head};
+use reth_tasks::TaskSpawner;
+use rustc_hash::FxHashMap;
+use secp256k1::SecretKey;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpStream,
-    sync::{mpsc, oneshot},
+    sync::{mpsc, mpsc::error::TrySendError, oneshot},
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::PollSender;
 use tracing::{debug, instrument, trace};
 
-mod active;
-mod config;
-mod conn;
-mod handle;
-pub use crate::message::PeerRequestSender;
-use crate::protocol::{IntoRlpxSubProtocol, RlpxSubProtocolHandlers, RlpxSubProtocols};
-pub use config::{SessionLimits, SessionsConfig};
-pub use handle::{
-    ActiveSessionHandle, ActiveSessionMessage, PendingSessionEvent, PendingSessionHandle,
-    SessionCommand,
+use crate::{
+    message::PeerMessage,
+    metrics::SessionManagerMetrics,
+    protocol::{IntoRlpxSubProtocol, RlpxSubProtocolHandlers, RlpxSubProtocols},
+    session::active::ActiveSession,
 };
-use reth_eth_wire::multiplex::RlpxProtocolMultiplexer;
-pub use reth_network_api::{Direction, PeerInfo};
 
 /// Internal identifier for active sessions.
 #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Eq, Hash)]
@@ -86,7 +90,7 @@ pub struct SessionManager {
     ///
     /// Events produced during the authentication phase are reported to this manager. Once the
     /// session is authenticated, it can be moved to the `active_session` set.
-    pending_sessions: FnvHashMap<SessionId, PendingSessionHandle>,
+    pending_sessions: FxHashMap<SessionId, PendingSessionHandle>,
     /// All active sessions that are ready to exchange messages.
     active_sessions: HashMap<PeerId, ActiveSessionHandle>,
     /// The original Sender half of the [`PendingSessionEvent`] channel.
@@ -171,6 +175,11 @@ impl SessionManager {
     /// Returns the secret key used for authenticating sessions.
     pub const fn secret_key(&self) -> SecretKey {
         self.secret_key
+    }
+
+    /// Returns a borrowed reference to the active sessions.
+    pub const fn active_sessions(&self) -> &HashMap<PeerId, ActiveSessionHandle> {
+        &self.active_sessions
     }
 
     /// Returns the session hello message.
@@ -337,7 +346,18 @@ impl SessionManager {
     /// Sends a message to the peer's session
     pub fn send_message(&mut self, peer_id: &PeerId, msg: PeerMessage) {
         if let Some(session) = self.active_sessions.get_mut(peer_id) {
-            let _ = session.commands_to_session.try_send(SessionCommand::Message(msg));
+            let _ = session.commands_to_session.try_send(SessionCommand::Message(msg)).inspect_err(
+                |e| {
+                    if let TrySendError::Full(_) = e {
+                        debug!(
+                            target: "net::session",
+                            ?peer_id,
+                            "session command buffer full, dropping message"
+                        );
+                        self.metrics.total_outgoing_peer_messages_dropped.increment(1);
+                    }
+                },
+            );
         }
     }
 
@@ -589,35 +609,6 @@ impl SessionManager {
                 }
             }
         }
-    }
-
-    /// Returns [`PeerInfo`] for all connected peers
-    pub(crate) fn get_peer_info(&self) -> Vec<PeerInfo> {
-        self.active_sessions.values().map(ActiveSessionHandle::peer_info).collect()
-    }
-
-    /// Returns [`PeerInfo`] for a given peer.
-    ///
-    /// Returns `None` if there's no active session to the peer.
-    pub(crate) fn get_peer_info_by_id(&self, peer_id: PeerId) -> Option<PeerInfo> {
-        self.active_sessions.get(&peer_id).map(ActiveSessionHandle::peer_info)
-    }
-    /// Returns [`PeerInfo`] for a given peer.
-    ///
-    /// Returns `None` if there's no active session to the peer.
-    pub(crate) fn get_peer_infos_by_ids(
-        &self,
-        peer_ids: impl IntoIterator<Item = PeerId>,
-    ) -> Vec<PeerInfo> {
-        let mut infos = Vec::new();
-        for peer_id in peer_ids {
-            if let Some(info) =
-                self.active_sessions.get(&peer_id).map(ActiveSessionHandle::peer_info)
-            {
-                infos.push(info);
-            }
-        }
-        infos
     }
 }
 
@@ -1006,10 +997,7 @@ async fn authenticate_stream(
         (eth_stream.into(), their_status)
     } else {
         // Multiplex the stream with the extra protocols
-        let (mut multiplex_stream, their_status) = RlpxProtocolMultiplexer::new(p2p_stream)
-            .into_eth_satellite_stream(status, fork_filter)
-            .await
-            .unwrap();
+        let mut multiplex_stream = RlpxProtocolMultiplexer::new(p2p_stream);
 
         // install additional handlers
         for handler in extra_handlers.into_iter() {
@@ -1021,6 +1009,19 @@ async fn authenticate_stream(
                 })
                 .ok();
         }
+
+        let (multiplex_stream, their_status) =
+            match multiplex_stream.into_eth_satellite_stream(status, fork_filter).await {
+                Ok((multiplex_stream, their_status)) => (multiplex_stream, their_status),
+                Err(err) => {
+                    return PendingSessionEvent::Disconnected {
+                        remote_addr,
+                        session_id,
+                        direction,
+                        error: Some(PendingSessionHandshakeError::Eth(err)),
+                    }
+                }
+            };
 
         (multiplex_stream.into(), their_status)
     };

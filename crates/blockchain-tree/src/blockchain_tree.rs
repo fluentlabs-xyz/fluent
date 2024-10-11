@@ -2,30 +2,34 @@
 
 use crate::{
     metrics::{MakeCanonicalAction, MakeCanonicalDurationsRecorder, TreeMetrics},
-    state::{BlockchainId, TreeState},
+    state::{SidechainId, TreeState},
     AppendableChain, BlockIndices, BlockchainTreeConfig, ExecutionData, TreeExternals,
 };
+use alloy_eips::{BlockNumHash, ForkBlock};
+use alloy_primitives::{BlockHash, BlockNumber, B256, U256};
 use reth_blockchain_tree_api::{
     error::{BlockchainTreeError, CanonicalError, InsertBlockError, InsertBlockErrorKind},
     BlockAttachment, BlockStatus, BlockValidationKind, CanonicalOutcome, InsertPayloadOk,
 };
 use reth_consensus::{Consensus, ConsensusError};
-use reth_db_api::database::Database;
 use reth_evm::execute::BlockExecutorProvider;
 use reth_execution_errors::{BlockExecutionError, BlockValidationError};
+use reth_execution_types::{Chain, ExecutionOutcome};
+use reth_node_types::NodeTypesWithDB;
 use reth_primitives::{
-    BlockHash, BlockNumHash, BlockNumber, ForkBlock, GotExpected, Hardfork, Receipt, SealedBlock,
-    SealedBlockWithSenders, SealedHeader, StaticFileSegment, B256, U256,
+    EthereumHardfork, GotExpected, Hardforks, Receipt, SealedBlock, SealedBlockWithSenders,
+    SealedHeader, StaticFileSegment,
 };
 use reth_provider::{
-    BlockExecutionWriter, BlockNumReader, BlockWriter, CanonStateNotification,
-    CanonStateNotificationSender, CanonStateNotifications, Chain, ChainSpecProvider, ChainSplit,
-    ChainSplitTarget, DisplayBlocksChain, ExecutionOutcome, HeaderProvider, ProviderError,
-    StaticFileProviderFactory,
+    providers::ProviderNodeTypes, BlockExecutionWriter, BlockNumReader, BlockWriter,
+    CanonStateNotification, CanonStateNotificationSender, CanonStateNotifications,
+    ChainSpecProvider, ChainSplit, ChainSplitTarget, DisplayBlocksChain, HeaderProvider,
+    ProviderError, StaticFileProviderFactory,
 };
-use reth_prune_types::PruneModes;
 use reth_stages_api::{MetricEvent, MetricEventsSender};
 use reth_storage_errors::provider::{ProviderResult, RootMismatch};
+use reth_trie::{hashed_cursor::HashedPostStateCursorFactory, StateRoot};
+use reth_trie_db::{DatabaseHashedCursorFactory, DatabaseStateRoot};
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashSet},
     sync::Arc,
@@ -56,17 +60,15 @@ use tracing::{debug, error, info, instrument, trace, warn};
 /// * [`BlockchainTree::make_canonical`]: Check if we have the hash of a block that is the current
 ///   canonical head and commit it to db.
 #[derive(Debug)]
-pub struct BlockchainTree<DB, E> {
+pub struct BlockchainTree<N: NodeTypesWithDB, E> {
     /// The state of the tree
     ///
     /// Tracks all the chains, the block indices, and the block buffer.
     state: TreeState,
     /// External components (the database, consensus engine etc.)
-    externals: TreeExternals<DB, E>,
+    externals: TreeExternals<N, E>,
     /// Tree configuration
     config: BlockchainTreeConfig,
-    /// Prune modes.
-    prune_modes: Option<PruneModes>,
     /// Broadcast channel for canon state changes notifications.
     canon_state_notification_sender: CanonStateNotificationSender,
     /// Metrics for sync stages.
@@ -75,7 +77,7 @@ pub struct BlockchainTree<DB, E> {
     metrics: TreeMetrics,
 }
 
-impl<DB, E> BlockchainTree<DB, E> {
+impl<N: NodeTypesWithDB, E> BlockchainTree<N, E> {
     /// Subscribe to new blocks events.
     ///
     /// Note: Only canonical blocks are emitted by the tree.
@@ -89,9 +91,9 @@ impl<DB, E> BlockchainTree<DB, E> {
     }
 }
 
-impl<DB, E> BlockchainTree<DB, E>
+impl<N, E> BlockchainTree<N, E>
 where
-    DB: Database + Clone,
+    N: ProviderNodeTypes,
     E: BlockExecutorProvider,
 {
     /// Builds the blockchain tree for the node.
@@ -115,9 +117,8 @@ where
     ///   storage space efficiently. It's important to validate this configuration to ensure it does
     ///   not lead to unintended data loss.
     pub fn new(
-        externals: TreeExternals<DB, E>,
+        externals: TreeExternals<N, E>,
         config: BlockchainTreeConfig,
-        prune_modes: Option<PruneModes>,
     ) -> ProviderResult<Self> {
         let max_reorg_depth = config.max_reorg_depth() as usize;
         // The size of the broadcast is twice the maximum reorg depth, because at maximum reorg
@@ -128,7 +129,9 @@ where
         let last_canonical_hashes =
             externals.fetch_latest_canonical_hashes(config.num_of_canonical_hashes() as usize)?;
 
-        let last_finalized_block_number = externals.fetch_latest_finalized_block_number()?;
+        // If we haven't written the finalized block, assume it's zero
+        let last_finalized_block_number =
+            externals.fetch_latest_finalized_block_number()?.unwrap_or_default();
 
         Ok(Self {
             externals,
@@ -138,7 +141,6 @@ where
                 config.max_unconnected_blocks(),
             ),
             config,
-            prune_modes,
             canon_state_notification_sender,
             sync_metrics_tx: None,
             metrics: Default::default(),
@@ -182,7 +184,7 @@ where
     ) -> Result<Option<BlockStatus>, InsertBlockErrorKind> {
         // check if block is canonical
         if self.is_block_hash_canonical(&block.hash)? {
-            return Ok(Some(BlockStatus::Valid(BlockAttachment::Canonical)))
+            return Ok(Some(BlockStatus::Valid(BlockAttachment::Canonical)));
         }
 
         let last_finalized_block = self.block_indices().last_finalized_block();
@@ -190,7 +192,7 @@ where
         if block.number <= last_finalized_block {
             // check if block is inside database
             if self.externals.provider_factory.provider()?.block_number(block.hash)?.is_some() {
-                return Ok(Some(BlockStatus::Valid(BlockAttachment::Canonical)))
+                return Ok(Some(BlockStatus::Valid(BlockAttachment::Canonical)));
             }
 
             return Err(BlockchainTreeError::PendingBlockIsFinalized {
@@ -201,7 +203,7 @@ where
 
         // is block inside chain
         if let Some(attachment) = self.is_block_inside_sidechain(&block) {
-            return Ok(Some(BlockStatus::Valid(attachment)))
+            return Ok(Some(BlockStatus::Valid(attachment)));
         }
 
         // check if block is disconnected
@@ -270,7 +272,7 @@ where
         let canonical_chain = self.state.block_indices.canonical_chain();
 
         // if it is part of the chain
-        if let Some(chain_id) = self.block_indices().get_block_chain_id(&block_hash) {
+        if let Some(chain_id) = self.block_indices().get_side_chain_id(&block_hash) {
             trace!(target: "blockchain_tree", ?block_hash, "Constructing post state data based on non-canonical chain");
             // get block state
             let Some(chain) = self.state.chains.get(&chain_id) else {
@@ -285,7 +287,7 @@ where
             let Some((first_pending_block_number, _)) = parent_block_hashes.first_key_value()
             else {
                 debug!(target: "blockchain_tree", ?chain_id, "No block hashes stored");
-                return None
+                return None;
             };
             let canonical_chain = canonical_chain
                 .iter()
@@ -295,7 +297,7 @@ where
 
             // get canonical fork.
             let canonical_fork = self.canonical_fork(chain_id)?;
-            return Some(ExecutionData { execution_outcome, parent_block_hashes, canonical_fork })
+            return Some(ExecutionData { execution_outcome, parent_block_hashes, canonical_fork });
         }
 
         // check if there is canonical block
@@ -305,7 +307,7 @@ where
                 canonical_fork: ForkBlock { number: canonical_number, hash: block_hash },
                 execution_outcome: ExecutionOutcome::default(),
                 parent_block_hashes: canonical_chain.inner().clone(),
-            })
+            });
         }
 
         None
@@ -326,14 +328,14 @@ where
         let parent = block.parent_num_hash();
 
         // check if block parent can be found in any side chain.
-        if let Some(chain_id) = self.block_indices().get_block_chain_id(&parent.hash) {
+        if let Some(chain_id) = self.block_indices().get_side_chain_id(&parent.hash) {
             // found parent in side tree, try to insert there
-            return self.try_insert_block_into_side_chain(block, chain_id, block_validation_kind)
+            return self.try_insert_block_into_side_chain(block, chain_id, block_validation_kind);
         }
 
         // if not found, check if the parent can be found inside canonical chain.
         if self.is_block_hash_canonical(&parent.hash)? {
-            return self.try_append_canonical_chain(block.clone(), block_validation_kind)
+            return self.try_append_canonical_chain(block.clone(), block_validation_kind);
         }
 
         // this is another check to ensure that if the block points to a canonical block its block
@@ -402,7 +404,7 @@ where
             .externals
             .provider_factory
             .chain_spec()
-            .fork(Hardfork::Paris)
+            .fork(EthereumHardfork::Paris)
             .active_at_ttd(parent_td, U256::ZERO)
         {
             return Err(BlockExecutionError::Validation(BlockValidationError::BlockPreMerge {
@@ -413,8 +415,9 @@ where
 
         let parent_header = provider
             .header(&block.parent_hash)?
-            .ok_or_else(|| BlockchainTreeError::CanonicalChain { block_hash: block.parent_hash })?
-            .seal(block.parent_hash);
+            .ok_or_else(|| BlockchainTreeError::CanonicalChain { block_hash: block.parent_hash })?;
+
+        let parent_sealed_header = SealedHeader::new(parent_header, block.parent_hash);
 
         let canonical_chain = self.state.block_indices.canonical_chain();
 
@@ -426,7 +429,7 @@ where
 
         let chain = AppendableChain::new_canonical_fork(
             block,
-            &parent_header,
+            &parent_sealed_header,
             canonical_chain.inner(),
             parent,
             &self.externals,
@@ -442,12 +445,12 @@ where
 
     /// Try inserting a block into the given side chain.
     ///
-    /// WARNING: This expects a valid side chain id, see [BlockIndices::get_block_chain_id]
+    /// WARNING: This expects a valid side chain id, see [BlockIndices::get_side_chain_id]
     #[instrument(level = "trace", skip_all, target = "blockchain_tree")]
     fn try_insert_block_into_side_chain(
         &mut self,
         block: SealedBlockWithSenders,
-        chain_id: BlockchainId,
+        chain_id: SidechainId,
         block_validation_kind: BlockValidationKind,
     ) -> Result<BlockStatus, InsertBlockErrorKind> {
         let block_num_hash = block.num_hash();
@@ -520,7 +523,7 @@ where
     /// # Note
     ///
     /// This is not cached in order to save memory.
-    fn all_chain_hashes(&self, chain_id: BlockchainId) -> BTreeMap<BlockNumber, BlockHash> {
+    fn all_chain_hashes(&self, chain_id: SidechainId) -> BTreeMap<BlockNumber, BlockHash> {
         let mut chain_id = chain_id;
         let mut hashes = BTreeMap::new();
         loop {
@@ -541,7 +544,7 @@ where
             }
 
             let fork_block = chain.fork_block();
-            if let Some(next_chain_id) = self.block_indices().get_block_chain_id(&fork_block.hash) {
+            if let Some(next_chain_id) = self.block_indices().get_side_chain_id(&fork_block.hash) {
                 chain_id = next_chain_id;
             } else {
                 // if there is no fork block that point to other chains, break the loop.
@@ -558,14 +561,14 @@ where
     /// the block on
     ///
     /// Returns `None` if the chain is unknown.
-    fn canonical_fork(&self, chain_id: BlockchainId) -> Option<ForkBlock> {
+    fn canonical_fork(&self, chain_id: SidechainId) -> Option<ForkBlock> {
         let mut chain_id = chain_id;
         let mut fork;
         loop {
             // chain fork block
             fork = self.state.chains.get(&chain_id)?.fork_block();
             // get fork block chain
-            if let Some(fork_chain_id) = self.block_indices().get_block_chain_id(&fork.hash) {
+            if let Some(fork_chain_id) = self.block_indices().get_side_chain_id(&fork.hash) {
                 chain_id = fork_chain_id;
                 continue
             }
@@ -577,21 +580,21 @@ where
     /// Insert a chain into the tree.
     ///
     /// Inserts a chain into the tree and builds the block indices.
-    fn insert_chain(&mut self, chain: AppendableChain) -> Option<BlockchainId> {
+    fn insert_chain(&mut self, chain: AppendableChain) -> Option<SidechainId> {
         self.state.insert_chain(chain)
     }
 
     /// Iterate over all child chains that depend on this block and return
     /// their ids.
-    fn find_all_dependent_chains(&self, block: &BlockHash) -> HashSet<BlockchainId> {
+    fn find_all_dependent_chains(&self, block: &BlockHash) -> HashSet<SidechainId> {
         // Find all forks of given block.
         let mut dependent_block =
             self.block_indices().fork_to_child().get(block).cloned().unwrap_or_default();
-        let mut dependent_chains = HashSet::new();
+        let mut dependent_chains = HashSet::default();
 
         while let Some(block) = dependent_block.pop_back() {
             // Get chain of dependent block.
-            let Some(chain_id) = self.block_indices().get_block_chain_id(&block) else {
+            let Some(chain_id) = self.block_indices().get_side_chain_id(&block) else {
                 debug!(target: "blockchain_tree", ?block, "Block not in tree");
                 return Default::default();
             };
@@ -620,7 +623,7 @@ where
     /// plain state during the unwind.
     /// Returns the result of inserting the chain or None if any of the dependent chains is not
     /// in the tree.
-    fn insert_unwound_chain(&mut self, chain: AppendableChain) -> Option<BlockchainId> {
+    fn insert_unwound_chain(&mut self, chain: AppendableChain) -> Option<SidechainId> {
         // iterate over all blocks in chain and find any fork blocks that are in tree.
         for (number, block) in chain.blocks() {
             let hash = block.hash();
@@ -684,7 +687,7 @@ where
     pub fn buffer_block(&mut self, block: SealedBlockWithSenders) -> Result<(), InsertBlockError> {
         // validate block consensus rules
         if let Err(err) = self.validate_block(&block) {
-            return Err(InsertBlockError::consensus_error(err, block.block))
+            return Err(InsertBlockError::consensus_error(err, block.block));
         }
 
         self.state.buffered_blocks.insert_block(block);
@@ -702,17 +705,17 @@ where
                 "Failed to validate total difficulty for block {}: {e}",
                 block.header.hash()
             );
-            return Err(e)
+            return Err(e);
         }
 
         if let Err(e) = self.externals.consensus.validate_header(block) {
             error!(?block, "Failed to validate header {}: {e}", block.header.hash());
-            return Err(e)
+            return Err(e);
         }
 
         if let Err(e) = self.externals.consensus.validate_block_pre_execution(block) {
             error!(?block, "Failed to validate block {}: {e}", block.header.hash());
-            return Err(e)
+            return Err(e);
         }
 
         Ok(())
@@ -726,7 +729,7 @@ where
     #[track_caller]
     fn is_block_inside_sidechain(&self, block: &BlockNumHash) -> Option<BlockAttachment> {
         // check if block known and is already in the tree
-        if let Some(chain_id) = self.block_indices().get_block_chain_id(&block.hash) {
+        if let Some(chain_id) = self.block_indices().get_side_chain_id(&block.hash) {
             // find the canonical fork of this chain
             let Some(canonical_fork) = self.canonical_fork(chain_id) else {
                 debug!(target: "blockchain_tree", chain_id=?chain_id, block=?block.hash, "Chain id not valid");
@@ -737,7 +740,7 @@ where
                 Some(BlockAttachment::Canonical)
             } else {
                 Some(BlockAttachment::HistoricalFork)
-            }
+            };
         }
         None
     }
@@ -778,7 +781,7 @@ where
 
         // validate block consensus rules
         if let Err(err) = self.validate_block(&block) {
-            return Err(InsertBlockError::consensus_error(err, block.block))
+            return Err(InsertBlockError::consensus_error(err, block.block));
         }
 
         let status = self
@@ -940,7 +943,7 @@ where
     /// The pending part of the chain is reinserted back into the tree with the same `chain_id`.
     fn remove_and_split_chain(
         &mut self,
-        chain_id: BlockchainId,
+        chain_id: SidechainId,
         split_at: ChainSplitTarget,
     ) -> Option<Chain> {
         let chain = self.state.chains.remove(&chain_id)?;
@@ -992,7 +995,7 @@ where
             header = provider.header(hash)?
         }
 
-        Ok(header.map(|header| header.seal(*hash)))
+        Ok(header.map(|header| SealedHeader::new(header, *hash)))
     }
 
     /// Determines whether or not a block is canonical, checking the db if necessary.
@@ -1043,7 +1046,7 @@ where
                 .externals
                 .provider_factory
                 .chain_spec()
-                .fork(Hardfork::Paris)
+                .fork(EthereumHardfork::Paris)
                 .active_at_ttd(td, U256::ZERO)
             {
                 return Err(CanonicalError::from(BlockValidationError::BlockPreMerge {
@@ -1052,10 +1055,10 @@ where
             }
 
             let head = self.state.block_indices.canonical_tip();
-            return Ok(CanonicalOutcome::AlreadyCanonical { header, head })
+            return Ok(CanonicalOutcome::AlreadyCanonical { header, head });
         }
 
-        let Some(chain_id) = self.block_indices().get_block_chain_id(&block_hash) else {
+        let Some(chain_id) = self.block_indices().get_side_chain_id(&block_hash) else {
             debug!(target: "blockchain_tree", ?block_hash, "Block hash not found in block indices");
             return Err(CanonicalError::from(BlockchainTreeError::BlockHashNotFoundInChain {
                 block_hash,
@@ -1063,13 +1066,11 @@ where
         };
 
         // we are splitting chain at the block hash that we want to make canonical
-        let Some(canonical) =
-            self.remove_and_split_chain(chain_id, ChainSplitTarget::Hash(block_hash))
-        else {
+        let Some(canonical) = self.remove_and_split_chain(chain_id, block_hash.into()) else {
             debug!(target: "blockchain_tree", ?block_hash, ?chain_id, "Chain not present");
             return Err(CanonicalError::from(BlockchainTreeError::BlockSideChainIdConsistency {
                 chain_id: chain_id.into(),
-            }));
+            }))
         };
         trace!(target: "blockchain_tree", chain = ?canonical, "Found chain to make canonical");
         durations_recorder.record_relative(MakeCanonicalAction::SplitChain);
@@ -1078,7 +1079,7 @@ where
         let mut chains_to_promote = vec![canonical];
 
         // loop while fork blocks are found in Tree.
-        while let Some(chain_id) = self.block_indices().get_block_chain_id(&fork_block.hash) {
+        while let Some(chain_id) = self.block_indices().get_side_chain_id(&fork_block.hash) {
             // canonical chain is lower part of the chain.
             let Some(canonical) =
                 self.remove_and_split_chain(chain_id, ChainSplitTarget::Number(fork_block.number))
@@ -1099,7 +1100,7 @@ where
             debug!(target: "blockchain_tree", "No blocks in the chain to make canonical");
             return Err(CanonicalError::from(BlockchainTreeError::BlockHashNotFoundInChain {
                 block_hash: fork_block.hash,
-            }));
+            }))
         };
         trace!(target: "blockchain_tree", ?new_canon_chain, "Merging chains");
         let mut chain_appended = false;
@@ -1193,14 +1194,14 @@ where
             .unwrap_or_default()
             .into_iter()
             .for_each(|child| {
-                if let Some(chain_id) = self.block_indices().get_block_chain_id(&child) {
+                if let Some(chain_id) = self.block_indices().get_side_chain_id(&child) {
                     if let Some(chain) = self.state.chains.get_mut(&chain_id) {
                         chain.clear_trie_updates();
                     }
                 }
             });
 
-        durations_recorder.record_relative(MakeCanonicalAction::ClearTrieUpdatesForOtherChilds);
+        durations_recorder.record_relative(MakeCanonicalAction::ClearTrieUpdatesForOtherChildren);
 
         // Send notification about new canonical chain and return outcome of canonicalization.
         let outcome = CanonicalOutcome::Committed { head: chain_notification.tip().header.clone() };
@@ -1216,6 +1217,8 @@ where
     ) -> Result<(), CanonicalError> {
         let (blocks, state, chain_trie_updates) = chain.into_inner();
         let hashed_state = state.hash_state_slow();
+        let prefix_sets = hashed_state.construct_prefix_sets().freeze();
+        let hashed_state_sorted = hashed_state.into_sorted();
 
         // Compute state root or retrieve cached trie updates before opening write transaction.
         let block_hash_numbers =
@@ -1235,8 +1238,13 @@ where
                     // State root calculation can take a while, and we're sure no write transaction
                     // will be open in parallel. See https://github.com/paradigmxyz/reth/issues/6168.
                     .disable_long_read_transaction_safety();
-                let (state_root, trie_updates) = hashed_state
-                    .state_root_with_updates(provider.tx_ref())
+                let (state_root, trie_updates) = StateRoot::from_tx(provider.tx_ref())
+                    .with_hashed_cursor_factory(HashedPostStateCursorFactory::new(
+                        DatabaseHashedCursorFactory::new(provider.tx_ref()),
+                        &hashed_state_sorted,
+                    ))
+                    .with_prefix_sets(prefix_sets)
+                    .root_with_updates()
                     .map_err(Into::<BlockValidationError>::into)?;
                 let tip = blocks.tip();
                 if state_root != tip.state_root {
@@ -1258,9 +1266,8 @@ where
             .append_blocks_with_state(
                 blocks.into_blocks().collect(),
                 state,
-                hashed_state,
+                hashed_state_sorted,
                 trie_updates,
-                self.prune_modes.as_ref(),
             )
             .map_err(|e| CanonicalError::CanonicalCommit(e.to_string()))?;
 
@@ -1274,7 +1281,7 @@ where
     pub fn unwind(&mut self, unwind_to: BlockNumber) -> Result<(), CanonicalError> {
         // nothing to be done if unwind_to is higher then the tip
         if self.block_indices().canonical_tip().number <= unwind_to {
-            return Ok(())
+            return Ok(());
         }
         // revert `N` blocks from current canonical chain and put them inside BlockchainTree
         let old_canon_chain = self.revert_canonical_from_database(unwind_to)?;
@@ -1316,7 +1323,7 @@ where
                 "Reverting optimistic canonical chain to block {}",
                 revert_until
             );
-            return Err(CanonicalError::OptimisticTargetRevert(revert_until))
+            return Err(CanonicalError::OptimisticTargetRevert(revert_until));
         }
 
         // read data that is needed for new sidechain
@@ -1369,28 +1376,29 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_consensus::TxEip1559;
+    use alloy_genesis::{Genesis, GenesisAccount};
+    use alloy_primitives::{keccak256, Address, Sealable, B256};
     use assert_matches::assert_matches;
     use linked_hash_set::LinkedHashSet;
-    use reth_chainspec::{ChainSpecBuilder, MAINNET};
+    use reth_chainspec::{ChainSpecBuilder, MAINNET, MIN_TRANSACTION_GAS};
     use reth_consensus::test_utils::TestConsensus;
-    use reth_db::{tables, test_utils::TempDatabase, DatabaseEnv};
+    use reth_db::tables;
     use reth_db_api::transaction::DbTxMut;
     use reth_evm::test_utils::MockExecutorProvider;
     use reth_evm_ethereum::execute::EthExecutorProvider;
-    #[cfg(not(feature = "optimism"))]
-    use reth_primitives::proofs::calculate_receipt_root;
-    #[cfg(feature = "optimism")]
-    use reth_primitives::proofs::calculate_receipt_root_optimism;
     use reth_primitives::{
-        constants::{EIP1559_INITIAL_BASE_FEE, EMPTY_ROOT_HASH, ETHEREUM_BLOCK_GAS_LIMIT},
-        keccak256,
-        proofs::calculate_transaction_root,
+        constants::{EIP1559_INITIAL_BASE_FEE, EMPTY_ROOT_HASH},
+        proofs::{calculate_receipt_root, calculate_transaction_root},
         revm_primitives::AccountInfo,
-        Account, Address, Genesis, GenesisAccount, Header, Signature, Transaction,
-        TransactionSigned, TransactionSignedEcRecovered, TxEip1559, Withdrawals, B256,
+        Account, BlockBody, Header, Signature, Transaction, TransactionSigned,
+        TransactionSignedEcRecovered, Withdrawals,
     };
     use reth_provider::{
-        test_utils::{blocks::BlockchainTestData, create_test_provider_factory_with_chain_spec},
+        test_utils::{
+            blocks::BlockchainTestData, create_test_provider_factory_with_chain_spec,
+            MockNodeTypesWithDB,
+        },
         ProviderFactory,
     };
     use reth_stages_api::StageCheckpoint;
@@ -1399,7 +1407,7 @@ mod tests {
 
     fn setup_externals(
         exec_res: Vec<ExecutionOutcome>,
-    ) -> TreeExternals<Arc<TempDatabase<DatabaseEnv>>, MockExecutorProvider> {
+    ) -> TreeExternals<MockNodeTypesWithDB, MockExecutorProvider> {
         let chain_spec = Arc::new(
             ChainSpecBuilder::default()
                 .chain(MAINNET.chain)
@@ -1415,7 +1423,7 @@ mod tests {
         TreeExternals::new(provider_factory, consensus, executor_factory)
     }
 
-    fn setup_genesis<DB: Database>(factory: &ProviderFactory<DB>, mut genesis: SealedBlock) {
+    fn setup_genesis<N: ProviderNodeTypes>(factory: &ProviderFactory<N>, mut genesis: SealedBlock) {
         // insert genesis to db.
 
         genesis.header.set_block_number(10);
@@ -1425,7 +1433,6 @@ mod tests {
         provider
             .insert_historical_block(
                 genesis.try_seal_with_senders().expect("invalid tx signature in genesis"),
-                None,
             )
             .unwrap();
 
@@ -1449,7 +1456,7 @@ mod tests {
         /// Number of chains
         chain_num: Option<usize>,
         /// Check block to chain index
-        block_to_chain: Option<HashMap<BlockHash, BlockchainId>>,
+        block_to_chain: Option<HashMap<BlockHash, SidechainId>>,
         /// Check fork to child index
         fork_to_child: Option<HashMap<BlockHash, HashSet<BlockHash>>>,
         /// Pending blocks
@@ -1464,7 +1471,7 @@ mod tests {
             self
         }
 
-        fn with_block_to_chain(mut self, block_to_chain: HashMap<BlockHash, BlockchainId>) -> Self {
+        fn with_block_to_chain(mut self, block_to_chain: HashMap<BlockHash, SidechainId>) -> Self {
             self.block_to_chain = Some(block_to_chain);
             self
         }
@@ -1493,7 +1500,7 @@ mod tests {
             self
         }
 
-        fn assert<DB: Database, E: BlockExecutorProvider>(self, tree: &BlockchainTree<DB, E>) {
+        fn assert<N: NodeTypesWithDB, E: BlockExecutorProvider>(self, tree: &BlockchainTree<N, E>) {
             if let Some(chain_num) = self.chain_num {
                 assert_eq!(tree.state.chains.len(), chain_num);
             }
@@ -1501,7 +1508,8 @@ mod tests {
                 assert_eq!(*tree.state.block_indices.blocks_to_chain(), block_to_chain);
             }
             if let Some(fork_to_child) = self.fork_to_child {
-                let mut x: HashMap<BlockHash, LinkedHashSet<BlockHash>> = HashMap::new();
+                let mut x: HashMap<BlockHash, LinkedHashSet<BlockHash>> =
+                    HashMap::with_capacity(fork_to_child.len());
                 for (key, hash_set) in fork_to_child {
                     x.insert(key, hash_set.into_iter().collect());
                 }
@@ -1546,7 +1554,6 @@ mod tests {
                     SealedBlock::new(chain_spec.sealed_genesis_header(), Default::default())
                         .try_seal_with_senders()
                         .unwrap(),
-                    None,
                 )
                 .unwrap();
             let account = Account { balance: initial_signer_balance, ..Default::default() };
@@ -1555,18 +1562,18 @@ mod tests {
             provider_rw.commit().unwrap();
         }
 
-        let single_tx_cost = U256::from(EIP1559_INITIAL_BASE_FEE * 21_000);
+        let single_tx_cost = U256::from(EIP1559_INITIAL_BASE_FEE * MIN_TRANSACTION_GAS);
         let mock_tx = |nonce: u64| -> TransactionSignedEcRecovered {
             TransactionSigned::from_transaction_and_signature(
                 Transaction::Eip1559(TxEip1559 {
                     chain_id: chain_spec.chain.id(),
                     nonce,
-                    gas_limit: 21_000,
+                    gas_limit: MIN_TRANSACTION_GAS,
                     to: Address::ZERO.into(),
                     max_fee_per_gas: EIP1559_INITIAL_BASE_FEE as u128,
                     ..Default::default()
                 }),
-                Signature::default(),
+                Signature::test_signature(),
             )
             .with_signer(signer)
         };
@@ -1584,49 +1591,51 @@ mod tests {
                     Receipt {
                         tx_type: tx.tx_type(),
                         success: true,
-                        cumulative_gas_used: (idx as u64 + 1) * 21_000,
+                        cumulative_gas_used: (idx as u64 + 1) * MIN_TRANSACTION_GAS,
                         ..Default::default()
                     }
                     .with_bloom()
                 })
                 .collect::<Vec<_>>();
 
-            #[cfg(not(feature = "optimism"))]
+            // receipts root computation is different for OP
             let receipts_root = calculate_receipt_root(&receipts);
 
-            #[cfg(feature = "optimism")]
-            let receipts_root = calculate_receipt_root_optimism(&receipts, &chain_spec, 0);
+            let sealed = Header {
+                number,
+                parent_hash: parent.unwrap_or_default(),
+                gas_used: body.len() as u64 * MIN_TRANSACTION_GAS,
+                gas_limit: chain_spec.max_gas_limit,
+                mix_hash: B256::random(),
+                base_fee_per_gas: Some(EIP1559_INITIAL_BASE_FEE),
+                transactions_root,
+                receipts_root,
+                state_root: state_root_unhashed(HashMap::from([(
+                    signer,
+                    (
+                        AccountInfo {
+                            balance: initial_signer_balance -
+                                (single_tx_cost * U256::from(num_of_signer_txs)),
+                            nonce: num_of_signer_txs,
+                            ..Default::default()
+                        },
+                        EMPTY_ROOT_HASH,
+                    ),
+                )])),
+                ..Default::default()
+            }
+            .seal_slow();
+            let (header, seal) = sealed.into_parts();
 
             SealedBlockWithSenders::new(
                 SealedBlock {
-                    header: Header {
-                        number,
-                        parent_hash: parent.unwrap_or_default(),
-                        gas_used: body.len() as u64 * 21_000,
-                        gas_limit: ETHEREUM_BLOCK_GAS_LIMIT,
-                        mix_hash: B256::random(),
-                        base_fee_per_gas: Some(EIP1559_INITIAL_BASE_FEE),
-                        transactions_root,
-                        receipts_root,
-                        state_root: state_root_unhashed(HashMap::from([(
-                            signer,
-                            (
-                                AccountInfo {
-                                    balance: initial_signer_balance -
-                                        (single_tx_cost * U256::from(num_of_signer_txs)),
-                                    nonce: num_of_signer_txs,
-                                    ..Default::default()
-                                },
-                                EMPTY_ROOT_HASH,
-                            ),
-                        )])),
-                        ..Default::default()
-                    }
-                    .seal_slow(),
-                    body: body.clone().into_iter().map(|tx| tx.into_signed()).collect(),
-                    ommers: Vec::new(),
-                    withdrawals: Some(Withdrawals::default()),
-                    requests: None,
+                    header: SealedHeader::new(header, seal),
+                    body: BlockBody {
+                        transactions: body.clone().into_iter().map(|tx| tx.into_signed()).collect(),
+                        ommers: Vec::new(),
+                        withdrawals: Some(Withdrawals::default()),
+                        requests: None,
+                    },
                 },
                 body.iter().map(|tx| tx.signer()).collect(),
             )
@@ -1648,7 +1657,6 @@ mod tests {
         let mut tree = BlockchainTree::new(
             TreeExternals::new(provider_factory, consensus, executor_provider),
             BlockchainTreeConfig::default(),
-            None,
         )
         .expect("failed to create tree");
 
@@ -1728,7 +1736,7 @@ mod tests {
 
         // make tree
         let config = BlockchainTreeConfig::new(1, 2, 3, 2);
-        let mut tree = BlockchainTree::new(externals, config, None).expect("failed to create tree");
+        let mut tree = BlockchainTree::new(externals, config).expect("failed to create tree");
         // genesis block 10 is already canonical
         tree.make_canonical(B256::ZERO).unwrap();
 
@@ -1774,8 +1782,7 @@ mod tests {
             InsertPayloadOk::Inserted(BlockStatus::Valid(BlockAttachment::Canonical)) /* TODO: this is incorrect, figure out why */
         );
 
-        let block3a_chain_id =
-            tree.state.block_indices.get_block_chain_id(&block3a.hash()).unwrap();
+        let block3a_chain_id = tree.state.block_indices.get_side_chain_id(&block3a.hash()).unwrap();
         assert_eq!(
             tree.all_chain_hashes(block3a_chain_id),
             BTreeMap::from([
@@ -1804,7 +1811,7 @@ mod tests {
 
         // make tree
         let config = BlockchainTreeConfig::new(1, 2, 3, 2);
-        let mut tree = BlockchainTree::new(externals, config, None).expect("failed to create tree");
+        let mut tree = BlockchainTree::new(externals, config).expect("failed to create tree");
         // genesis block 10 is already canonical
         tree.make_canonical(B256::ZERO).unwrap();
 
@@ -1815,7 +1822,7 @@ mod tests {
             tree.insert_block(block1.clone(), BlockValidationKind::Exhaustive).unwrap(),
             InsertPayloadOk::Inserted(BlockStatus::Valid(BlockAttachment::Canonical))
         );
-        let block1_chain_id = tree.state.block_indices.get_block_chain_id(&block1.hash()).unwrap();
+        let block1_chain_id = tree.state.block_indices.get_side_chain_id(&block1.hash()).unwrap();
         let block1_chain = tree.state.chains.get(&block1_chain_id).unwrap();
         assert!(block1_chain.trie_updates().is_some());
 
@@ -1823,7 +1830,7 @@ mod tests {
             tree.insert_block(block2.clone(), BlockValidationKind::Exhaustive).unwrap(),
             InsertPayloadOk::Inserted(BlockStatus::Valid(BlockAttachment::Canonical))
         );
-        let block2_chain_id = tree.state.block_indices.get_block_chain_id(&block2.hash()).unwrap();
+        let block2_chain_id = tree.state.block_indices.get_side_chain_id(&block2.hash()).unwrap();
         let block2_chain = tree.state.chains.get(&block2_chain_id).unwrap();
         assert!(block2_chain.trie_updates().is_none());
 
@@ -1836,7 +1843,7 @@ mod tests {
             tree.insert_block(block3.clone(), BlockValidationKind::Exhaustive).unwrap(),
             InsertPayloadOk::Inserted(BlockStatus::Valid(BlockAttachment::Canonical))
         );
-        let block3_chain_id = tree.state.block_indices.get_block_chain_id(&block3.hash()).unwrap();
+        let block3_chain_id = tree.state.block_indices.get_side_chain_id(&block3.hash()).unwrap();
         let block3_chain = tree.state.chains.get(&block3_chain_id).unwrap();
         assert!(block3_chain.trie_updates().is_some());
 
@@ -1849,7 +1856,7 @@ mod tests {
             tree.insert_block(block4.clone(), BlockValidationKind::Exhaustive).unwrap(),
             InsertPayloadOk::Inserted(BlockStatus::Valid(BlockAttachment::Canonical))
         );
-        let block4_chain_id = tree.state.block_indices.get_block_chain_id(&block4.hash()).unwrap();
+        let block4_chain_id = tree.state.block_indices.get_side_chain_id(&block4.hash()).unwrap();
         let block4_chain = tree.state.chains.get(&block4_chain_id).unwrap();
         assert!(block4_chain.trie_updates().is_some());
 
@@ -1858,7 +1865,7 @@ mod tests {
             InsertPayloadOk::Inserted(BlockStatus::Valid(BlockAttachment::Canonical))
         );
 
-        let block5_chain_id = tree.state.block_indices.get_block_chain_id(&block5.hash()).unwrap();
+        let block5_chain_id = tree.state.block_indices.get_side_chain_id(&block5.hash()).unwrap();
         let block5_chain = tree.state.chains.get(&block5_chain_id).unwrap();
         assert!(block5_chain.trie_updates().is_none());
 
@@ -1868,7 +1875,7 @@ mod tests {
         );
 
         let provider = tree.externals.provider_factory.provider().unwrap();
-        let prefix_sets = exec5.hash_state_slow().construct_prefix_sets();
+        let prefix_sets = exec5.hash_state_slow().construct_prefix_sets().freeze();
         let state_root =
             StateRoot::from_tx(provider.tx_ref()).with_prefix_sets(prefix_sets).root().unwrap();
         assert_eq!(state_root, block5.state_root);
@@ -1889,7 +1896,7 @@ mod tests {
 
         // make tree
         let config = BlockchainTreeConfig::new(1, 2, 3, 2);
-        let mut tree = BlockchainTree::new(externals, config, None).expect("failed to create tree");
+        let mut tree = BlockchainTree::new(externals, config).expect("failed to create tree");
         // genesis block 10 is already canonical
         tree.make_canonical(B256::ZERO).unwrap();
 
@@ -1987,7 +1994,7 @@ mod tests {
 
         // make tree
         let config = BlockchainTreeConfig::new(1, 2, 3, 2);
-        let mut tree = BlockchainTree::new(externals, config, None).expect("failed to create tree");
+        let mut tree = BlockchainTree::new(externals, config).expect("failed to create tree");
 
         let mut canon_notif = tree.subscribe_canon_state();
         // genesis block 10 is already canonical
@@ -2174,7 +2181,7 @@ mod tests {
                 (block1.parent_hash, HashSet::from([block1a_hash])),
                 (block1.hash(), HashSet::from([block2.hash()])),
             ]))
-            .with_pending_blocks((block2.number + 1, HashSet::new()))
+            .with_pending_blocks((block2.number + 1, HashSet::default()))
             .assert(&tree);
 
         assert_matches!(tree.make_canonical(block1a_hash), Ok(_));
@@ -2198,7 +2205,7 @@ mod tests {
                 (block1.parent_hash, HashSet::from([block1.hash()])),
                 (block1.hash(), HashSet::from([block2.hash()])),
             ]))
-            .with_pending_blocks((block1a.number + 1, HashSet::new()))
+            .with_pending_blocks((block1a.number + 1, HashSet::default()))
             .assert(&tree);
 
         // check notification.
@@ -2235,7 +2242,7 @@ mod tests {
                 (block1.parent_hash, HashSet::from([block1a_hash])),
                 (block1.hash(), HashSet::from([block2a_hash])),
             ]))
-            .with_pending_blocks((block2.number + 1, HashSet::new()))
+            .with_pending_blocks((block2.number + 1, HashSet::default()))
             .assert(&tree);
 
         // check notification.
@@ -2304,7 +2311,7 @@ mod tests {
             .with_chain_num(1)
             .with_block_to_chain(HashMap::from([(block2a_hash, 4.into())]))
             .with_fork_to_child(HashMap::from([(block1.hash(), HashSet::from([block2a_hash]))]))
-            .with_pending_blocks((block2.number + 1, HashSet::new()))
+            .with_pending_blocks((block2.number + 1, HashSet::default()))
             .assert(&tree);
 
         // check notification.
@@ -2380,7 +2387,7 @@ mod tests {
 
         // make tree
         let config = BlockchainTreeConfig::new(1, 2, 3, 2);
-        let mut tree = BlockchainTree::new(externals, config, None).expect("failed to create tree");
+        let mut tree = BlockchainTree::new(externals, config).expect("failed to create tree");
 
         assert_eq!(
             tree.insert_block(block1.clone(), BlockValidationKind::Exhaustive).unwrap(),
@@ -2401,7 +2408,7 @@ mod tests {
 
         // restart
         let mut tree =
-            BlockchainTree::new(cloned_externals_1, config, None).expect("failed to create tree");
+            BlockchainTree::new(cloned_externals_1, config).expect("failed to create tree");
         assert_eq!(tree.block_indices().last_finalized_block(), 0);
 
         let mut block1a = block1;
@@ -2417,8 +2424,7 @@ mod tests {
         tree.finalize_block(block1a.number).unwrap();
 
         // restart
-        let tree =
-            BlockchainTree::new(cloned_externals_2, config, None).expect("failed to create tree");
+        let tree = BlockchainTree::new(cloned_externals_2, config).expect("failed to create tree");
 
         assert_eq!(tree.block_indices().last_finalized_block(), block1a.number);
     }

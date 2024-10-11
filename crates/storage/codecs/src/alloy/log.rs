@@ -1,22 +1,22 @@
 //! Native Compact codec impl for primitive alloy log types.
 
 use crate::Compact;
+use alloc::vec::Vec;
 use alloy_primitives::{Address, Bytes, Log, LogData};
 use bytes::BufMut;
 
 /// Implement `Compact` for `LogData` and `Log`.
 impl Compact for LogData {
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: BufMut + AsMut<[u8]>,
     {
-        let mut buffer = bytes::BytesMut::new();
-        let (topics, data) = self.split();
-        topics.specialized_to_compact(&mut buffer);
-        data.to_compact(&mut buffer);
-        let total_length = buffer.len();
-        buf.put(buffer);
-        total_length
+        let mut buffer = Vec::new();
+
+        self.topics().specialized_to_compact(&mut buffer);
+        self.data.to_compact(&mut buffer);
+        buf.put(&buffer[..]);
+        buffer.len()
     }
 
     fn from_compact(mut buf: &[u8], _: usize) -> (Self, &[u8]) {
@@ -29,16 +29,15 @@ impl Compact for LogData {
 }
 
 impl Compact for Log {
-    fn to_compact<B>(self, buf: &mut B) -> usize
+    fn to_compact<B>(&self, buf: &mut B) -> usize
     where
         B: BufMut + AsMut<[u8]>,
     {
-        let mut buffer = bytes::BytesMut::new();
+        let mut buffer = Vec::new();
         self.address.to_compact(&mut buffer);
         self.data.to_compact(&mut buffer);
-        let total_length = buffer.len();
-        buf.put(buffer);
-        total_length
+        buf.put(&buffer[..]);
+        buffer.len()
     }
 
     fn from_compact(mut buf: &[u8], _: usize) -> (Self, &[u8]) {
@@ -62,7 +61,7 @@ mod tests {
         #[test]
         fn roundtrip(log: Log) {
             let mut buf = Vec::<u8>::new();
-            let len = log.clone().to_compact(&mut buf);
+            let len = log.to_compact(&mut buf);
             let (decoded, _) = Log::from_compact(&buf, len);
             assert_eq!(log, decoded);
         }
