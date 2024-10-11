@@ -50,8 +50,8 @@ pub enum TxType {
     /// Optimism Deposit transaction.
     #[cfg(feature = "optimism")]
     Deposit = 126_isize,
-    /// Fluent V1 transaction.
-    FluentV1 = FLUENT_TX_V1_TYPE_ID as isize,
+    // /// Fluent V1 transaction.
+    // FluentV1 = FLUENT_TX_V1_TYPE_ID as isize,
 }
 
 impl TxType {
@@ -65,7 +65,7 @@ impl TxType {
             Self::Eip2930 | Self::Eip1559 | Self::Eip4844 => true,
             #[cfg(feature = "optimism")]
             Self::Deposit => false,
-            Self::FluentV1 => false,
+            // Self::FluentV1 => false,
         }
     }
 }
@@ -79,7 +79,7 @@ impl From<TxType> for u8 {
             TxType::Eip4844 => EIP4844_TX_TYPE_ID,
             #[cfg(feature = "optimism")]
             TxType::Deposit => DEPOSIT_TX_TYPE_ID,
-            TxType::FluentV1 => FLUENT_TX_V1_TYPE_ID,
+            // TxType::FluentV1 => FLUENT_TX_V1_TYPE_ID,
         }
     }
 }
@@ -107,9 +107,9 @@ impl TryFrom<u8> for TxType {
             return Ok(Self::Eip1559)
         } else if value == Self::Eip4844 {
             return Ok(Self::Eip4844)
-        } else if value == Self::FluentV1 {
-            return Ok(Self::FluentV1)
-        }
+        } /* else if value == Self::FluentV1 {
+              return Ok(Self::FluentV1)
+          }*/
 
         Err("invalid tx type")
     }
@@ -152,11 +152,10 @@ impl Compact for TxType {
             Self::Deposit => {
                 buf.put_u8(self as u8);
                 3
-            }
-            Self::FluentV1 => {
-                buf.put_u8(self as u8);
-                3
-            }
+            } /* Self::FluentV1 => {
+               *     buf.put_u8(self as u8);
+               *     3
+               * } */
         }
     }
 
@@ -173,7 +172,7 @@ impl Compact for TxType {
                     let extended_identifier = buf.get_u8();
                     match extended_identifier {
                         EIP4844_TX_TYPE_ID => Self::Eip4844,
-                        FLUENT_TX_V1_TYPE_ID => Self::FluentV1,
+                        // FLUENT_TX_V1_TYPE_ID => Self::FluentV1,
                         #[cfg(feature = "optimism")]
                         DEPOSIT_TX_TYPE_ID => Self::Deposit,
                         _ => panic!("Unsupported TxType identifier: {extended_identifier}"),
@@ -240,7 +239,7 @@ mod tests {
         #[cfg(feature = "optimism")]
         assert_eq!(TxType::try_from(U64::from(126)).unwrap(), TxType::Deposit);
 
-        assert_eq!(TxType::try_from(U64::from(FLUENT_TX_V1_TYPE_ID)).unwrap(), TxType::FluentV1);
+        // assert_eq!(TxType::try_from(U64::from(FLUENT_TX_V1_TYPE_ID)).unwrap(), TxType::FluentV1);
 
         // For transactions with unsupported values
         assert!(TxType::try_from(U64::from(4)).is_err());
@@ -255,7 +254,7 @@ mod tests {
             (TxType::Eip4844, 3, vec![EIP4844_TX_TYPE_ID]),
             #[cfg(feature = "optimism")]
             (TxType::Deposit, 3, vec![DEPOSIT_TX_TYPE_ID]),
-            (TxType::FluentV1, 3, vec![FLUENT_TX_V1_TYPE_ID]),
+            // (TxType::FluentV1, 3, vec![FLUENT_TX_V1_TYPE_ID]),
         ];
 
         for (tx_type, expected_identifier, expected_buf) in cases {
@@ -278,7 +277,7 @@ mod tests {
             (TxType::Eip4844, 3, vec![EIP4844_TX_TYPE_ID]),
             #[cfg(feature = "optimism")]
             (TxType::Deposit, 3, vec![DEPOSIT_TX_TYPE_ID]),
-            (TxType::FluentV1, 3, vec![FLUENT_TX_V1_TYPE_ID]),
+            // (TxType::FluentV1, 3, vec![FLUENT_TX_V1_TYPE_ID]),
         ];
 
         for (expected_type, identifier, buf) in cases {

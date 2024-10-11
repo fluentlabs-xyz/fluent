@@ -16,8 +16,8 @@ pub struct Account {
     pub balance: U256,
     /// Hash of the account's bytecode.
     pub bytecode_hash: Option<B256>,
-    /// Hash of the rWASM bytecode
-    pub rwasm_hash: Option<B256>,
+    // /// Hash of the rWASM bytecode
+    // pub rwasm_hash: Option<B256>,
 }
 
 impl Account {
@@ -43,16 +43,17 @@ impl Account {
         //     .or_else(|| {
         //         value.code.as_ref().map(|bytes| keccak256(bytes.as_ref()))
         //     });
-        let rwasm_hash =
-            value.storage.as_ref().and_then(|s| s.get(&GENESIS_KECCAK_HASH_SLOT)).cloned().or_else(
-                || value.code.as_ref().map(|bytes| B256::from(poseidon_hash(bytes.as_ref()))),
-            );
+        // let rwasm_hash =
+        //     value.storage.as_ref().and_then(|s|
+        // s.get(&GENESIS_KECCAK_HASH_SLOT)).cloned().or_else(         ||
+        // value.code.as_ref().map(|bytes| B256::from(poseidon_hash(bytes.as_ref()))),
+        //     );
         Self {
             // nonce must exist, so we default to zero when converting a genesis account
             nonce: value.nonce.unwrap_or_default(),
             balance: value.balance,
             bytecode_hash: value.code.as_ref().map(keccak256),
-            rwasm_hash,
+            // rwasm_hash,
         }
     }
 

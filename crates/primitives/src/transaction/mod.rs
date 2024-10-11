@@ -20,7 +20,7 @@ pub use eip4844::TxEip4844;
 pub use error::{
     InvalidTransactionError, TransactionConversionError, TryFromRecoveredTransactionError,
 };
-pub use fluent::fluent_v1::{ExecutionEnvironment, TxFluentV1};
+// pub use fluent::fluent_v1::{ExecutionEnvironment, TxFluentV1};
 pub use legacy::TxLegacy;
 pub use meta::TransactionMeta;
 #[cfg(feature = "optimism")]
@@ -62,7 +62,7 @@ mod variant;
 #[cfg(feature = "optimism")]
 mod optimism;
 
-pub mod fluent;
+// pub mod fluent;
 
 /// Either a transaction hash or number.
 pub type TxHashOrNumber = BlockHashOrNumber;
@@ -138,9 +138,8 @@ pub enum Transaction {
     /// Optimism deposit transaction.
     #[cfg(feature = "optimism")]
     Deposit(TxDeposit),
-
-    /// FLUENT V1 transaction.
-    FluentV1(TxFluentV1),
+    // /// FLUENT V1 transaction.
+    // FluentV1(TxFluentV1),
 }
 
 // === impl Transaction ===
@@ -156,7 +155,7 @@ impl Transaction {
             Self::Eip4844(tx) => tx.signature_hash(),
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => B256::ZERO,
-            Self::FluentV1(tx) => tx.signature_hash(),
+            // Self::FluentV1(tx) => tx.signature_hash(),
         }
     }
 
@@ -169,8 +168,7 @@ impl Transaction {
             Self::Eip4844(TxEip4844 { chain_id, .. }) => Some(*chain_id),
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => None,
-
-            Self::FluentV1(tx) => tx.chain_id(),
+            // Self::FluentV1(tx) => tx.chain_id(),
         }
     }
 
@@ -182,10 +180,9 @@ impl Transaction {
             Self::Eip1559(TxEip1559 { chain_id: ref mut c, .. }) |
             Self::Eip4844(TxEip4844 { chain_id: ref mut c, .. }) => *c = chain_id,
             #[cfg(feature = "optimism")]
-            Self::Deposit(_) => { /* noop */ }
-            Self::FluentV1(TxFluentV1 { execution_environment: ref mut ee, .. }) => {
-                ee.set_chain_id(Some(chain_id));
-            }
+            Self::Deposit(_) => { /* noop */ } /* Self::FluentV1(TxFluentV1 { execution_environment: ref mut ee, .. }) => {
+                                                *     ee.set_chain_id(Some(chain_id));
+                                                * } */
         }
     }
 
@@ -199,7 +196,7 @@ impl Transaction {
             Self::Eip4844(TxEip4844 { to, .. }) => TxKind::Call(*to),
             #[cfg(feature = "optimism")]
             Self::Deposit(TxDeposit { to, .. }) => *to,
-            Self::FluentV1(fluent_tx) => fluent_tx.tx_kind(),
+            // Self::FluentV1(fluent_tx) => fluent_tx.tx_kind(),
         }
     }
 
@@ -220,8 +217,7 @@ impl Transaction {
             Self::Eip4844(blob_tx) => blob_tx.tx_type(),
             #[cfg(feature = "optimism")]
             Self::Deposit(deposit_tx) => deposit_tx.tx_type(),
-
-            Self::FluentV1(tx) => tx.tx_type(),
+            // Self::FluentV1(tx) => tx.tx_type(),
         }
     }
 
@@ -234,7 +230,7 @@ impl Transaction {
             Self::Eip4844(TxEip4844 { value, .. }) => value,
             #[cfg(feature = "optimism")]
             Self::Deposit(TxDeposit { value, .. }) => value,
-            Self::FluentV1(tx) => tx.value(),
+            // Self::FluentV1(tx) => tx.value(),
         }
     }
 
@@ -248,7 +244,7 @@ impl Transaction {
             // Deposit transactions do not have nonces.
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => 0,
-            Self::FluentV1(tx) => tx.nonce(),
+            // Self::FluentV1(tx) => tx.nonce(),
         }
     }
 
@@ -263,7 +259,7 @@ impl Transaction {
             Self::Eip4844(tx) => Some(&tx.access_list),
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => None,
-            Self::FluentV1(tx) => tx.access_list(),
+            // Self::FluentV1(tx) => tx.access_list(),
         }
     }
 
@@ -276,7 +272,7 @@ impl Transaction {
             Self::Eip4844(TxEip4844 { gas_limit, .. }) => *gas_limit,
             #[cfg(feature = "optimism")]
             Self::Deposit(TxDeposit { gas_limit, .. }) => *gas_limit,
-            Self::FluentV1(tx) => tx.gas_limit(),
+            // Self::FluentV1(tx) => tx.gas_limit(),
         }
     }
 
@@ -287,7 +283,7 @@ impl Transaction {
             Self::Eip1559(_) | Self::Eip4844(_) => true,
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => false,
-            Self::FluentV1(tx) => tx.is_dynamic_fee(),
+            // Self::FluentV1(tx) => tx.is_dynamic_fee(),
         }
     }
 
@@ -304,7 +300,7 @@ impl Transaction {
             // refundable.
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => 0,
-            Self::FluentV1(tx) => tx.max_fee_per_gas(),
+            // Self::FluentV1(tx) => tx.max_fee_per_gas(),
         }
     }
 
@@ -321,7 +317,7 @@ impl Transaction {
             }
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => None,
-            Self::FluentV1(tx) => tx.max_priority_fee_per_gas(),
+            // Self::FluentV1(tx) => tx.max_priority_fee_per_gas(),
         }
     }
 
@@ -337,7 +333,7 @@ impl Transaction {
             }
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => None,
-            Self::FluentV1(tx) => tx.blob_versioned_hashes(),
+            // Self::FluentV1(tx) => tx.blob_versioned_hashes(),
         }
     }
 
@@ -377,7 +373,7 @@ impl Transaction {
             Self::Eip4844(TxEip4844 { max_priority_fee_per_gas, .. }) => *max_priority_fee_per_gas,
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => 0,
-            Self::FluentV1(tx) => tx.priority_fee_or_price(),
+            // Self::FluentV1(tx) => tx.priority_fee_or_price(),
         }
     }
 
@@ -392,7 +388,7 @@ impl Transaction {
             Self::Eip4844(dynamic_tx) => dynamic_tx.effective_gas_price(base_fee),
             #[cfg(feature = "optimism")]
             Self::Deposit(_) => 0,
-            Self::FluentV1(tx) => tx.effective_gas_price(base_fee),
+            // Self::FluentV1(tx) => tx.effective_gas_price(base_fee),
         }
     }
 
@@ -436,7 +432,7 @@ impl Transaction {
             Self::Eip4844(TxEip4844 { input, .. }) => input,
             #[cfg(feature = "optimism")]
             Self::Deposit(TxDeposit { input, .. }) => input,
-            Self::FluentV1(tx) => tx.input(),
+            // Self::FluentV1(tx) => tx.input(),
         }
     }
 
@@ -504,9 +500,9 @@ impl Transaction {
             Self::Eip4844(blob_tx) => blob_tx.encode_with_signature(signature, out, with_header),
             #[cfg(feature = "optimism")]
             Self::Deposit(deposit_tx) => deposit_tx.encode(out, with_header),
-            Self::FluentV1(fluent_tx) => {
-                fluent_tx.encode_with_signature(signature, out, with_header)
-            }
+            // Self::FluentV1(fluent_tx) => {
+            //     fluent_tx.encode_with_signature(signature, out, with_header)
+            // }
         }
     }
 
@@ -519,7 +515,7 @@ impl Transaction {
             Self::Eip4844(tx) => tx.gas_limit = gas_limit,
             #[cfg(feature = "optimism")]
             Self::Deposit(tx) => tx.gas_limit = gas_limit,
-            Self::FluentV1(tx) => tx.set_gas_limit(gas_limit),
+            // Self::FluentV1(tx) => tx.set_gas_limit(gas_limit),
         }
     }
 
@@ -531,8 +527,7 @@ impl Transaction {
             Self::Eip1559(tx) => tx.nonce = nonce,
             Self::Eip4844(tx) => tx.nonce = nonce,
             #[cfg(feature = "optimism")]
-            Self::Deposit(_) => { /* noop */ }
-            Self::FluentV1(tx) => tx.set_nonce(nonce),
+            Self::Deposit(_) => { /* noop */ } // Self::FluentV1(tx) => tx.set_nonce(nonce),
         }
     }
 
@@ -545,7 +540,7 @@ impl Transaction {
             Self::Eip4844(tx) => tx.value = value,
             #[cfg(feature = "optimism")]
             Self::Deposit(tx) => tx.value = value,
-            Self::FluentV1(tx) => tx.set_value(value),
+            // Self::FluentV1(tx) => tx.set_value(value),
         }
     }
 
@@ -558,7 +553,7 @@ impl Transaction {
             Self::Eip4844(tx) => tx.input = input,
             #[cfg(feature = "optimism")]
             Self::Deposit(tx) => tx.input = input,
-            Self::FluentV1(tx) => tx.set_input(input),
+            // Self::FluentV1(tx) => tx.set_input(input),
         }
     }
 
@@ -572,7 +567,7 @@ impl Transaction {
             Self::Eip4844(tx) => tx.size(),
             #[cfg(feature = "optimism")]
             Self::Deposit(tx) => tx.size(),
-            Self::FluentV1(tx) => tx.size(),
+            // Self::FluentV1(tx) => tx.size(),
         }
     }
 
@@ -632,13 +627,13 @@ impl Transaction {
         }
     }
 
-    /// Returns the [`FluentV1`] variant if the transaction is a FLUENT V1 transaction.
-    pub const fn as_fluent_v1(&self) -> Option<&TxFluentV1> {
-        match self {
-            Self::FluentV1(tx) => Some(tx),
-            _ => None,
-        }
-    }
+    // /// Returns the [`FluentV1`] variant if the transaction is a FLUENT V1 transaction.
+    // pub const fn as_fluent_v1(&self) -> Option<&TxFluentV1> {
+    //     match self {
+    //         Self::FluentV1(tx) => Some(tx),
+    //         _ => None,
+    //     }
+    // }
 }
 
 impl From<TxLegacy> for Transaction {
@@ -665,11 +660,11 @@ impl From<TxEip4844> for Transaction {
     }
 }
 
-impl From<TxFluentV1> for Transaction {
-    fn from(tx: TxFluentV1) -> Self {
-        Self::FluentV1(tx)
-    }
-}
+// impl From<TxFluentV1> for Transaction {
+//     fn from(tx: TxFluentV1) -> Self {
+//         Self::FluentV1(tx)
+//     }
+// }
 
 impl Compact for Transaction {
     // Serializes the TxType to the buffer if necessary, returning 2 bits of the type as an
@@ -695,10 +690,9 @@ impl Compact for Transaction {
             #[cfg(feature = "optimism")]
             Self::Deposit(tx) => {
                 tx.to_compact(buf);
-            }
-            Self::FluentV1(tx) => {
-                tx.to_compact(buf);
-            }
+            } /* Self::FluentV1(tx) => {
+               *     tx.to_compact(buf);
+               * } */
         }
         identifier
     }
@@ -742,10 +736,10 @@ impl Compact for Transaction {
                         let (tx, buf) = TxDeposit::from_compact(buf, buf.len());
                         (Self::Deposit(tx), buf)
                     }
-                    127 => {
-                        let (tx, buf) = TxFluentV1::from_compact(buf, buf.len());
-                        (Self::FluentV1(tx), buf)
-                    }
+                    // 127 => {
+                    //     let (tx, buf) = TxFluentV1::from_compact(buf, buf.len());
+                    //     (Self::FluentV1(tx), buf)
+                    // }
                     _ => unreachable!("Junk data in database: unknown Transaction variant"),
                 }
             }
@@ -780,8 +774,7 @@ impl Encodable for Transaction {
             #[cfg(feature = "optimism")]
             Self::Deposit(deposit_tx) => {
                 deposit_tx.encode(out, true);
-            }
-            Self::FluentV1(fluent_tx) => fluent_tx.encode(out),
+            } // Self::FluentV1(fluent_tx) => fluent_tx.encode(out),
         }
     }
 
@@ -793,7 +786,7 @@ impl Encodable for Transaction {
             Self::Eip4844(blob_tx) => blob_tx.payload_len_for_signature(),
             #[cfg(feature = "optimism")]
             Self::Deposit(deposit_tx) => deposit_tx.payload_len(),
-            Self::FluentV1(fluent_tx) => fluent_tx.payload_len_for_signature(),
+            // Self::FluentV1(fluent_tx) => fluent_tx.payload_len_for_signature(),
         }
     }
 }
@@ -816,10 +809,10 @@ impl TransactionSignedNoHash {
     /// Calculates the transaction hash. If used more than once, it's better to convert it to
     /// [`TransactionSigned`] first.
     pub fn hash(&self) -> B256 {
-        match &self.transaction {
-            Transaction::FluentV1(fluent_tx) => return fluent_tx.hash().unwrap_or_default(),
-            _ => {}
-        }
+        // match &self.transaction {
+        //     Transaction::FluentV1(fluent_tx) => return fluent_tx.hash().unwrap_or_default(),
+        //     _ => {}
+        // }
         // pre-allocate buffer for the transaction
         let mut buf = Vec::with_capacity(128 + self.transaction.input().len());
         self.transaction.encode_with_signature(&self.signature, &mut buf, false);
@@ -836,12 +829,12 @@ impl TransactionSignedNoHash {
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
             return Some(from)
         }
-        match &self.transaction {
-            Transaction::FluentV1(fluent_tx) => {
-                return fluent_tx.recover_owner().map(|a| Address::from_word(a.0.into()))
-            }
-            _ => {}
-        }
+        // match &self.transaction {
+        //     Transaction::FluentV1(fluent_tx) => {
+        //         return fluent_tx.recover_owner().map(|a| Address::from_word(a.0.into()))
+        //     }
+        //     _ => {}
+        // }
 
         let signature_hash = self.signature_hash();
         self.signature.recover_signer(signature_hash)
@@ -880,12 +873,12 @@ impl TransactionSignedNoHash {
                 return Some(Address::ZERO)
             }
         }
-        match &self.transaction {
-            _ => {}
-            Transaction::FluentV1(fluent_tx) => {
-                return fluent_tx.recover_owner().map(|a| Address::from_word(a.0.into()))
-            }
-        }
+        // match &self.transaction {
+        //     _ => {}
+        //     Transaction::FluentV1(fluent_tx) => {
+        //         return fluent_tx.recover_owner().map(|a| Address::from_word(a.0.into()))
+        //     }
+        // }
 
         self.signature.recover_signer_unchecked(keccak256(buffer))
     }
@@ -1101,12 +1094,12 @@ impl TransactionSigned {
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
             return Some(from)
         }
-        match &self.transaction {
-            Transaction::FluentV1(tx) => {
-                return tx.recover_owner().map(|a| Address::from_word(a.0.into()))
-            }
-            _ => {}
-        }
+        // match &self.transaction {
+        //     Transaction::FluentV1(tx) => {
+        //         return tx.recover_owner().map(|a| Address::from_word(a.0.into()))
+        //     }
+        //     _ => {}
+        // }
         let signature_hash = self.signature_hash();
         self.signature.recover_signer(signature_hash)
     }
@@ -1123,12 +1116,12 @@ impl TransactionSigned {
         if let Transaction::Deposit(TxDeposit { from, .. }) = self.transaction {
             return Some(from)
         }
-        match &self.transaction {
-            _ => {}
-            Transaction::FluentV1(fluent_tx) => {
-                return fluent_tx.recover_owner().map(|a| Address::from_word(a.0.into()))
-            }
-        }
+        // match &self.transaction {
+        //     _ => {}
+        //     Transaction::FluentV1(fluent_tx) => {
+        //         return fluent_tx.recover_owner().map(|a| Address::from_word(a.0.into()))
+        //     }
+        // }
         let signature_hash = self.signature_hash();
         self.signature.recover_signer_unchecked(signature_hash)
     }
@@ -1257,19 +1250,19 @@ impl TransactionSigned {
             Transaction::Eip4844(blob_tx) => blob_tx.payload_len_with_signature(&self.signature),
             #[cfg(feature = "optimism")]
             Transaction::Deposit(deposit_tx) => deposit_tx.payload_len(),
-            Transaction::FluentV1(fluent_tx) => {
-                fluent_tx.payload_len_with_signature(&self.signature)
-            }
+            // Transaction::FluentV1(fluent_tx) => {
+            //     fluent_tx.payload_len_with_signature(&self.signature)
+            // }
         }
     }
 
     /// Calculate transaction hash, eip2728 transaction does not contain rlp header and start with
     /// tx type.
     pub fn recalculate_hash(&self) -> B256 {
-        match &self.transaction {
-            Transaction::FluentV1(tx) => return tx.hash().unwrap_or_default(),
-            _ => {}
-        }
+        // match &self.transaction {
+        //     Transaction::FluentV1(tx) => return tx.hash().unwrap_or_default(),
+        //     _ => {}
+        // }
         let mut buf = Vec::new();
         self.encode_inner(&mut buf, false);
         keccak256(&buf)
@@ -1390,12 +1383,12 @@ impl TransactionSigned {
             TxType::Eip4844 => Transaction::Eip4844(TxEip4844::decode_inner(data)?),
             #[cfg(feature = "optimism")]
             TxType::Deposit => Transaction::Deposit(TxDeposit::decode_inner(data)?),
-            TxType::FluentV1 => Transaction::FluentV1(TxFluentV1::decode_inner(data)?),
+            // TxType::FluentV1 => Transaction::FluentV1(TxFluentV1::decode_inner(data)?),
             TxType::Legacy => return Err(RlpError::Custom("unexpected legacy tx type")),
         };
 
         #[cfg(not(feature = "optimism"))]
-        let signature = if let Transaction::FluentV1(ref tx) = transaction {
+        let signature = /*if let Transaction::FluentV1(ref tx) = transaction {
             match &tx.execution_environment {
                 ExecutionEnvironment::Fuel(_) => {
                     Signature { r: U256::ZERO, s: U256::ZERO, odd_y_parity: false }
@@ -1404,9 +1397,8 @@ impl TransactionSigned {
                     Signature { r: U256::ZERO, s: U256::ZERO, odd_y_parity: false }
                 }
             }
-        } else {
-            Signature::decode(data)?
-        };
+        } else {*/
+            Signature::decode(data)?;
 
         #[cfg(feature = "optimism")]
         let signature = if tx_type == TxType::Deposit {
@@ -1420,7 +1412,7 @@ impl TransactionSigned {
             return Err(RlpError::UnexpectedLength)
         }
 
-        let hash = match tx_type {
+        let hash = /*match tx_type {
             TxType::FluentV1 => {
                 if let Transaction::FluentV1(tx) = &transaction {
                     tx.hash().unwrap_or_default()
@@ -1430,8 +1422,7 @@ impl TransactionSigned {
                     ))
                 }
             }
-            _ => keccak256(&original_encoding_without_header[..tx_length]),
-        };
+            _ => */keccak256(&original_encoding_without_header[..tx_length]);
         let signed = Self { transaction, hash, signature };
         Ok(signed)
     }
@@ -1489,7 +1480,7 @@ impl TransactionSigned {
             }
             #[cfg(feature = "optimism")]
             Transaction::Deposit(deposit_tx) => deposit_tx.payload_len_without_header(),
-            Transaction::FluentV1(fluent_tx) => fluent_tx.payload_len_without_header(),
+            // Transaction::FluentV1(fluent_tx) => fluent_tx.payload_len_without_header(),
         }
     }
 }
@@ -2188,26 +2179,26 @@ mod tests {
         TransactionSigned::decode(&mut &encoded[..]).unwrap();
     }
 
-    #[ignore]
-    #[test]
-    fn min_length_encoded_fluent_v1_transaction() {
-        let transaction = TxFluentV1::new(
-            ExecutionEnvironment::Fuel(FuelEnvironment::default()),
-            Bytes::default(),
-        );
-        let signature = Signature::default();
-
-        let signed_tx = TransactionSigned::from_transaction_and_signature(
-            Transaction::FluentV1(transaction),
-            signature,
-        );
-
-        let encoded = alloy_rlp::encode(signed_tx);
-        println!("encoded {}", hex::encode(&encoded));
-        assert_eq!(MIN_LENGTH_FLUENT_V1_TX_ENCODED, encoded.len());
-
-        TransactionSigned::decode(&mut &encoded[..]).unwrap();
-    }
+    // #[ignore]
+    // #[test]
+    // fn min_length_encoded_fluent_v1_transaction() {
+    //     let transaction = TxFluentV1::new(
+    //         ExecutionEnvironment::Fuel(FuelEnvironment::default()),
+    //         Bytes::default(),
+    //     );
+    //     let signature = Signature::default();
+    //
+    //     let signed_tx = TransactionSigned::from_transaction_and_signature(
+    //         Transaction::FluentV1(transaction),
+    //         signature,
+    //     );
+    //
+    //     let encoded = alloy_rlp::encode(signed_tx);
+    //     println!("encoded {}", hex::encode(&encoded));
+    //     assert_eq!(MIN_LENGTH_FLUENT_V1_TX_ENCODED, encoded.len());
+    //
+    //     TransactionSigned::decode(&mut &encoded[..]).unwrap();
+    // }
 
     #[cfg(feature = "optimism")]
     #[test]

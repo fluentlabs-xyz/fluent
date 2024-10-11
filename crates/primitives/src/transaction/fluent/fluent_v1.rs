@@ -333,9 +333,9 @@ impl TxFluentV1 {
         1 + length_of_length(payload_length) + payload_length
     }
 
-    pub(crate) const fn tx_type(&self) -> TxType {
-        TxType::FluentV1
-    }
+    // pub(crate) const fn tx_type(&self) -> TxType {
+    //     TxType::FluentV1
+    // }
 
     pub(crate) fn signature_hash(&self) -> B256 {
         B256::ZERO
