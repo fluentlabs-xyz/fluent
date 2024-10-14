@@ -24,7 +24,7 @@ use std::sync::Arc;
 mod config;
 pub use config::{revm_spec, revm_spec_by_timestamp_after_merge};
 use reth_ethereum_forks::EthereumHardfork;
-use reth_primitives::constants::EIP1559_INITIAL_BASE_FEE;
+use reth_primitives::constants::{EIP1559_INITIAL_BASE_FEE, ETHEREUM_BLOCK_GAS_LIMIT};
 
 pub mod execute;
 
@@ -72,7 +72,7 @@ impl ConfigureEvmEnv for EthEvmConfig {
             transact_to: TxKind::Call(contract),
             // Explicitly set nonce to None so revm does not do any nonce checks
             nonce: None,
-            gas_limit: 30_000_000,
+            gas_limit: ETHEREUM_BLOCK_GAS_LIMIT,
             value: U256::ZERO,
             data,
             // Setting the gas price to zero enforces that no value is transferred as part of the

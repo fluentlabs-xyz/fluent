@@ -32,7 +32,7 @@ pub const EPOCH_DURATION: Duration = Duration::from_secs(12 * EPOCH_SLOTS);
 pub const BEACON_NONCE: u64 = 0u64;
 
 /// The default Ethereum block gas limit.
-pub const ETHEREUM_BLOCK_GAS_LIMIT: u64 = 300_000_000;
+pub const ETHEREUM_BLOCK_GAS_LIMIT: u64 = 3_000_000_000;
 
 /// The minimum tx fee below which the txpool will reject the transaction.
 ///

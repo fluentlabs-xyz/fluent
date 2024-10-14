@@ -10,6 +10,7 @@ use reth_optimism_node::{
     node::OptimismAddOns, OptimismBuiltPayload, OptimismNode, OptimismPayloadBuilderAttributes,
 };
 use reth_payload_builder::EthPayloadBuilderAttributes;
+use reth_primitives::constants::ETHEREUM_BLOCK_GAS_LIMIT;
 use tokio::sync::Mutex;
 
 /// Optimism Node Helper type
@@ -71,6 +72,6 @@ pub(crate) fn optimism_payload_attributes(timestamp: u64) -> OptimismPayloadBuil
         payload_attributes: EthPayloadBuilderAttributes::new(B256::ZERO, attributes),
         transactions: vec![],
         no_tx_pool: false,
-        gas_limit: Some(30_000_000),
+        gas_limit: Some(ETHEREUM_BLOCK_GAS_LIMIT),
     }
 }

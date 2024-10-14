@@ -479,9 +479,12 @@ check-features:
 		--package reth-primitives \
 		--feature-powerset
 
+FLUENT_NODE_BUILD_PROFILE=--release
+FLUENT_NODE_BUILD_PROFILE=--profile dev
+
 .PHONY: fluent_build
 fluent_build:
-	cargo build -p reth
+	cargo build -p reth --bin reth $(FLUENT_NODE_BUILD_PROFILE)
 
 FLUENT_DATADIR:=datadir
 .PHONY: fluent_clear_datadir
@@ -490,7 +493,7 @@ fluent_clear_datadir:
 
 .PHONY: fluent_run
 fluent_run:
-	cargo run --package reth --bin reth -- --color=never --chain=dev node --datadir=./$(FLUENT_DATADIR) --dev --full --http --port=30305
+	cargo run -p reth --bin reth $(FLUENT_NODE_BUILD_PROFILE) -- --color=never --chain=dev node --datadir=./$(FLUENT_DATADIR) --dev --full --http --port=30305
 
 .PHONY: fluent_run_clean
 fluent_run_clean:

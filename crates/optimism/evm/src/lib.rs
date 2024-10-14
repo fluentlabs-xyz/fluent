@@ -29,6 +29,7 @@ pub use l1::*;
 
 mod error;
 pub use error::OptimismBlockExecutionError;
+use reth_primitives::constants::ETHEREUM_BLOCK_GAS_LIMIT;
 use revm_primitives::{
     BlobExcessGasAndPrice, BlockEnv, Bytes, CfgEnv, Env, HandlerCfg, OptimismFields, SpecId, TxKind,
 };
@@ -70,7 +71,7 @@ impl ConfigureEvmEnv for OptimismEvmConfig {
             transact_to: TxKind::Call(contract),
             // Explicitly set nonce to None so revm does not do any nonce checks
             nonce: None,
-            gas_limit: 30_000_000,
+            gas_limit: ETHEREUM_BLOCK_GAS_LIMIT,
             value: U256::ZERO,
             data,
             // Setting the gas price to zero enforces that no value is transferred as part of the
