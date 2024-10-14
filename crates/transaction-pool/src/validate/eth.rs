@@ -209,7 +209,6 @@ where
         };
 
         // Reject transactions over defined size to prevent DOS attacks
-        // TODO(bfdays): compute correct size
         let transaction_size = transaction.size();
         if transaction_size > self.max_tx_input_bytes {
             return TransactionValidationOutcome::Invalid(
@@ -382,7 +381,6 @@ where
             )
         }
 
-        // TODO(bfdays): compute correct cost
         let cost = transaction.cost();
 
         // Checks for max cost
