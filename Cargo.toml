@@ -416,14 +416,14 @@ reth-trie-parallel = { path = "crates/trie/parallel" }
 #revm-primitives = { version = "10.0.0", features = [
 #    "std",
 #], default-features = false }
-revm = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", features = [
+revm = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/fuel-vm", features = [
     "std",
     "secp256k1",
     "blst",
     "rwasm",
 ], default-features = false }
-revm-primitives = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel" }
-revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "devel" }
+revm-primitives = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/fuel-vm" }
+revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "feat/fuel-vm" }
 #revm = { path = "../fluentbase/revm/crates/revm", features = [
 #    "std",
 #    "secp256k1",
@@ -433,11 +433,11 @@ revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git
 #revm-primitives = { path = "../fluentbase/revm/crates/primitives" }
 #revm-inspectors = { path = "../revm-inspectors" }
 
-fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-core = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-runtime = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-sdk = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
-fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/fuel-vm", default-features = false }
+fluentbase-core = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/fuel-vm", default-features = false }
+fluentbase-runtime = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/fuel-vm", default-features = false }
+fluentbase-sdk = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/fuel-vm", default-features = false }
+fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/fuel-vm", default-features = false }
 #fluentbase-poseidon = { path = "../fluentbase/crates/poseidon", default-features = false }
 #fluentbase-core = { path = "../fluentbase/crates/core", default-features = false }
 #fluentbase-runtime = { path = "../fluentbase/crates/runtime", default-features = false }
