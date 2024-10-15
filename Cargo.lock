@@ -2527,7 +2527,7 @@ dependencies = [
  "socket2 0.4.10",
  "tokio",
  "tracing",
- "uint 0.9.5",
+ "uint",
  "zeroize",
 ]
 
@@ -2547,15 +2547,6 @@ name = "doctest-file"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aac81fa3e28d21450aa4d2ac065992ba96a1d7303efbce51a95f4fd175b67562"
-
-[[package]]
-name = "document-features"
-version = "0.2.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb6969eaabd2421f8a2775cfd2471a2b634372b4a25d41e3bd647b79912850a0"
-dependencies = [
- "litrs",
-]
 
 [[package]]
 name = "downcast"
@@ -2618,18 +2609,6 @@ dependencies = [
  "sha2 0.10.8",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "educe"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d7bc049e1bd8cdeb31b68bbd586a9464ecf9f3944af3958a7a9d0f8b9799417"
-dependencies = [
- "enum-ordinalize",
- "proc-macro2",
- "quote",
- "syn 2.0.79",
 ]
 
 [[package]]
@@ -2728,26 +2707,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "enum-ordinalize"
-version = "4.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fea0dcfa4e54eeb516fe454635a95753ddd39acda650ce703031c6973e315dd5"
-dependencies = [
- "enum-ordinalize-derive",
-]
-
-[[package]]
-name = "enum-ordinalize-derive"
-version = "4.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d28318a75d4aead5c4db25382e8ef717932d0346600cacae6357eb5941bc5ff"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.79",
-]
-
-[[package]]
 name = "enumn"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2782,7 +2741,7 @@ checksum = "ec3aeb0284b473041df2419a28e3cdf0c64a78d2b9511af4b6e40bad3964b172"
 dependencies = [
  "ethereum-types",
  "hashbrown 0.14.5",
- "keccak-hash 0.10.0",
+ "keccak-hash",
  "log",
  "parking_lot 0.12.3",
  "rlp",
@@ -2811,8 +2770,8 @@ dependencies = [
  "fixed-hash",
  "impl-rlp",
  "impl-serde",
- "primitive-types 0.12.2",
- "uint 0.9.5",
+ "primitive-types",
+ "uint",
 ]
 
 [[package]]
@@ -3243,7 +3202,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -3257,7 +3216,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec-derive"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "convert_case",
  "crypto-hashes",
@@ -3269,17 +3228,17 @@ dependencies = [
 [[package]]
 name = "fluentbase-core"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "alloy-rlp",
+ "alloy-sol-types",
  "anyhow",
  "byteorder",
  "fluentbase-runtime",
  "fluentbase-sdk",
  "hex",
- "keccak-hash 0.11.0",
+ "keccak-hash",
  "paste",
- "phantom-type",
  "postcard",
  "revm-interpreter",
  "revm-primitives",
@@ -3289,7 +3248,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-genesis"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "alloy-genesis",
  "alloy-primitives",
@@ -3309,7 +3268,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-poseidon"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "bitvec",
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
@@ -3321,7 +3280,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-runtime"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "eth_trie",
  "fluentbase-poseidon",
@@ -3329,14 +3288,14 @@ dependencies = [
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
  "hashbrown 0.15.0",
  "k256",
- "keccak-hash 0.10.0",
+ "keccak-hash",
  "rwasm",
 ]
 
 [[package]]
 name = "fluentbase-sdk"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "fluentbase-codec",
  "fluentbase-genesis",
@@ -3349,7 +3308,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk-derive"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "convert_case",
  "crypto-hashes",
@@ -3366,7 +3325,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-types"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -4787,17 +4746,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b286e6b663fb926e1eeb68528e69cb70ed46c6d65871a21b2215ae8154c6d3c"
 dependencies = [
- "primitive-types 0.12.2",
- "tiny-keccak",
-]
-
-[[package]]
-name = "keccak-hash"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e1b8590eb6148af2ea2d75f38e7d29f5ca970d5a4df456b3ef19b8b415d0264"
-dependencies = [
- "primitive-types 0.13.1",
+ "primitive-types",
  "tiny-keccak",
 ]
 
@@ -4982,12 +4931,6 @@ name = "litemap"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "643cb0b8d4fcc284004d5fd0d67ccf61dfffadb7f75e1e71bc420f4688a3a704"
-
-[[package]]
-name = "litrs"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 
 [[package]]
 name = "lock_api"
@@ -5887,16 +5830,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "phantom-type"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b80a8d2c9184208c4f27a58f7f7f5d1f18ab76d28d9e38c0860aa513323f81"
-dependencies = [
- "document-features",
- "educe",
-]
-
-[[package]]
 name = "pharos"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6180,17 +6113,7 @@ dependencies = [
  "impl-codec",
  "impl-rlp",
  "impl-serde",
- "uint 0.9.5",
-]
-
-[[package]]
-name = "primitive-types"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d15600a7d856470b7d278b3fe0e311fe28c2526348549f8ef2ff7db3299c87f5"
-dependencies = [
- "fixed-hash",
- "uint 0.10.0",
+ "uint",
 ]
 
 [[package]]
@@ -9710,7 +9633,7 @@ dependencies = [
 [[package]]
 name = "revm"
 version = "14.0.3"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "auto_impl",
  "cfg-if",
@@ -9727,7 +9650,7 @@ dependencies = [
 [[package]]
 name = "revm-inspectors"
 version = "0.8.1"
-source = "git+https://github.com/fluentlabs-xyz/revm-inspectors.git?branch=feat/fuel-vm#8c21de8e4f5cb0e61c7c46fb543b3feb4226f99b"
+source = "git+https://github.com/fluentlabs-xyz/revm-inspectors.git?branch=devel#97520fc11d527d6164a200b15885474eeadcb5b2"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -9745,7 +9668,7 @@ dependencies = [
 [[package]]
 name = "revm-interpreter"
 version = "10.0.3"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "revm-primitives",
  "serde",
@@ -9754,7 +9677,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "11.0.3"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "aurora-engine-modexp",
  "blst",
@@ -9773,7 +9696,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "10.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/fuel-vm#f261c28a4db07df83fd8d28118717952872d4a7e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#87e9c2a3a4795aebd8f4b63a7c5ec6fd496bf504"
 dependencies = [
  "alloy-eip2930",
  "alloy-eip7702",
@@ -9919,7 +9842,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "parity-scale-codec",
- "primitive-types 0.12.2",
+ "primitive-types",
  "proptest",
  "rand 0.8.5",
  "rlp",
@@ -11541,18 +11464,6 @@ name = "uint"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76f64bba2c53b04fcab63c01a7d7427eadc821e3bc48c34dc9ba29c501164b52"
-dependencies = [
- "byteorder",
- "crunchy",
- "hex",
- "static_assertions",
-]
-
-[[package]]
-name = "uint"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "909988d098b2f738727b161a106cfc7cab00c539c2687a8836f8e565976fb53e"
 dependencies = [
  "byteorder",
  "crunchy",
