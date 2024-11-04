@@ -24,7 +24,7 @@ use reth_trie_db::DatabaseStateRoot;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io::BufRead};
 use tracing::{debug, error, info, trace};
-use fluentbase_genesis::devnet::GENESIS_POSEIDON_HASH_SLOT;
+use fluentbase_genesis::GENESIS_POSEIDON_HASH_SLOT;
 use fluentbase_poseidon::poseidon_hash;
 
 /// Default soft limit for number of bytes to read from state dump file, before inserting into

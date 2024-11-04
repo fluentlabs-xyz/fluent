@@ -23,7 +23,7 @@ use reth_primitives_traits::{
     Header, SealedHeader,
 };
 use reth_trie_common::root::state_root_ref_unhashed;
-use fluentbase_genesis::devnet::devnet_genesis_from_file;
+use fluentbase_genesis::devnet_genesis_from_file;
 
 use crate::{constants::MAINNET_DEPOSIT_CONTRACT, once_cell_set, EthChainSpec};
 
