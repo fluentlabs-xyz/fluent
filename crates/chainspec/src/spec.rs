@@ -23,7 +23,7 @@ use reth_primitives_traits::{
     Header, SealedHeader,
 };
 use reth_trie_common::root::state_root_ref_unhashed;
-use fluentbase_genesis::devnet_genesis_from_file;
+use fluentbase_genesis::{devnet_genesis_from_file, devnet_genesis_v0_1_0_dev5_from_file};
 
 use crate::{constants::MAINNET_DEPOSIT_CONTRACT, once_cell_set, EthChainSpec};
 
@@ -126,7 +126,7 @@ pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
 pub static DEVELOPER_PREVIEW: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
     ChainSpec {
         chain: Chain::from(0x5201),
-        genesis: devnet_genesis_from_file(),
+        genesis: devnet_genesis_v0_1_0_dev5_from_file(),
         // genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json"))
         //             .expect("Can't deserialize Dev testnet genesis json"),
         // genesis_hash: once_cell_set(DEV_GENESIS_HASH),
