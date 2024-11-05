@@ -31,7 +31,7 @@ pub use info::ChainInfo;
 pub use spec::test_fork_ids;
 pub use spec::{
     BaseFeeParams, BaseFeeParamsKind, ChainSpec, ChainSpecBuilder, ChainSpecProvider,
-    DepositContract, ForkBaseFeeParams, DEV, HOLESKY, MAINNET, SEPOLIA,
+    DepositContract, ForkBaseFeeParams, DEV, DEVELOPER_PREVIEW, HOLESKY, MAINNET, SEPOLIA,
 };
 
 /// Simple utility to create a `OnceCell` with a value set.
