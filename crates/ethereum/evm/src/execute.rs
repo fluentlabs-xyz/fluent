@@ -518,7 +518,6 @@ mod tests {
             balance: U256::ZERO,
             bytecode_hash: Some(keccak256(BEACON_ROOTS_CODE.clone())),
             nonce: 1,
-            rwasm_hash: None,
         };
 
         db.insert_account(
@@ -538,7 +537,6 @@ mod tests {
             nonce: 1,
             balance: U256::ZERO,
             bytecode_hash: Some(keccak256(WITHDRAWAL_REQUEST_PREDEPLOY_CODE.clone())),
-            rwasm_hash: None,
         };
 
         db.insert_account(
@@ -1253,7 +1251,6 @@ mod tests {
                 nonce: 1,
                 balance: U256::from(ETH_TO_WEI),
                 bytecode_hash: None,
-                rwasm_hash: None,
             },
             None,
             HashMap::default(),
@@ -1341,7 +1338,6 @@ mod tests {
                 nonce: 1,
                 balance: U256::from(ETH_TO_WEI),
                 bytecode_hash: None,
-                rwasm_hash: None,
             },
             None,
             HashMap::default(),

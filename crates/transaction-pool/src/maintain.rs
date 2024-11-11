@@ -678,7 +678,7 @@ mod tests {
     };
     use alloy_eips::eip2718::Decodable2718;
     use alloy_primitives::{hex, U256};
-    use reth_chainspec::{DEV, MAINNET};
+    use reth_chainspec::{MAINNET};
     use reth_fs_util as fs;
     use reth_primitives::PooledTransactionsElement;
     use reth_provider::test_utils::{ExtendedAccount, MockEthProvider};
