@@ -35,7 +35,6 @@ mod config;
 use alloy_eips::eip1559::INITIAL_BASE_FEE;
 pub use config::{revm_spec, revm_spec_by_timestamp_and_block_number};
 use reth_ethereum_forks::EthereumHardfork;
-use reth_primitives::constants::{EIP1559_INITIAL_BASE_FEE, ETHEREUM_BLOCK_GAS_LIMIT};
 
 pub mod execute;
 
@@ -77,7 +76,7 @@ impl<EXT, DB: Database> Evm for EthEvm<'_, EXT, DB> {
             transact_to: TxKind::Call(contract),
             // Explicitly set nonce to None so revm does not do any nonce checks
             nonce: None,
-            gas_limit: ETHEREUM_BLOCK_GAS_LIMIT,
+            gas_limit: 30_000_000,
             value: U256::ZERO,
             data,
             // Setting the gas price to zero enforces that no value is transferred as part of the

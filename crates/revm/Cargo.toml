@@ -57,4 +57,4 @@ serde = [
     "reth-ethereum-forks/serde",
     "reth-primitives-traits/serde",
 ]
-rwasm = ["reth-primitives/rwasm"]
+rwasm = ["reth-primitives-traits/rwasm"]

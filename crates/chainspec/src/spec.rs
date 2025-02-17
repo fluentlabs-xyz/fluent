@@ -119,7 +119,7 @@ pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
         // genesis: serde_json::from_str(include_str!("../res/genesis/dev.json"))
         //             .expect("Can't deserialize Dev testnet genesis json"),
         // genesis_hash: once_cell_set(DEV_GENESIS_HASH),
-        genesis_hash: OnceCell::new(),
+        genesis_hash: OnceLock::new(),
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks: DEV_HARDFORKS.clone(),
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
@@ -128,14 +128,14 @@ pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     .into()
 });
 
-pub static DEVELOPER_PREVIEW: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
+pub static DEVELOPER_PREVIEW: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     ChainSpec {
         chain: Chain::from(0x5201),
         genesis: devnet_genesis_v0_1_0_dev5_from_file(),
         // genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json"))
         //             .expect("Can't deserialize Dev testnet genesis json"),
         // genesis_hash: once_cell_set(DEV_GENESIS_HASH),
-        genesis_hash: OnceCell::with_value(b256!("bc0f43f427499b652b4156e6a36991e4b2682af46cdb85808b51464b58200cb9")),
+        genesis_hash: once_cell_set(b256!("bc0f43f427499b652b4156e6a36991e4b2682af46cdb85808b51464b58200cb9")),
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks: DEV_HARDFORKS.clone(),
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
@@ -984,7 +984,15 @@ impl ChainSpecBuilder {
     /// This function panics if the chain ID and genesis is not set ([`Self::chain`] and
     /// [`Self::genesis`])
     pub fn build(self) -> ChainSpec {
-        let paris_block_and_final_difficulty = None;
+        let paris_block_and_final_difficulty = {
+            self.hardforks.get(EthereumHardfork::Paris).and_then(|cond| {
+                if let ForkCondition::TTD { total_difficulty, activation_block_number, .. } = cond {
+                    Some((activation_block_number, total_difficulty))
+                } else {
+                    None
+                }
+            })
+        };
         ChainSpec {
             chain: self.chain.expect("The chain is required"),
             genesis: self.genesis.expect("The genesis is required"),

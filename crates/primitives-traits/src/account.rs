@@ -115,6 +115,7 @@ impl reth_codecs::Compact for Bytecode {
             RevmBytecode::LegacyAnalyzed(analyzed) => analyzed.bytecode(),
             RevmBytecode::Eof(eof) => eof.raw(),
             RevmBytecode::Eip7702(eip7702) => eip7702.raw(),
+            RevmBytecode::Rwasm(bytes) => bytes,
         };
         buf.put_u32(bytecode.len() as u32);
         buf.put_slice(bytecode.as_ref());
@@ -139,6 +140,7 @@ impl reth_codecs::Compact for Bytecode {
                 buf.put_u8(EIP7702_BYTECODE_ID);
                 1
             }
+            RevmBytecode::Rwasm(bytes) => todo!("to compact/from compact is not yet implemented for rwasm")
         };
         len + bytecode.len() + 4
     }
