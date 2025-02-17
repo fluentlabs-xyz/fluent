@@ -2,6 +2,7 @@ use alloy_consensus::constants::KECCAK_EMPTY;
 use alloy_genesis::GenesisAccount;
 use alloy_primitives::{keccak256, Bytes, B256, U256};
 use alloy_trie::TrieAccount;
+use bytes::BufMut;
 use derive_more::Deref;
 use revm_primitives::{AccountInfo, Bytecode as RevmBytecode, BytecodeDecodeError};
 
@@ -22,6 +23,9 @@ pub mod compact_ids {
 
     /// Identifier for [`Eip7702`](revm_primitives::Bytecode::Eip7702).
     pub const EIP7702_BYTECODE_ID: u8 = 4;
+
+    /// Identifier for [`Rwasm`](revm_primitives::Bytecode::Rwasm).
+    pub const RWASM_BYTECODE_ID: u8 = 99;
 }
 
 /// An Ethereum account.
@@ -107,7 +111,7 @@ impl reth_codecs::Compact for Bytecode {
     {
         use compact_ids::{
             EIP7702_BYTECODE_ID, EOF_BYTECODE_ID, LEGACY_ANALYZED_BYTECODE_ID,
-            LEGACY_RAW_BYTECODE_ID,
+            LEGACY_RAW_BYTECODE_ID, RWASM_BYTECODE_ID
         };
 
         let bytecode = match &self.0 {
@@ -141,7 +145,8 @@ impl reth_codecs::Compact for Bytecode {
                 1
             }
             RevmBytecode::Rwasm(bytes) => {
-                todo!("to compact/from compact is not yet implemented for rwasm")
+                buf.put_u8(RWASM_BYTECODE_ID);
+                1
             }
         };
         len + bytecode.len() + 4
