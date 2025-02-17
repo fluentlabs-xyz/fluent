@@ -10,13 +10,12 @@ use reth_ethereum_cli::chainspec::EthereumChainSpecParser;
 use reth_node_builder::{NodeBuilder, WithLaunchContext};
 use reth_node_core::{
     args::{
-        DatabaseArgs, DatadirArgs, DebugArgs, DevArgs, NetworkArgs, PayloadBuilderArgs,
+        DatabaseArgs, DatadirArgs, DebugArgs, DevArgs, EngineArgs, NetworkArgs, PayloadBuilderArgs,
         PruningArgs, RpcServerArgs, TxPoolArgs,
     },
     node_config::NodeConfig,
     version,
 };
-use reth_node_metrics::recorder::install_prometheus_recorder;
 use std::{ffi::OsString, fmt, future::Future, net::SocketAddr, path::PathBuf, sync::Arc};
 
 /// Start the node
@@ -108,6 +107,10 @@ pub struct NodeCommand<
     #[command(flatten)]
     pub pruning: PruningArgs,
 
+    /// Engine cli arguments
+    #[command(flatten, next_help_heading = "Engine")]
+    pub engine: EngineArgs,
+
     /// Additional cli arguments
     #[command(flatten, next_help_heading = "Extension")]
     pub ext: Ext,
@@ -161,6 +164,7 @@ impl<
             dev,
             pruning,
             ext,
+            engine,
         } = self;
 
         // set up node config
@@ -178,11 +182,8 @@ impl<
             db,
             dev,
             pruning,
+            engine,
         };
-
-        // Register the prometheus recorder before creating the database,
-        // because database init needs it to register metrics.
-        let _ = install_prometheus_recorder();
 
         let data_dir = node_config.datadir();
         let db_path = data_dir.db();

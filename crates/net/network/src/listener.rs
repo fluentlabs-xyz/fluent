@@ -1,13 +1,12 @@
 //! Contains connection-oriented interfaces.
 
+use futures::{ready, Stream};
 use std::{
     io,
     net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
 };
-
-use futures::{ready, Stream};
 use tokio::net::{TcpListener, TcpStream};
 
 /// A tcp connection listener.
@@ -78,7 +77,8 @@ pub enum ListenerEvent {
     },
     /// Encountered an error when accepting a connection.
     ///
-    /// This is non-fatal error as the listener continues to listen for new connections to accept.
+    /// This is a non-fatal error as the listener continues to listen for new connections to
+    /// accept.
     Error(io::Error),
 }
 

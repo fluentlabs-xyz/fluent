@@ -1,7 +1,8 @@
 //! Pool component for the node builder.
 
 use alloy_primitives::Address;
-use reth_transaction_pool::{PoolConfig, SubPoolLimit, TransactionPool};
+use reth_node_api::TxTy;
+use reth_transaction_pool::{PoolConfig, PoolTransaction, SubPoolLimit, TransactionPool};
 use std::{collections::HashSet, future::Future};
 
 use crate::{BuilderContext, FullNodeTypes};
@@ -9,7 +10,9 @@ use crate::{BuilderContext, FullNodeTypes};
 /// A type that knows how to build the transaction pool.
 pub trait PoolBuilder<Node: FullNodeTypes>: Send {
     /// The transaction pool to build.
-    type Pool: TransactionPool + Unpin + 'static;
+    type Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TxTy<Node::Types>>>
+        + Unpin
+        + 'static;
 
     /// Creates the transaction pool.
     fn build_pool(
@@ -21,7 +24,9 @@ pub trait PoolBuilder<Node: FullNodeTypes>: Send {
 impl<Node, F, Fut, Pool> PoolBuilder<Node> for F
 where
     Node: FullNodeTypes,
-    Pool: TransactionPool + Unpin + 'static,
+    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TxTy<Node::Types>>>
+        + Unpin
+        + 'static,
     F: FnOnce(&BuilderContext<Node>) -> Fut + Send,
     Fut: Future<Output = eyre::Result<Pool>> + Send,
 {
@@ -52,6 +57,8 @@ pub struct PoolBuilderConfigOverrides {
     pub minimal_protocol_basefee: Option<u64>,
     /// Addresses that will be considered as local. Above exemptions apply.
     pub local_addresses: HashSet<Address>,
+    /// Additional tasks to validate new transactions.
+    pub additional_validation_tasks: Option<usize>,
 }
 
 impl PoolBuilderConfigOverrides {
@@ -65,6 +72,7 @@ impl PoolBuilderConfigOverrides {
             max_account_slots,
             minimal_protocol_basefee,
             local_addresses,
+            additional_validation_tasks: _,
         } = self;
 
         if let Some(pending_limit) = pending_limit {

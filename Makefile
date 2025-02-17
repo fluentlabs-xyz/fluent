@@ -1,6 +1,7 @@
 # Heavily inspired by Lighthouse: https://github.com/sigp/lighthouse/blob/693886b94176faa4cb450f024696cb69cda2fe58/Makefile
 .DEFAULT_GOAL := help
 
+GIT_SHA ?= $(shell git rev-parse HEAD)
 GIT_TAG ?= $(shell git describe --tags --abbrev=0)
 BIN_DIR = "dist/bin"
 
@@ -60,6 +61,35 @@ install-op: ## Build and install the op-reth binary under `~/.cargo/bin`.
 .PHONY: build
 build: ## Build the reth binary into `target` directory.
 	cargo build --bin reth --features "$(FEATURES)" --profile "$(PROFILE)"
+
+# Environment variables for reproducible builds
+# Initialize RUSTFLAGS
+RUST_BUILD_FLAGS =
+# Enable static linking to ensure reproducibility across builds
+RUST_BUILD_FLAGS += --C target-feature=+crt-static
+# Set the linker to use static libgcc to ensure reproducibility across builds
+RUST_BUILD_FLAGS += -Clink-arg=-static-libgcc
+# Remove build ID from the binary to ensure reproducibility across builds
+RUST_BUILD_FLAGS += -C link-arg=-Wl,--build-id=none
+# Remove metadata hash from symbol names to ensure reproducible builds
+RUST_BUILD_FLAGS += -C metadata=''
+# Set timestamp from last git commit for reproducible builds
+SOURCE_DATE ?= $(shell git log -1 --pretty=%ct)
+# Disable incremental compilation to avoid non-deterministic artifacts
+CARGO_INCREMENTAL_VAL = 0
+# Set C locale for consistent string handling and sorting
+LOCALE_VAL = C
+# Set UTC timezone for consistent time handling across builds
+TZ_VAL = UTC
+
+.PHONY: build-reproducible
+build-reproducible: ## Build the reth binary into `target` directory with reproducible builds. Only works for x86_64-unknown-linux-gnu currently
+	SOURCE_DATE_EPOCH=$(SOURCE_DATE) \
+	RUSTFLAGS="${RUST_BUILD_FLAGS} --remap-path-prefix $$(pwd)=." \
+	CARGO_INCREMENTAL=${CARGO_INCREMENTAL_VAL} \
+	LC_ALL=${LOCALE_VAL} \
+	TZ=${TZ_VAL} \
+	cargo build --bin reth --features "$(FEATURES)" --profile "release" --locked --target x86_64-unknown-linux-gnu
 
 .PHONY: build-debug
 build-debug: ## Build the reth binary into `target/debug` directory.
@@ -203,6 +233,14 @@ docker-build-push: ## Build and push a cross-arch Docker image tagged with the l
 #
 # `docker run --privileged --rm tonistiigi/binfmt --install amd64,arm64`
 # `docker buildx create --use --driver docker-container --name cross-builder`
+.PHONY: docker-build-push-git-sha
+docker-build-push-git-sha: ## Build and push a cross-arch Docker image tagged with the latest git sha.
+	$(call docker_build_push,$(GIT_SHA),$(GIT_SHA))
+
+# Note: This requires a buildx builder with emulation support. For example:
+#
+# `docker run --privileged --rm tonistiigi/binfmt --install amd64,arm64`
+# `docker buildx create --use --driver docker-container --name cross-builder`
 .PHONY: docker-build-push-latest
 docker-build-push-latest: ## Build and push a cross-arch Docker image tagged with the latest git tag and `latest`.
 	$(call docker_build_push,$(GIT_TAG),latest)
@@ -242,6 +280,14 @@ endef
 .PHONY: op-docker-build-push
 op-docker-build-push: ## Build and push a cross-arch Docker image tagged with the latest git tag.
 	$(call op_docker_build_push,$(GIT_TAG),$(GIT_TAG))
+
+# Note: This requires a buildx builder with emulation support. For example:
+#
+# `docker run --privileged --rm tonistiigi/binfmt --install amd64,arm64`
+# `docker buildx create --use --driver docker-container --name cross-builder`
+.PHONY: op-docker-build-push-git-sha
+op-docker-build-push-git-sha: ## Build and push a cross-arch Docker image tagged with the latest git sha.
+	$(call op_docker_build_push,$(GIT_SHA),$(GIT_SHA))
 
 # Note: This requires a buildx builder with emulation support. For example:
 #
@@ -308,6 +354,10 @@ update-book-cli: build-debug ## Update book cli documentation.
 	@echo "Updating book cli doc..."
 	@./book/cli/update.sh $(CARGO_TARGET_DIR)/debug/reth
 
+.PHONY: profiling
+profiling: ## Builds `reth` with optimisations, but also symbols.
+	RUSTFLAGS="-C target-cpu=native" cargo build --profile profiling --features jemalloc,asm-keccak
+
 .PHONY: maxperf
 maxperf: ## Builds `reth` with the most aggressive optimisations.
 	RUSTFLAGS="-C target-cpu=native" cargo build --profile maxperf --features jemalloc,asm-keccak
@@ -365,12 +415,32 @@ ensure-codespell:
 		exit 1; \
     fi
 
+# Lint and format all TOML files in the project using dprint.
+# This target ensures that TOML files follow consistent formatting rules,
+# such as using spaces instead of tabs, and enforces other style guidelines
+# defined in the dprint configuration file (e.g., dprint.json).
+#
+# Usage:
+#   make lint-toml
+#
+# Dependencies:
+#   - ensure-dprint: Ensures that dprint is installed and available in the system.
+lint-toml: ensure-dprint
+	dprint fmt
+
+ensure-dprint:
+	@if ! command -v dprint &> /dev/null; then \
+		echo "dprint not found. Please install it by running the command `cargo install --locked dprint` or refer to the following link for more information: https://github.com/dprint/dprint" \
+		exit 1; \
+    fi
+
 lint:
 	make fmt && \
 	make lint-reth && \
 	make lint-op-reth && \
 	make lint-other-targets && \
-	make lint-codespell
+	make lint-codespell && \
+	make lint-toml
 
 fix-lint-reth:
 	cargo +nightly clippy \
@@ -470,6 +540,7 @@ test:
 pr:
 	make lint && \
 	make update-book-cli && \
+	cargo docs --document-private-items && \
 	make test
 
 check-features:

@@ -16,7 +16,7 @@ use clap::Parser;
 use futures_util::StreamExt;
 use reth::{
     builder::NodeHandle, chainspec::EthereumChainSpecParser, cli::Cli,
-    rpc::compat::transaction::transaction_to_call_request, transaction_pool::TransactionPool,
+    rpc::types::TransactionRequest, transaction_pool::TransactionPool,
 };
 use reth_node_ethereum::node::EthereumNode;
 
@@ -45,7 +45,7 @@ fn main() {
                         if args.is_match(&recipient) {
                             // trace the transaction with `trace_call`
                             let callrequest =
-                                transaction_to_call_request(tx.to_recovered_transaction());
+                                TransactionRequest::from_recovered_transaction(tx.to_consensus());
                             let tracerequest = TraceCallRequest::new(callrequest)
                                 .with_trace_type(TraceType::Trace);
                             if let Ok(trace_result) = traceapi.trace_call(tracerequest).await {

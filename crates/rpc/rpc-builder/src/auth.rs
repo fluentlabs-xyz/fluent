@@ -6,7 +6,6 @@ use jsonrpsee::{
     server::{AlreadyStoppedError, RpcModule},
     Methods,
 };
-use reth_engine_primitives::EngineTypes;
 use reth_rpc_api::servers::*;
 use reth_rpc_eth_types::EthSubscriptionIdProvider;
 use reth_rpc_layer::{
@@ -75,10 +74,7 @@ impl AuthServerConfig {
                 .clone()
                 .unwrap_or_else(|| constants::DEFAULT_ENGINE_API_IPC_ENDPOINT.to_string());
             let ipc_server = ipc_server_config.build(ipc_endpoint_str);
-            let res = ipc_server
-                .start(module.inner)
-                .await
-                .map_err(reth_ipc::server::IpcServerStartError::from)?;
+            let res = ipc_server.start(module.inner).await?;
             ipc_handle = Some(res);
         }
 
@@ -192,18 +188,10 @@ pub struct AuthRpcModule {
     pub(crate) inner: RpcModule<()>,
 }
 
-// === impl AuthRpcModule ===
-
 impl AuthRpcModule {
     /// Create a new `AuthRpcModule` with the given `engine_api`.
-    pub fn new<EngineApi, EngineT>(engine: EngineApi) -> Self
-    where
-        EngineT: EngineTypes,
-        EngineApi: EngineApiServer<EngineT>,
-    {
-        let mut module = RpcModule::new(());
-        module.merge(engine.into_rpc()).expect("No conflicting methods");
-        Self { inner: module }
+    pub fn new(engine: impl IntoEngineApiRpcModule) -> Self {
+        Self { inner: engine.into_rpc_module() }
     }
 
     /// Get a reference to the inner `RpcModule`.
@@ -219,6 +207,30 @@ impl AuthRpcModule {
         other: impl Into<Methods>,
     ) -> Result<bool, RegisterMethodError> {
         self.module_mut().merge(other.into()).map(|_| true)
+    }
+
+    /// Removes the method with the given name from the configured authenticated methods.
+    ///
+    /// Returns `true` if the method was found and removed, `false` otherwise.
+    pub fn remove_auth_method(&mut self, method_name: &'static str) -> bool {
+        self.module_mut().remove_method(method_name).is_some()
+    }
+
+    /// Removes the given methods from the configured authenticated methods.
+    pub fn remove_auth_methods(&mut self, methods: impl IntoIterator<Item = &'static str>) {
+        for name in methods {
+            self.remove_auth_method(name);
+        }
+    }
+
+    /// Replace the given [Methods] in the configured authenticated methods.
+    pub fn replace_auth_methods(
+        &mut self,
+        other: impl Into<Methods>,
+    ) -> Result<bool, RegisterMethodError> {
+        let other = other.into();
+        self.remove_auth_methods(other.method_names());
+        self.merge_auth_methods(other)
     }
 
     /// Convenience function for starting a server

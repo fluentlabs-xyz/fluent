@@ -27,16 +27,18 @@ pub use reth_ethereum_forks::*;
 
 pub use api::EthChainSpec;
 pub use info::ChainInfo;
-#[cfg(feature = "test-utils")]
+#[cfg(any(test, feature = "test-utils"))]
 pub use spec::test_fork_ids;
 pub use spec::{
     BaseFeeParams, BaseFeeParamsKind, ChainSpec, ChainSpecBuilder, ChainSpecProvider,
-    DepositContract, ForkBaseFeeParams, DEV, DEVELOPER_PREVIEW, HOLESKY, MAINNET, SEPOLIA,
+    DepositContract, ForkBaseFeeParams, HardforkBlobParams, DEV, HOLESKY, MAINNET, SEPOLIA,
 };
 
-/// Simple utility to create a `OnceCell` with a value set.
-pub fn once_cell_set<T>(value: T) -> once_cell::sync::OnceCell<T> {
-    let once = once_cell::sync::OnceCell::new();
+use reth_primitives_traits::sync::OnceLock;
+
+/// Simple utility to create a thread-safe sync cell with a value set.
+pub fn once_cell_set<T>(value: T) -> OnceLock<T> {
+    let once = OnceLock::new();
     let _ = once.set(value);
     once
 }

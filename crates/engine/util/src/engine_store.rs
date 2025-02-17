@@ -1,9 +1,8 @@
 //! Stores engine API messages to disk for later inspection and replay.
 
-use alloy_rpc_types_engine::{CancunPayloadFields, ExecutionPayload, ForkchoiceState};
+use alloy_rpc_types_engine::ForkchoiceState;
 use futures::{Stream, StreamExt};
-use reth_beacon_consensus::BeaconEngineMessage;
-use reth_engine_primitives::EngineTypes;
+use reth_engine_primitives::{BeaconEngineMessage, EngineTypes, ExecutionPayload};
 use reth_fs_util as fs;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -18,20 +17,19 @@ use tracing::*;
 /// A message from the engine API that has been stored to disk.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum StoredEngineApiMessage<Attributes> {
+pub enum StoredEngineApiMessage<EngineT: EngineTypes> {
     /// The on-disk representation of an `engine_forkchoiceUpdated` method call.
     ForkchoiceUpdated {
         /// The [`ForkchoiceState`] sent in the persisted call.
         state: ForkchoiceState,
         /// The payload attributes sent in the persisted call, if any.
-        payload_attrs: Option<Attributes>,
+        payload_attrs: Option<EngineT::PayloadAttributes>,
     },
     /// The on-disk representation of an `engine_newPayload` method call.
     NewPayload {
-        /// The [`ExecutionPayload`] sent in the persisted call.
-        payload: ExecutionPayload,
-        /// The Cancun-specific fields sent in the persisted call, if any.
-        cancun_fields: Option<CancunPayloadFields>,
+        /// The [`EngineTypes::ExecutionData`] sent in the persisted call.
+        #[serde(flatten)]
+        payload: EngineT::ExecutionData,
     },
 }
 
@@ -63,26 +61,28 @@ impl EngineMessageStore {
         fs::create_dir_all(&self.path)?; // ensure that store path had been created
         let timestamp = received_at.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
         match msg {
-            BeaconEngineMessage::ForkchoiceUpdated { state, payload_attrs, tx: _tx } => {
+            BeaconEngineMessage::ForkchoiceUpdated {
+                state,
+                payload_attrs,
+                tx: _tx,
+                version: _version,
+            } => {
                 let filename = format!("{}-fcu-{}.json", timestamp, state.head_block_hash);
                 fs::write(
                     self.path.join(filename),
-                    serde_json::to_vec(&StoredEngineApiMessage::ForkchoiceUpdated {
+                    serde_json::to_vec(&StoredEngineApiMessage::<Engine>::ForkchoiceUpdated {
                         state: *state,
                         payload_attrs: payload_attrs.clone(),
                     })?,
                 )?;
             }
-            BeaconEngineMessage::NewPayload { payload, cancun_fields, tx: _tx } => {
+            BeaconEngineMessage::NewPayload { payload, tx: _tx } => {
                 let filename = format!("{}-new_payload-{}.json", timestamp, payload.block_hash());
                 fs::write(
                     self.path.join(filename),
-                    serde_json::to_vec(
-                        &StoredEngineApiMessage::<Engine::PayloadAttributes>::NewPayload {
-                            payload: payload.clone(),
-                            cancun_fields: cancun_fields.clone(),
-                        },
-                    )?,
+                    serde_json::to_vec(&StoredEngineApiMessage::<Engine>::NewPayload {
+                        payload: payload.clone(),
+                    })?,
                 )?;
             }
             // noop

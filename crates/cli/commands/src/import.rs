@@ -1,13 +1,12 @@
 //! Command that initializes the node by importing a chain from a file.
-use crate::common::{AccessRights, Environment, EnvironmentArgs};
+use crate::common::{AccessRights, CliNodeComponents, CliNodeTypes, Environment, EnvironmentArgs};
 use alloy_primitives::B256;
 use clap::Parser;
 use futures::{Stream, StreamExt};
-use reth_beacon_consensus::EthBeaconConsensus;
 use reth_chainspec::{EthChainSpec, EthereumHardforks};
 use reth_cli::chainspec::ChainSpecParser;
 use reth_config::Config;
-use reth_consensus::Consensus;
+use reth_consensus::{ConsensusError, FullConsensus};
 use reth_db::tables;
 use reth_db_api::transaction::DbTx;
 use reth_downloaders::{
@@ -20,7 +19,7 @@ use reth_network_p2p::{
     bodies::downloader::BodyDownloader,
     headers::downloader::{HeaderDownloader, SyncTarget},
 };
-use reth_node_builder::NodeTypesWithEngine;
+use reth_node_api::BlockTy;
 use reth_node_core::version::SHORT_VERSION;
 use reth_node_events::node::NodeEvent;
 use reth_provider::{
@@ -58,11 +57,11 @@ pub struct ImportCommand<C: ChainSpecParser> {
 
 impl<C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks>> ImportCommand<C> {
     /// Execute `import` command
-    pub async fn execute<N, E, F>(self, executor: F) -> eyre::Result<()>
+    pub async fn execute<N, Comp, F>(self, components: F) -> eyre::Result<()>
     where
-        N: NodeTypesWithEngine<ChainSpec = C::ChainSpec>,
-        E: BlockExecutorProvider,
-        F: FnOnce(Arc<N::ChainSpec>) -> E,
+        N: CliNodeTypes<ChainSpec = C::ChainSpec>,
+        Comp: CliNodeComponents<N>,
+        F: FnOnce(Arc<N::ChainSpec>) -> Comp,
     {
         info!(target: "reth::cli", "reth {} starting", SHORT_VERSION);
 
@@ -77,8 +76,9 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks>> ImportComm
 
         let Environment { provider_factory, config, .. } = self.env.init::<N>(AccessRights::RW)?;
 
-        let executor = executor(provider_factory.chain_spec());
-        let consensus = Arc::new(EthBeaconConsensus::new(self.env.chain.clone()));
+        let components = components(provider_factory.chain_spec());
+        let executor = components.executor().clone();
+        let consensus = Arc::new(components.consensus().clone());
         info!(target: "reth::cli", "Consensus engine initialized");
 
         // open file
@@ -87,7 +87,13 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks>> ImportComm
         let mut total_decoded_blocks = 0;
         let mut total_decoded_txns = 0;
 
-        while let Some(file_client) = reader.next_chunk::<FileClient>().await? {
+        let mut sealed_header = provider_factory
+            .sealed_header(provider_factory.last_block_number()?)?
+            .expect("should have genesis");
+
+        while let Some(file_client) =
+            reader.next_chunk::<BlockTy<N>>(consensus.clone(), Some(sealed_header)).await?
+        {
             // create a new FileClient from chunk read from file
             info!(target: "reth::cli",
                 "Importing chain file chunk"
@@ -125,6 +131,10 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks>> ImportComm
                 res = pipeline.run() => res?,
                 _ = tokio::signal::ctrl_c() => {},
             }
+
+            sealed_header = provider_factory
+                .sealed_header(provider_factory.last_block_number()?)?
+                .expect("should have genesis");
         }
 
         let provider = provider_factory.provider()?;
@@ -162,15 +172,15 @@ pub fn build_import_pipeline<N, C, E>(
     config: &Config,
     provider_factory: ProviderFactory<N>,
     consensus: &Arc<C>,
-    file_client: Arc<FileClient>,
+    file_client: Arc<FileClient<BlockTy<N>>>,
     static_file_producer: StaticFileProducer<ProviderFactory<N>>,
     disable_exec: bool,
     executor: E,
-) -> eyre::Result<(Pipeline<N>, impl Stream<Item = NodeEvent>)>
+) -> eyre::Result<(Pipeline<N>, impl Stream<Item = NodeEvent<N::Primitives>>)>
 where
-    N: ProviderNodeTypes,
-    C: Consensus + 'static,
-    E: BlockExecutorProvider,
+    N: ProviderNodeTypes + CliNodeTypes,
+    C: FullConsensus<N::Primitives, Error = ConsensusError> + 'static,
+    E: BlockExecutorProvider<Primitives = N::Primitives>,
 {
     if !file_client.has_canonical_blocks() {
         eyre::bail!("unable to import non canonical blocks");
@@ -203,10 +213,11 @@ where
 
     let max_block = file_client.max_block().unwrap_or(0);
 
-    let pipeline = Pipeline::<N>::builder()
+    let pipeline = Pipeline::builder()
         .with_tip_sender(tip_tx)
         // we want to sync all blocks the file client provides or 0 if empty
         .with_max_block(max_block)
+        .with_fail_on_unwind(true)
         .add_stages(
             DefaultStages::new(
                 provider_factory.clone(),

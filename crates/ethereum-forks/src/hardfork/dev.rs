@@ -1,12 +1,17 @@
 use alloc::vec;
 
 use alloy_primitives::U256;
-use once_cell::sync::Lazy;
 
-use crate::{ChainHardforks, EthereumHardfork, ForkCondition};
+use once_cell as _;
+#[cfg(not(feature = "std"))]
+use once_cell::sync::Lazy as LazyLock;
+#[cfg(feature = "std")]
+use std::sync::LazyLock;
+
+use crate::{ChainHardforks, EthereumHardfork, ForkCondition, Hardfork};
 
 /// Dev hardforks
-pub static DEV_HARDFORKS: Lazy<ChainHardforks> = Lazy::new(|| {
+pub static DEV_HARDFORKS: LazyLock<ChainHardforks> = LazyLock::new(|| {
     ChainHardforks::new(vec![
         (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
         (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
@@ -21,7 +26,11 @@ pub static DEV_HARDFORKS: Lazy<ChainHardforks> = Lazy::new(|| {
         (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
         (
             EthereumHardfork::Paris.boxed(),
-            ForkCondition::TTD { fork_block: None, total_difficulty: U256::ZERO },
+            ForkCondition::TTD {
+                activation_block_number: 0,
+                fork_block: None,
+                total_difficulty: U256::ZERO,
+            },
         ),
         (EthereumHardfork::Shanghai.boxed(), ForkCondition::Timestamp(0)),
         (EthereumHardfork::Cancun.boxed(), ForkCondition::Timestamp(0)),

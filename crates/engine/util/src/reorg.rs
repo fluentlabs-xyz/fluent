@@ -1,29 +1,31 @@
 //! Stream wrapper that simulates reorgs.
 
-use alloy_primitives::U256;
+use alloy_consensus::{Header, Transaction};
 use alloy_rpc_types_engine::{
-    CancunPayloadFields, ExecutionPayload, ForkchoiceState, PayloadStatus,
+    CancunPayloadFields, ExecutionPayload, ExecutionPayloadSidecar, ForkchoiceState, PayloadStatus,
 };
 use futures::{stream::FuturesUnordered, Stream, StreamExt, TryFutureExt};
 use itertools::Either;
-use reth_beacon_consensus::{BeaconEngineMessage, BeaconOnNewPayloadError, OnForkChoiceUpdated};
-use reth_engine_primitives::EngineTypes;
+use reth_chainspec::EthChainSpec;
+use reth_engine_primitives::{
+    BeaconEngineMessage, BeaconOnNewPayloadError, EngineTypes, ExecutionData,
+    ExecutionPayload as _, OnForkChoiceUpdated,
+};
 use reth_errors::{BlockExecutionError, BlockValidationError, RethError, RethResult};
 use reth_ethereum_forks::EthereumHardforks;
-use reth_evm::{system_calls::SystemCaller, ConfigureEvm};
+use reth_evm::{
+    state_change::post_block_withdrawals_balance_increments, system_calls::SystemCaller,
+    ConfigureEvm, Evm, EvmError,
+};
+use reth_payload_primitives::EngineApiMessageVersion;
 use reth_payload_validator::ExecutionPayloadValidator;
-use reth_primitives::{proofs, Block, BlockBody, Header, Receipt, Receipts};
+use reth_primitives::{transaction::SignedTransactionIntoRecoveredExt, Block, BlockBody, Receipt};
+use reth_primitives_traits::{block::Block as _, proofs, SignedTransaction};
 use reth_provider::{BlockReader, ExecutionOutcome, ProviderError, StateProviderFactory};
 use reth_revm::{
     database::StateProviderDatabase,
     db::{states::bundle_state::BundleRetention, State},
-    state_change::post_block_withdrawals_balance_increments,
     DatabaseCommit,
-};
-use reth_rpc_types_compat::engine::payload::block_to_payload;
-use reth_trie::HashedPostState;
-use revm_primitives::{
-    calc_excess_blob_gas, BlockEnv, CfgEnvWithHandlerCfg, EVMError, EnvWithHandlerCfg,
 };
 use std::{
     collections::VecDeque,
@@ -103,10 +105,10 @@ impl<S, Engine: EngineTypes, Provider, Evm, Spec> EngineReorg<S, Engine, Provide
 impl<S, Engine, Provider, Evm, Spec> Stream for EngineReorg<S, Engine, Provider, Evm, Spec>
 where
     S: Stream<Item = BeaconEngineMessage<Engine>>,
-    Engine: EngineTypes,
-    Provider: BlockReader + StateProviderFactory,
-    Evm: ConfigureEvm<Header = Header>,
-    Spec: EthereumHardforks,
+    Engine: EngineTypes<ExecutionData = ExecutionData>,
+    Provider: BlockReader<Block = reth_primitives::Block> + StateProviderFactory,
+    Evm: ConfigureEvm<Header = Header, Transaction = reth_primitives::TransactionSigned>,
+    Spec: EthChainSpec + EthereumHardforks,
 {
     type Item = S::Item;
 
@@ -146,7 +148,7 @@ where
             let next = ready!(this.stream.poll_next_unpin(cx));
             let item = match (next, &this.last_forkchoice_state) {
                 (
-                    Some(BeaconEngineMessage::NewPayload { payload, cancun_fields, tx }),
+                    Some(BeaconEngineMessage::NewPayload { payload, tx }),
                     Some(last_forkchoice_state),
                 ) if this.forkchoice_states_forwarded > this.frequency &&
                         // Only enter reorg state if new payload attaches to current head.
@@ -161,13 +163,12 @@ where
                     // forkchoice state. We will rely on CL to reorg us back to canonical chain.
                     // TODO: This is an expensive blocking operation, ideally it's spawned as a task
                     // so that the stream could yield the control back.
-                    let (reorg_payload, reorg_cancun_fields) = match create_reorg_head(
+                    let reorg_payload = match create_reorg_head(
                         this.provider,
                         this.evm_config,
                         this.payload_validator,
                         *this.depth,
                         payload.clone(),
-                        cancun_fields.clone(),
                     ) {
                         Ok(result) => result,
                         Err(error) => {
@@ -176,7 +177,6 @@ where
                             // the next one
                             return Poll::Ready(Some(BeaconEngineMessage::NewPayload {
                                 payload,
-                                cancun_fields,
                                 tx,
                             }))
                         }
@@ -196,11 +196,10 @@ where
 
                     let queue = VecDeque::from([
                         // Current payload
-                        BeaconEngineMessage::NewPayload { payload, cancun_fields, tx },
+                        BeaconEngineMessage::NewPayload { payload, tx },
                         // Reorg payload
                         BeaconEngineMessage::NewPayload {
                             payload: reorg_payload,
-                            cancun_fields: reorg_cancun_fields,
                             tx: reorg_payload_tx,
                         },
                         // Reorg forkchoice state
@@ -208,18 +207,32 @@ where
                             state: reorg_forkchoice_state,
                             payload_attrs: None,
                             tx: reorg_fcu_tx,
+                            version: EngineApiMessageVersion::default(),
                         },
                     ]);
                     *this.state = EngineReorgState::Reorg { queue };
                     continue
                 }
-                (Some(BeaconEngineMessage::ForkchoiceUpdated { state, payload_attrs, tx }), _) => {
+                (
+                    Some(BeaconEngineMessage::ForkchoiceUpdated {
+                        state,
+                        payload_attrs,
+                        tx,
+                        version,
+                    }),
+                    _,
+                ) => {
                     // Record last forkchoice state forwarded to the engine.
                     // We do not care if it's valid since engine should be able to handle
                     // reorgs that rely on invalid forkchoice state.
                     *this.last_forkchoice_state = Some(state);
                     *this.forkchoice_states_forwarded += 1;
-                    Some(BeaconEngineMessage::ForkchoiceUpdated { state, payload_attrs, tx })
+                    Some(BeaconEngineMessage::ForkchoiceUpdated {
+                        state,
+                        payload_attrs,
+                        tx,
+                        version,
+                    })
                 }
                 (item, _) => item,
             };
@@ -233,24 +246,22 @@ fn create_reorg_head<Provider, Evm, Spec>(
     evm_config: &Evm,
     payload_validator: &ExecutionPayloadValidator<Spec>,
     mut depth: usize,
-    next_payload: ExecutionPayload,
-    next_cancun_fields: Option<CancunPayloadFields>,
-) -> RethResult<(ExecutionPayload, Option<CancunPayloadFields>)>
+    next_payload: ExecutionData,
+) -> RethResult<ExecutionData>
 where
-    Provider: BlockReader + StateProviderFactory,
-    Evm: ConfigureEvm<Header = Header>,
-    Spec: EthereumHardforks,
+    Provider: BlockReader<Block = reth_primitives::Block> + StateProviderFactory,
+    Evm: ConfigureEvm<Header = Header, Transaction = reth_primitives::TransactionSigned>,
+    Spec: EthChainSpec + EthereumHardforks,
 {
     let chain_spec = payload_validator.chain_spec();
 
     // Ensure next payload is valid.
-    let next_block = payload_validator
-        .ensure_well_formed_payload(next_payload, next_cancun_fields.into())
-        .map_err(RethError::msg)?;
+    let next_block =
+        payload_validator.ensure_well_formed_payload(next_payload).map_err(RethError::msg)?;
 
     // Fetch reorg target block depending on its depth and its parent.
     let mut previous_hash = next_block.parent_hash;
-    let mut candidate_transactions = next_block.body.transactions;
+    let mut candidate_transactions = next_block.into_body().transactions;
     let reorg_target = 'target: {
         loop {
             let reorg_target = provider
@@ -278,15 +289,11 @@ where
         .with_bundle_update()
         .build();
 
-    // Configure environments
-    let mut cfg = CfgEnvWithHandlerCfg::new(Default::default(), Default::default());
-    let mut block_env = BlockEnv::default();
-    evm_config.fill_cfg_and_block_env(&mut cfg, &mut block_env, &reorg_target.header, U256::MAX);
-    let env = EnvWithHandlerCfg::new_with_cfg_env(cfg, block_env, Default::default());
-    let mut evm = evm_config.evm_with_env(&mut state, env);
+    // Configure EVM
+    let mut evm = evm_config.evm_for_block(&mut state, &reorg_target.header);
 
     // apply eip-4788 pre block contract call
-    let mut system_caller = SystemCaller::new(evm_config, chain_spec);
+    let mut system_caller = SystemCaller::new(evm_config.clone(), chain_spec.clone());
 
     system_caller.apply_beacon_root_contract_call(
         reorg_target.timestamp,
@@ -307,39 +314,38 @@ where
         }
 
         // Configure the environment for the block.
-        let tx_recovered = tx.clone().try_into_ecrecovered().map_err(|_| {
-            BlockExecutionError::Validation(BlockValidationError::SenderRecoveryError)
-        })?;
-        evm_config.fill_tx_env(evm.tx_mut(), &tx_recovered, tx_recovered.signer());
-        let exec_result = match evm.transact() {
+        let tx_recovered =
+            tx.try_clone_into_recovered().map_err(|_| ProviderError::SenderRecoveryError)?;
+        let tx_env = evm_config.tx_env(&tx_recovered, tx_recovered.signer());
+        let exec_result = match evm.transact(tx_env) {
             Ok(result) => result,
-            error @ Err(EVMError::Transaction(_) | EVMError::Header(_)) => {
-                trace!(target: "engine::stream::reorg", hash = %tx.hash(), ?error, "Error executing transaction from next block");
+            Err(err) if err.is_invalid_tx_err() => {
+                trace!(target: "engine::stream::reorg", hash = %tx.tx_hash(), ?err, "Error executing transaction from next block");
                 continue
             }
             // Treat error as fatal
             Err(error) => {
                 return Err(RethError::Execution(BlockExecutionError::Validation(
-                    BlockValidationError::EVM { hash: tx.hash, error: Box::new(error) },
+                    BlockValidationError::EVM { hash: *tx.tx_hash(), error: Box::new(error) },
                 )))
             }
         };
         evm.db_mut().commit(exec_result.state);
 
-        if let Some(blob_tx) = tx.transaction.as_eip4844() {
+        if let Some(blob_tx) = tx.as_eip4844() {
             sum_blob_gas_used += blob_tx.blob_gas();
             versioned_hashes.extend(blob_tx.blob_versioned_hashes.clone());
         }
 
         cumulative_gas_used += exec_result.result.gas_used();
         #[allow(clippy::needless_update)] // side-effect of optimism fields
-        receipts.push(Some(Receipt {
+        receipts.push(Receipt {
             tx_type: tx.tx_type(),
             success: exec_result.result.is_success(),
             cumulative_gas_used,
-            logs: exec_result.result.into_logs().into_iter().map(Into::into).collect(),
+            logs: exec_result.result.into_logs().into_iter().collect(),
             ..Default::default()
-        }));
+        });
 
         // append transaction to the list of executed transactions
         transactions.push(tx);
@@ -358,23 +364,17 @@ where
     // and 4788 contract call
     state.merge_transitions(BundleRetention::PlainState);
 
-    let outcome = ExecutionOutcome::new(
+    let outcome: ExecutionOutcome = ExecutionOutcome::new(
         state.take_bundle(),
-        Receipts::from(vec![receipts]),
+        vec![receipts],
         reorg_target.number,
         Default::default(),
     );
-    let hashed_state = HashedPostState::from_bundle_state(&outcome.state().state);
+    let hashed_state = state_provider.hashed_post_state(outcome.state());
 
     let (blob_gas_used, excess_blob_gas) =
-        if chain_spec.is_cancun_active_at_timestamp(reorg_target.timestamp) {
-            (
-                Some(sum_blob_gas_used),
-                Some(calc_excess_blob_gas(
-                    reorg_target_parent.excess_blob_gas.unwrap_or_default(),
-                    reorg_target_parent.blob_gas_used.unwrap_or_default(),
-                )),
-            )
+        if let Some(blob_params) = chain_spec.blob_params_at_timestamp(reorg_target.timestamp) {
+            (Some(sum_blob_gas_used), reorg_target_parent.next_block_excess_blob_gas(blob_params))
         } else {
             (None, None)
         };
@@ -398,28 +398,38 @@ where
 
             // Compute or add new fields
             transactions_root: proofs::calculate_transaction_root(&transactions),
-            receipts_root: outcome.receipts_root_slow(reorg_target.header.number).unwrap(),
+            receipts_root: outcome.ethereum_receipts_root(reorg_target.header.number).unwrap(),
             logs_bloom: outcome.block_logs_bloom(reorg_target.header.number).unwrap(),
-            requests_root: None, // TODO(prague)
             gas_used: cumulative_gas_used,
-            blob_gas_used: blob_gas_used.map(Into::into),
-            excess_blob_gas: excess_blob_gas.map(Into::into),
+            blob_gas_used,
+            excess_blob_gas,
             state_root: state_provider.state_root(hashed_state)?,
+            requests_hash: None, // TODO(prague)
         },
         body: BlockBody {
             transactions,
             ommers: reorg_target.body.ommers,
             withdrawals: reorg_target.body.withdrawals,
-            requests: None, // TODO(prague)
         },
     }
     .seal_slow();
 
-    Ok((
-        block_to_payload(reorg_block),
-        reorg_target
+    Ok(ExecutionData {
+        payload: ExecutionPayload::from_block_unchecked(
+            reorg_block.hash(),
+            &reorg_block.into_block(),
+        )
+        .0,
+        // todo(onbjerg): how do we support execution requests?
+        sidecar: reorg_target
             .header
             .parent_beacon_block_root
-            .map(|root| CancunPayloadFields { parent_beacon_block_root: root, versioned_hashes }),
-    ))
+            .map(|root| {
+                ExecutionPayloadSidecar::v3(CancunPayloadFields {
+                    parent_beacon_block_root: root,
+                    versioned_hashes,
+                })
+            })
+            .unwrap_or_else(ExecutionPayloadSidecar::none),
+    })
 }

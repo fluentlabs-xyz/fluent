@@ -1,5 +1,3 @@
-use derive_more::Constructor;
-
 use super::{
     DEFAULT_MAX_COUNT_TRANSACTIONS_SEEN_BY_PEER,
     DEFAULT_SOFT_LIMIT_BYTE_SIZE_POOLED_TRANSACTIONS_RESP_ON_PACK_GET_POOLED_TRANSACTIONS_REQ,
@@ -9,6 +7,7 @@ use crate::transactions::constants::tx_fetcher::{
     DEFAULT_MAX_CAPACITY_CACHE_PENDING_FETCH, DEFAULT_MAX_COUNT_CONCURRENT_REQUESTS,
     DEFAULT_MAX_COUNT_CONCURRENT_REQUESTS_PER_PEER,
 };
+use derive_more::Constructor;
 
 /// Configuration for managing transactions within the network.
 #[derive(Debug, Clone)]
@@ -47,7 +46,7 @@ pub enum TransactionPropagationMode {
 }
 
 impl TransactionPropagationMode {
-    /// Returns the number of peers that should
+    /// Returns the number of peers full transactions should be propagated to.
     pub(crate) fn full_peer_count(&self, peer_count: usize) -> usize {
         match self {
             Self::Sqrt => (peer_count as f64).sqrt().round() as usize,

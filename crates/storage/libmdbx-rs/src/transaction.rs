@@ -6,7 +6,7 @@ use crate::{
     txn_manager::{TxnManagerMessage, TxnPtr},
     Cursor, Error, Stat, TableObject,
 };
-use ffi::{mdbx_txn_renew, MDBX_txn_flags_t, MDBX_TXN_RDONLY, MDBX_TXN_READWRITE};
+use ffi::{MDBX_txn_flags_t, MDBX_TXN_RDONLY, MDBX_TXN_READWRITE};
 use indexmap::IndexSet;
 use parking_lot::{Mutex, MutexGuard};
 use std::{
@@ -17,6 +17,9 @@ use std::{
     sync::{atomic::AtomicBool, mpsc::sync_channel, Arc},
     time::Duration,
 };
+
+#[cfg(feature = "read-tx-timeouts")]
+use ffi::mdbx_txn_renew;
 
 mod private {
     use super::*;
@@ -576,15 +579,18 @@ impl TransactionPtr {
         self.timed_out.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// Acquires the inner transaction lock to guarantee exclusive access to the transaction
+    /// pointer.
     fn lock(&self) -> MutexGuard<'_, ()> {
         if let Some(lock) = self.lock.try_lock() {
             lock
         } else {
-            tracing::debug!(
+            tracing::trace!(
                 target: "libmdbx",
                 txn = %self.txn as usize,
-                backtrace = %std::backtrace::Backtrace::force_capture(),
-                "Transaction lock is already acquired, blocking..."
+                backtrace = %std::backtrace::Backtrace::capture(),
+                "Transaction lock is already acquired, blocking...
+                To display the full backtrace, run with `RUST_BACKTRACE=full` env variable."
             );
             self.lock.lock()
         }

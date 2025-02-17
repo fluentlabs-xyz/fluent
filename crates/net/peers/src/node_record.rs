@@ -1,21 +1,24 @@
 //! Commonly used `NodeRecord` type for peers.
 
-use std::{
+use crate::PeerId;
+use alloc::{
+    format,
+    string::{String, ToString},
+};
+use alloy_rlp::{RlpDecodable, RlpEncodable};
+use core::{
     fmt,
     fmt::Write,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     num::ParseIntError,
     str::FromStr,
 };
-
-use crate::PeerId;
-use alloy_rlp::{RlpDecodable, RlpEncodable};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
 #[cfg(feature = "secp256k1")]
 use enr::Enr;
 
-/// Represents a ENR in discovery.
+/// Represents an ENR in discovery.
 ///
 /// Note: this is only an excerpt of the [`NodeRecord`] data structure.
 #[derive(
@@ -231,11 +234,10 @@ impl TryFrom<&Enr<secp256k1::SecretKey>> for NodeRecord {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use alloy_rlp::Decodable;
     use rand::{thread_rng, Rng, RngCore};
     use std::net::Ipv6Addr;
-
-    use super::*;
 
     #[test]
     fn test_mapped_ipv6() {

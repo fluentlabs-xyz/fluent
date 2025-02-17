@@ -1,18 +1,13 @@
 //! A no operation block executor implementation.
 
-use alloy_primitives::BlockNumber;
-use core::fmt::Display;
 use reth_execution_errors::BlockExecutionError;
-use reth_execution_types::{BlockExecutionInput, BlockExecutionOutput, ExecutionOutcome};
-use reth_primitives::{BlockWithSenders, Receipt};
-use reth_prune_types::PruneModes;
-use reth_storage_errors::provider::ProviderError;
-use revm::State;
-use revm_primitives::db::Database;
+use reth_execution_types::BlockExecutionResult;
+use reth_primitives::{NodePrimitives, RecoveredBlock};
 
 use crate::{
-    execute::{BatchExecutor, BlockExecutorProvider, Executor},
+    execute::{BlockExecutorProvider, Executor},
     system_calls::OnStateHook,
+    Database,
 };
 
 const UNAVAILABLE_FOR_NOOP: &str = "execution unavailable for noop";
@@ -20,78 +15,49 @@ const UNAVAILABLE_FOR_NOOP: &str = "execution unavailable for noop";
 /// A [`BlockExecutorProvider`] implementation that does nothing.
 #[derive(Debug, Default, Clone)]
 #[non_exhaustive]
-pub struct NoopBlockExecutorProvider;
+pub struct NoopBlockExecutorProvider<P>(core::marker::PhantomData<P>);
 
-impl BlockExecutorProvider for NoopBlockExecutorProvider {
-    type Executor<DB: Database<Error: Into<ProviderError> + Display>> = Self;
+impl<P: NodePrimitives> BlockExecutorProvider for NoopBlockExecutorProvider<P> {
+    type Primitives = P;
 
-    type BatchExecutor<DB: Database<Error: Into<ProviderError> + Display>> = Self;
+    type Executor<DB: Database> = Self;
 
     fn executor<DB>(&self, _: DB) -> Self::Executor<DB>
     where
-        DB: Database<Error: Into<ProviderError> + Display>,
+        DB: Database,
     {
-        Self
-    }
-
-    fn batch_executor<DB>(&self, _: DB) -> Self::BatchExecutor<DB>
-    where
-        DB: Database<Error: Into<ProviderError> + Display>,
-    {
-        Self
+        Self::default()
     }
 }
 
-impl<DB> Executor<DB> for NoopBlockExecutorProvider {
-    type Input<'a> = BlockExecutionInput<'a, BlockWithSenders>;
-    type Output = BlockExecutionOutput<Receipt>;
+impl<DB: Database, P: NodePrimitives> Executor<DB> for NoopBlockExecutorProvider<P> {
+    type Primitives = P;
     type Error = BlockExecutionError;
 
-    fn execute(self, _: Self::Input<'_>) -> Result<Self::Output, Self::Error> {
-        Err(BlockExecutionError::msg(UNAVAILABLE_FOR_NOOP))
-    }
-
-    fn execute_with_state_closure<F>(
-        self,
-        _: Self::Input<'_>,
-        _: F,
-    ) -> Result<Self::Output, Self::Error>
-    where
-        F: FnMut(&State<DB>),
+    fn execute_one(
+        &mut self,
+        _block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
+    ) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
     {
         Err(BlockExecutionError::msg(UNAVAILABLE_FOR_NOOP))
     }
 
-    fn execute_with_state_hook<F>(
-        self,
-        _: Self::Input<'_>,
-        _: F,
-    ) -> Result<Self::Output, Self::Error>
+    fn execute_one_with_state_hook<F>(
+        &mut self,
+        _block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
+        _state_hook: F,
+    ) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
     where
-        F: OnStateHook,
+        F: OnStateHook + 'static,
     {
         Err(BlockExecutionError::msg(UNAVAILABLE_FOR_NOOP))
     }
-}
 
-impl<DB> BatchExecutor<DB> for NoopBlockExecutorProvider {
-    type Input<'a> = BlockExecutionInput<'a, BlockWithSenders>;
-    type Output = ExecutionOutcome;
-    type Error = BlockExecutionError;
-
-    fn execute_and_verify_one(&mut self, _: Self::Input<'_>) -> Result<(), Self::Error> {
-        Err(BlockExecutionError::msg(UNAVAILABLE_FOR_NOOP))
-    }
-
-    fn finalize(self) -> Self::Output {
+    fn into_state(self) -> revm::db::State<DB> {
         unreachable!()
     }
 
-    fn set_tip(&mut self, _: BlockNumber) {}
-
-    fn set_prune_modes(&mut self, _: PruneModes) {}
-
-    fn size_hint(&self) -> Option<usize> {
-        None
+    fn size_hint(&self) -> usize {
+        0
     }
 }

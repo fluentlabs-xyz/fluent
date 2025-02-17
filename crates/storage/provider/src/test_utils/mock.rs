@@ -1,40 +1,41 @@
 use crate::{
     traits::{BlockSource, ReceiptProvider},
-    AccountReader, BlockExecutionReader, BlockHashReader, BlockIdReader, BlockNumReader,
-    BlockReader, BlockReaderIdExt, ChainSpecProvider, ChangeSetReader, DatabaseProvider,
-    EvmEnvProvider, HeaderProvider, ReceiptProviderIdExt, RequestsProvider, StateProvider,
-    StateProviderBox, StateProviderFactory, StateReader, StateRootProvider, TransactionVariant,
-    TransactionsProvider, WithdrawalsProvider,
+    AccountReader, BlockHashReader, BlockIdReader, BlockNumReader, BlockReader, BlockReaderIdExt,
+    ChainSpecProvider, ChangeSetReader, DatabaseProvider, EthStorage, HeaderProvider,
+    ReceiptProviderIdExt, StateProvider, StateProviderBox, StateProviderFactory, StateReader,
+    StateRootProvider, TransactionVariant, TransactionsProvider, WithdrawalsProvider,
 };
-use alloy_consensus::constants::EMPTY_ROOT_HASH;
-use alloy_eips::{BlockHashOrNumber, BlockId, BlockNumberOrTag};
+use alloy_consensus::{
+    constants::EMPTY_ROOT_HASH, transaction::TransactionMeta, Header, Transaction,
+};
+use alloy_eips::{eip4895::Withdrawals, BlockHashOrNumber, BlockId, BlockNumberOrTag};
 use alloy_primitives::{
     keccak256,
-    map::{HashMap, HashSet},
-    Address, BlockHash, BlockNumber, Bytes, Sealable, StorageKey, StorageValue, TxHash, TxNumber,
-    B256, U256,
+    map::{B256Map, HashMap},
+    Address, BlockHash, BlockNumber, Bytes, StorageKey, StorageValue, TxHash, TxNumber, B256, U256,
 };
 use parking_lot::Mutex;
-use reth_chainspec::{ChainInfo, ChainSpec};
+use reth_chainspec::{ChainInfo, EthChainSpec};
 use reth_db::mock::{DatabaseMock, TxMock};
 use reth_db_api::models::{AccountBeforeTx, StoredBlockBodyIndices};
-use reth_evm::ConfigureEvmEnv;
-use reth_execution_types::{Chain, ExecutionOutcome};
+use reth_execution_types::ExecutionOutcome;
+use reth_node_types::NodeTypes;
 use reth_primitives::{
-    Account, Block, BlockWithSenders, Bytecode, GotExpected, Header, Receipt, SealedBlock,
-    SealedBlockWithSenders, SealedHeader, TransactionMeta, TransactionSigned,
-    TransactionSignedNoHash, Withdrawal, Withdrawals,
+    Account, Block, Bytecode, EthPrimitives, GotExpected, Receipt, RecoveredBlock, SealedBlock,
+    SealedHeader, TransactionSigned,
 };
+use reth_primitives_traits::SignedTransaction;
 use reth_stages_types::{StageCheckpoint, StageId};
 use reth_storage_api::{
-    DatabaseProviderFactory, StageCheckpointReader, StateProofProvider, StorageRootProvider,
+    BlockBodyIndicesProvider, DatabaseProviderFactory, HashedPostStateProvider, OmmersProvider,
+    StageCheckpointReader, StateCommitmentProvider, StateProofProvider, StorageRootProvider,
 };
 use reth_storage_errors::provider::{ConsistentViewError, ProviderError, ProviderResult};
 use reth_trie::{
-    updates::TrieUpdates, AccountProof, HashedPostState, HashedStorage, MultiProof, StorageProof,
-    TrieInput,
+    updates::TrieUpdates, AccountProof, HashedPostState, HashedStorage, MultiProof,
+    MultiProofTargets, StorageMultiProof, StorageProof, TrieInput,
 };
-use revm::primitives::{BlockEnv, CfgEnvWithHandlerCfg};
+use reth_trie_db::MerklePatriciaTrie;
 use std::{
     collections::BTreeMap,
     ops::{RangeBounds, RangeInclusive},
@@ -42,10 +43,10 @@ use std::{
 };
 
 /// A mock implementation for Provider interfaces.
-#[derive(Debug, Clone)]
-pub struct MockEthProvider {
+#[derive(Debug)]
+pub struct MockEthProvider<T = TransactionSigned, ChainSpec = reth_chainspec::ChainSpec> {
     /// Local block store
-    pub blocks: Arc<Mutex<HashMap<B256, Block>>>,
+    pub blocks: Arc<Mutex<HashMap<B256, Block<T>>>>,
     /// Local header store
     pub headers: Arc<Mutex<HashMap<B256, Header>>>,
     /// Local account store
@@ -56,8 +57,21 @@ pub struct MockEthProvider {
     pub state_roots: Arc<Mutex<Vec<B256>>>,
 }
 
-impl Default for MockEthProvider {
-    fn default() -> Self {
+impl<T, ChainSpec> Clone for MockEthProvider<T, ChainSpec> {
+    fn clone(&self) -> Self {
+        Self {
+            blocks: self.blocks.clone(),
+            headers: self.headers.clone(),
+            accounts: self.accounts.clone(),
+            chain_spec: self.chain_spec.clone(),
+            state_roots: self.state_roots.clone(),
+        }
+    }
+}
+
+impl<T> MockEthProvider<T> {
+    /// Create a new, empty instance
+    pub fn new() -> Self {
         Self {
             blocks: Default::default(),
             headers: Default::default(),
@@ -65,6 +79,68 @@ impl Default for MockEthProvider {
             chain_spec: Arc::new(reth_chainspec::ChainSpecBuilder::mainnet().build()),
             state_roots: Default::default(),
         }
+    }
+}
+
+impl<T, ChainSpec> MockEthProvider<T, ChainSpec> {
+    /// Add block to local block store
+    pub fn add_block(&self, hash: B256, block: Block<T>) {
+        self.add_header(hash, block.header.clone());
+        self.blocks.lock().insert(hash, block);
+    }
+
+    /// Add multiple blocks to local block store
+    pub fn extend_blocks(&self, iter: impl IntoIterator<Item = (B256, Block<T>)>) {
+        for (hash, block) in iter {
+            self.add_header(hash, block.header.clone());
+            self.add_block(hash, block)
+        }
+    }
+
+    /// Add header to local header store
+    pub fn add_header(&self, hash: B256, header: Header) {
+        self.headers.lock().insert(hash, header);
+    }
+
+    /// Add multiple headers to local header store
+    pub fn extend_headers(&self, iter: impl IntoIterator<Item = (B256, Header)>) {
+        for (hash, header) in iter {
+            self.add_header(hash, header)
+        }
+    }
+
+    /// Add account to local account store
+    pub fn add_account(&self, address: Address, account: ExtendedAccount) {
+        self.accounts.lock().insert(address, account);
+    }
+
+    /// Add account to local account store
+    pub fn extend_accounts(&self, iter: impl IntoIterator<Item = (Address, ExtendedAccount)>) {
+        for (address, account) in iter {
+            self.add_account(address, account)
+        }
+    }
+
+    /// Add state root to local state root store
+    pub fn add_state_root(&self, state_root: B256) {
+        self.state_roots.lock().push(state_root);
+    }
+
+    /// Set chain spec.
+    pub fn with_chain_spec<C>(self, chain_spec: C) -> MockEthProvider<T, C> {
+        MockEthProvider {
+            blocks: self.blocks,
+            headers: self.headers,
+            accounts: self.accounts,
+            chain_spec: Arc::new(chain_spec),
+            state_roots: self.state_roots,
+        }
+    }
+}
+
+impl Default for MockEthProvider {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -105,55 +181,29 @@ impl ExtendedAccount {
     }
 }
 
-impl MockEthProvider {
-    /// Add block to local block store
-    pub fn add_block(&self, hash: B256, block: Block) {
-        self.add_header(hash, block.header.clone());
-        self.blocks.lock().insert(hash, block);
-    }
+/// Mock node.
+#[derive(Debug)]
+pub struct MockNode;
 
-    /// Add multiple blocks to local block store
-    pub fn extend_blocks(&self, iter: impl IntoIterator<Item = (B256, Block)>) {
-        for (hash, block) in iter {
-            self.add_header(hash, block.header.clone());
-            self.add_block(hash, block)
-        }
-    }
-
-    /// Add header to local header store
-    pub fn add_header(&self, hash: B256, header: Header) {
-        self.headers.lock().insert(hash, header);
-    }
-
-    /// Add multiple headers to local header store
-    pub fn extend_headers(&self, iter: impl IntoIterator<Item = (B256, Header)>) {
-        for (hash, header) in iter {
-            self.add_header(hash, header)
-        }
-    }
-
-    /// Add account to local account store
-    pub fn add_account(&self, address: Address, account: ExtendedAccount) {
-        self.accounts.lock().insert(address, account);
-    }
-
-    /// Add account to local account store
-    pub fn extend_accounts(&self, iter: impl IntoIterator<Item = (Address, ExtendedAccount)>) {
-        for (address, account) in iter {
-            self.add_account(address, account)
-        }
-    }
-
-    /// Add state root to local state root store
-    pub fn add_state_root(&self, state_root: B256) {
-        self.state_roots.lock().push(state_root);
-    }
+impl NodeTypes for MockNode {
+    type Primitives = EthPrimitives;
+    type ChainSpec = reth_chainspec::ChainSpec;
+    type StateCommitment = MerklePatriciaTrie;
+    type Storage = EthStorage;
 }
 
-impl DatabaseProviderFactory for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> StateCommitmentProvider
+    for MockEthProvider<T, ChainSpec>
+{
+    type StateCommitment = <MockNode as NodeTypes>::StateCommitment;
+}
+
+impl<T: Transaction, ChainSpec: EthChainSpec> DatabaseProviderFactory
+    for MockEthProvider<T, ChainSpec>
+{
     type DB = DatabaseMock;
-    type Provider = DatabaseProvider<TxMock, ChainSpec>;
-    type ProviderRW = DatabaseProvider<TxMock, ChainSpec>;
+    type Provider = DatabaseProvider<TxMock, MockNode>;
+    type ProviderRW = DatabaseProvider<TxMock, MockNode>;
 
     fn database_provider_ro(&self) -> ProviderResult<Self::Provider> {
         Err(ConsistentViewError::Syncing { best_block: GotExpected::new(0, 0) }.into())
@@ -164,7 +214,9 @@ impl DatabaseProviderFactory for MockEthProvider {
     }
 }
 
-impl HeaderProvider for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> HeaderProvider for MockEthProvider<T, ChainSpec> {
+    type Header = Header;
+
     fn header(&self, block_hash: &BlockHash) -> ProviderResult<Option<Header>> {
         let lock = self.headers.lock();
         Ok(lock.get(block_hash).cloned())
@@ -204,11 +256,7 @@ impl HeaderProvider for MockEthProvider {
     }
 
     fn sealed_header(&self, number: BlockNumber) -> ProviderResult<Option<SealedHeader>> {
-        Ok(self.header_by_number(number)?.map(|h| {
-            let sealed = h.seal_slow();
-            let (header, seal) = sealed.into_parts();
-            SealedHeader::new(header, seal)
-        }))
+        Ok(self.header_by_number(number)?.map(SealedHeader::seal_slow))
     }
 
     fn sealed_headers_while(
@@ -219,17 +267,15 @@ impl HeaderProvider for MockEthProvider {
         Ok(self
             .headers_range(range)?
             .into_iter()
-            .map(|h| {
-                let sealed = h.seal_slow();
-                let (header, seal) = sealed.into_parts();
-                SealedHeader::new(header, seal)
-            })
+            .map(SealedHeader::seal_slow)
             .take_while(|h| predicate(h))
             .collect())
     }
 }
 
-impl ChainSpecProvider for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec + 'static> ChainSpecProvider
+    for MockEthProvider<T, ChainSpec>
+{
     type ChainSpec = ChainSpec;
 
     fn chain_spec(&self) -> Arc<ChainSpec> {
@@ -237,19 +283,23 @@ impl ChainSpecProvider for MockEthProvider {
     }
 }
 
-impl TransactionsProvider for MockEthProvider {
+impl<T: SignedTransaction, ChainSpec: EthChainSpec> TransactionsProvider
+    for MockEthProvider<T, ChainSpec>
+{
+    type Transaction = T;
+
     fn transaction_id(&self, tx_hash: TxHash) -> ProviderResult<Option<TxNumber>> {
         let lock = self.blocks.lock();
         let tx_number = lock
             .values()
             .flat_map(|block| &block.body.transactions)
-            .position(|tx| tx.hash() == tx_hash)
+            .position(|tx| *tx.tx_hash() == tx_hash)
             .map(|pos| pos as TxNumber);
 
         Ok(tx_number)
     }
 
-    fn transaction_by_id(&self, id: TxNumber) -> ProviderResult<Option<TransactionSigned>> {
+    fn transaction_by_id(&self, id: TxNumber) -> ProviderResult<Option<Self::Transaction>> {
         let lock = self.blocks.lock();
         let transaction =
             lock.values().flat_map(|block| &block.body.transactions).nth(id as usize).cloned();
@@ -257,34 +307,31 @@ impl TransactionsProvider for MockEthProvider {
         Ok(transaction)
     }
 
-    fn transaction_by_id_no_hash(
+    fn transaction_by_id_unhashed(
         &self,
         id: TxNumber,
-    ) -> ProviderResult<Option<TransactionSignedNoHash>> {
+    ) -> ProviderResult<Option<Self::Transaction>> {
         let lock = self.blocks.lock();
-        let transaction = lock
-            .values()
-            .flat_map(|block| &block.body.transactions)
-            .nth(id as usize)
-            .map(|tx| Into::<TransactionSignedNoHash>::into(tx.clone()));
+        let transaction =
+            lock.values().flat_map(|block| &block.body.transactions).nth(id as usize).cloned();
 
         Ok(transaction)
     }
 
-    fn transaction_by_hash(&self, hash: TxHash) -> ProviderResult<Option<TransactionSigned>> {
+    fn transaction_by_hash(&self, hash: TxHash) -> ProviderResult<Option<Self::Transaction>> {
         Ok(self.blocks.lock().iter().find_map(|(_, block)| {
-            block.body.transactions.iter().find(|tx| tx.hash() == hash).cloned()
+            block.body.transactions.iter().find(|tx| *tx.tx_hash() == hash).cloned()
         }))
     }
 
     fn transaction_by_hash_with_meta(
         &self,
         hash: TxHash,
-    ) -> ProviderResult<Option<(TransactionSigned, TransactionMeta)>> {
+    ) -> ProviderResult<Option<(Self::Transaction, TransactionMeta)>> {
         let lock = self.blocks.lock();
         for (block_hash, block) in lock.iter() {
             for (index, tx) in block.body.transactions.iter().enumerate() {
-                if tx.hash() == hash {
+                if *tx.tx_hash() == hash {
                     let meta = TransactionMeta {
                         tx_hash: hash,
                         index: index as u64,
@@ -316,14 +363,14 @@ impl TransactionsProvider for MockEthProvider {
     fn transactions_by_block(
         &self,
         id: BlockHashOrNumber,
-    ) -> ProviderResult<Option<Vec<TransactionSigned>>> {
+    ) -> ProviderResult<Option<Vec<Self::Transaction>>> {
         Ok(self.block(id)?.map(|b| b.body.transactions))
     }
 
     fn transactions_by_block_range(
         &self,
         range: impl RangeBounds<alloy_primitives::BlockNumber>,
-    ) -> ProviderResult<Vec<Vec<TransactionSigned>>> {
+    ) -> ProviderResult<Vec<Vec<Self::Transaction>>> {
         // init btreemap so we can return in order
         let mut map = BTreeMap::new();
         for (_, block) in self.blocks.lock().iter() {
@@ -338,19 +385,14 @@ impl TransactionsProvider for MockEthProvider {
     fn transactions_by_tx_range(
         &self,
         range: impl RangeBounds<TxNumber>,
-    ) -> ProviderResult<Vec<reth_primitives::TransactionSignedNoHash>> {
+    ) -> ProviderResult<Vec<Self::Transaction>> {
         let lock = self.blocks.lock();
         let transactions = lock
             .values()
             .flat_map(|block| &block.body.transactions)
             .enumerate()
-            .filter_map(|(tx_number, tx)| {
-                if range.contains(&(tx_number as TxNumber)) {
-                    Some(tx.clone().into())
-                } else {
-                    None
-                }
-            })
+            .filter(|&(tx_number, _)| range.contains(&(tx_number as TxNumber)))
+            .map(|(_, tx)| tx.clone())
             .collect();
 
         Ok(transactions)
@@ -367,7 +409,7 @@ impl TransactionsProvider for MockEthProvider {
             .enumerate()
             .filter_map(|(tx_number, tx)| {
                 if range.contains(&(tx_number as TxNumber)) {
-                    Some(tx.recover_signer()?)
+                    tx.recover_signer().ok()
                 } else {
                     None
                 }
@@ -382,7 +424,9 @@ impl TransactionsProvider for MockEthProvider {
     }
 }
 
-impl ReceiptProvider for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> ReceiptProvider for MockEthProvider<T, ChainSpec> {
+    type Receipt = Receipt;
+
     fn receipt(&self, _id: TxNumber) -> ProviderResult<Option<Receipt>> {
         Ok(None)
     }
@@ -403,9 +447,12 @@ impl ReceiptProvider for MockEthProvider {
     }
 }
 
-impl ReceiptProviderIdExt for MockEthProvider {}
+impl<T: Transaction, ChainSpec: EthChainSpec> ReceiptProviderIdExt
+    for MockEthProvider<T, ChainSpec>
+{
+}
 
-impl BlockHashReader for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> BlockHashReader for MockEthProvider<T, ChainSpec> {
     fn block_hash(&self, number: u64) -> ProviderResult<Option<B256>> {
         let lock = self.blocks.lock();
 
@@ -429,7 +476,7 @@ impl BlockHashReader for MockEthProvider {
     }
 }
 
-impl BlockNumReader for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> BlockNumReader for MockEthProvider<T, ChainSpec> {
     fn chain_info(&self) -> ProviderResult<ChainInfo> {
         let best_block_number = self.best_block_number()?;
         let lock = self.headers.lock();
@@ -460,30 +507,32 @@ impl BlockNumReader for MockEthProvider {
     }
 }
 
-impl BlockIdReader for MockEthProvider {
-    fn pending_block_num_hash(&self) -> ProviderResult<Option<reth_primitives::BlockNumHash>> {
+impl<T: Transaction, ChainSpec: EthChainSpec> BlockIdReader for MockEthProvider<T, ChainSpec> {
+    fn pending_block_num_hash(&self) -> ProviderResult<Option<alloy_eips::BlockNumHash>> {
         Ok(None)
     }
 
-    fn safe_block_num_hash(&self) -> ProviderResult<Option<reth_primitives::BlockNumHash>> {
+    fn safe_block_num_hash(&self) -> ProviderResult<Option<alloy_eips::BlockNumHash>> {
         Ok(None)
     }
 
-    fn finalized_block_num_hash(&self) -> ProviderResult<Option<reth_primitives::BlockNumHash>> {
+    fn finalized_block_num_hash(&self) -> ProviderResult<Option<alloy_eips::BlockNumHash>> {
         Ok(None)
     }
 }
 
-impl BlockReader for MockEthProvider {
+impl<T: SignedTransaction, ChainSpec: EthChainSpec> BlockReader for MockEthProvider<T, ChainSpec> {
+    type Block = Block<T>;
+
     fn find_block_by_hash(
         &self,
         hash: B256,
         _source: BlockSource,
-    ) -> ProviderResult<Option<Block>> {
+    ) -> ProviderResult<Option<Self::Block>> {
         self.block(hash.into())
     }
 
-    fn block(&self, id: BlockHashOrNumber) -> ProviderResult<Option<Block>> {
+    fn block(&self, id: BlockHashOrNumber) -> ProviderResult<Option<Self::Block>> {
         let lock = self.blocks.lock();
         match id {
             BlockHashOrNumber::Hash(hash) => Ok(lock.get(&hash).cloned()),
@@ -491,23 +540,17 @@ impl BlockReader for MockEthProvider {
         }
     }
 
-    fn pending_block(&self) -> ProviderResult<Option<SealedBlock>> {
+    fn pending_block(&self) -> ProviderResult<Option<SealedBlock<Self::Block>>> {
         Ok(None)
     }
 
-    fn pending_block_with_senders(&self) -> ProviderResult<Option<SealedBlockWithSenders>> {
+    fn pending_block_with_senders(&self) -> ProviderResult<Option<RecoveredBlock<Self::Block>>> {
         Ok(None)
     }
 
-    fn pending_block_and_receipts(&self) -> ProviderResult<Option<(SealedBlock, Vec<Receipt>)>> {
-        Ok(None)
-    }
-
-    fn ommers(&self, _id: BlockHashOrNumber) -> ProviderResult<Option<Vec<Header>>> {
-        Ok(None)
-    }
-
-    fn block_body_indices(&self, _num: u64) -> ProviderResult<Option<StoredBlockBodyIndices>> {
+    fn pending_block_and_receipts(
+        &self,
+    ) -> ProviderResult<Option<(SealedBlock<Self::Block>, Vec<Receipt>)>> {
         Ok(None)
     }
 
@@ -515,7 +558,7 @@ impl BlockReader for MockEthProvider {
         &self,
         _id: BlockHashOrNumber,
         _transaction_kind: TransactionVariant,
-    ) -> ProviderResult<Option<BlockWithSenders>> {
+    ) -> ProviderResult<Option<RecoveredBlock<Self::Block>>> {
         Ok(None)
     }
 
@@ -523,11 +566,11 @@ impl BlockReader for MockEthProvider {
         &self,
         _id: BlockHashOrNumber,
         _transaction_kind: TransactionVariant,
-    ) -> ProviderResult<Option<SealedBlockWithSenders>> {
+    ) -> ProviderResult<Option<RecoveredBlock<Self::Block>>> {
         Ok(None)
     }
 
-    fn block_range(&self, range: RangeInclusive<BlockNumber>) -> ProviderResult<Vec<Block>> {
+    fn block_range(&self, range: RangeInclusive<BlockNumber>) -> ProviderResult<Vec<Self::Block>> {
         let lock = self.blocks.lock();
 
         let mut blocks: Vec<_> =
@@ -540,20 +583,22 @@ impl BlockReader for MockEthProvider {
     fn block_with_senders_range(
         &self,
         _range: RangeInclusive<BlockNumber>,
-    ) -> ProviderResult<Vec<BlockWithSenders>> {
+    ) -> ProviderResult<Vec<RecoveredBlock<Self::Block>>> {
         Ok(vec![])
     }
 
     fn sealed_block_with_senders_range(
         &self,
         _range: RangeInclusive<BlockNumber>,
-    ) -> ProviderResult<Vec<SealedBlockWithSenders>> {
+    ) -> ProviderResult<Vec<RecoveredBlock<Self::Block>>> {
         Ok(vec![])
     }
 }
 
-impl BlockReaderIdExt for MockEthProvider {
-    fn block_by_id(&self, id: BlockId) -> ProviderResult<Option<Block>> {
+impl<T: SignedTransaction, ChainSpec: EthChainSpec> BlockReaderIdExt
+    for MockEthProvider<T, ChainSpec>
+{
+    fn block_by_id(&self, id: BlockId) -> ProviderResult<Option<Block<T>>> {
         match id {
             BlockId::Number(num) => self.block_by_number_or_tag(num),
             BlockId::Hash(hash) => self.block_by_hash(hash.block_hash),
@@ -561,14 +606,7 @@ impl BlockReaderIdExt for MockEthProvider {
     }
 
     fn sealed_header_by_id(&self, id: BlockId) -> ProviderResult<Option<SealedHeader>> {
-        self.header_by_id(id)?.map_or_else(
-            || Ok(None),
-            |h| {
-                let sealed = h.seal_slow();
-                let (header, seal) = sealed.into_parts();
-                Ok(Some(SealedHeader::new(header, seal)))
-            },
-        )
+        self.header_by_id(id)?.map_or_else(|| Ok(None), |h| Ok(Some(SealedHeader::seal_slow(h))))
     }
 
     fn header_by_id(&self, id: BlockId) -> ProviderResult<Option<Header>> {
@@ -586,13 +624,15 @@ impl BlockReaderIdExt for MockEthProvider {
     }
 }
 
-impl AccountReader for MockEthProvider {
-    fn basic_account(&self, address: Address) -> ProviderResult<Option<Account>> {
-        Ok(self.accounts.lock().get(&address).cloned().map(|a| a.account))
+impl<T: Transaction, ChainSpec: EthChainSpec> AccountReader for MockEthProvider<T, ChainSpec> {
+    fn basic_account(&self, address: &Address) -> ProviderResult<Option<Account>> {
+        Ok(self.accounts.lock().get(address).cloned().map(|a| a.account))
     }
 }
 
-impl StageCheckpointReader for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> StageCheckpointReader
+    for MockEthProvider<T, ChainSpec>
+{
     fn get_stage_checkpoint(&self, _id: StageId) -> ProviderResult<Option<StageCheckpoint>> {
         Ok(None)
     }
@@ -606,7 +646,7 @@ impl StageCheckpointReader for MockEthProvider {
     }
 }
 
-impl StateRootProvider for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> StateRootProvider for MockEthProvider<T, ChainSpec> {
     fn state_root(&self, _state: HashedPostState) -> ProviderResult<B256> {
         Ok(self.state_roots.lock().pop().unwrap_or_default())
     }
@@ -632,7 +672,9 @@ impl StateRootProvider for MockEthProvider {
     }
 }
 
-impl StorageRootProvider for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> StorageRootProvider
+    for MockEthProvider<T, ChainSpec>
+{
     fn storage_root(
         &self,
         _address: Address,
@@ -649,9 +691,18 @@ impl StorageRootProvider for MockEthProvider {
     ) -> ProviderResult<reth_trie::StorageProof> {
         Ok(StorageProof::new(slot))
     }
+
+    fn storage_multiproof(
+        &self,
+        _address: Address,
+        _slots: &[B256],
+        _hashed_storage: HashedStorage,
+    ) -> ProviderResult<StorageMultiProof> {
+        Ok(StorageMultiProof::empty())
+    }
 }
 
-impl StateProofProvider for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> StateProofProvider for MockEthProvider<T, ChainSpec> {
     fn proof(
         &self,
         _input: TrieInput,
@@ -664,7 +715,7 @@ impl StateProofProvider for MockEthProvider {
     fn multiproof(
         &self,
         _input: TrieInput,
-        _targets: HashMap<B256, HashSet<B256>>,
+        _targets: MultiProofTargets,
     ) -> ProviderResult<MultiProof> {
         Ok(MultiProof::default())
     }
@@ -673,12 +724,22 @@ impl StateProofProvider for MockEthProvider {
         &self,
         _input: TrieInput,
         _target: HashedPostState,
-    ) -> ProviderResult<HashMap<B256, Bytes>> {
+    ) -> ProviderResult<B256Map<Bytes>> {
         Ok(HashMap::default())
     }
 }
 
-impl StateProvider for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> HashedPostStateProvider
+    for MockEthProvider<T, ChainSpec>
+{
+    fn hashed_post_state(&self, _state: &revm::db::BundleState) -> HashedPostState {
+        HashedPostState::default()
+    }
+}
+
+impl<T: Transaction, ChainSpec: EthChainSpec + 'static> StateProvider
+    for MockEthProvider<T, ChainSpec>
+{
     fn storage(
         &self,
         account: Address,
@@ -688,11 +749,11 @@ impl StateProvider for MockEthProvider {
         Ok(lock.get(&account).and_then(|account| account.storage.get(&storage_key)).copied())
     }
 
-    fn bytecode_by_hash(&self, code_hash: B256) -> ProviderResult<Option<Bytecode>> {
+    fn bytecode_by_hash(&self, code_hash: &B256) -> ProviderResult<Option<Bytecode>> {
         let lock = self.accounts.lock();
         Ok(lock.values().find_map(|account| {
             match (account.account.bytecode_hash.as_ref(), account.bytecode.as_ref()) {
-                (Some(bytecode_hash), Some(bytecode)) if *bytecode_hash == code_hash => {
+                (Some(bytecode_hash), Some(bytecode)) if bytecode_hash == code_hash => {
                     Some(bytecode.clone())
                 }
                 _ => None,
@@ -701,72 +762,10 @@ impl StateProvider for MockEthProvider {
     }
 }
 
-impl EvmEnvProvider for MockEthProvider {
-    fn fill_env_at<EvmConfig>(
-        &self,
-        _cfg: &mut CfgEnvWithHandlerCfg,
-        _block_env: &mut BlockEnv,
-        _at: BlockHashOrNumber,
-        _evm_config: EvmConfig,
-    ) -> ProviderResult<()>
-    where
-        EvmConfig: ConfigureEvmEnv<Header = Header>,
-    {
-        Ok(())
-    }
-
-    fn fill_env_with_header<EvmConfig>(
-        &self,
-        _cfg: &mut CfgEnvWithHandlerCfg,
-        _block_env: &mut BlockEnv,
-        _header: &Header,
-        _evm_config: EvmConfig,
-    ) -> ProviderResult<()>
-    where
-        EvmConfig: ConfigureEvmEnv<Header = Header>,
-    {
-        Ok(())
-    }
-
-    fn fill_cfg_env_at<EvmConfig>(
-        &self,
-        _cfg: &mut CfgEnvWithHandlerCfg,
-        _at: BlockHashOrNumber,
-        _evm_config: EvmConfig,
-    ) -> ProviderResult<()>
-    where
-        EvmConfig: ConfigureEvmEnv<Header = Header>,
-    {
-        Ok(())
-    }
-
-    fn fill_cfg_env_with_header<EvmConfig>(
-        &self,
-        _cfg: &mut CfgEnvWithHandlerCfg,
-        _header: &Header,
-        _evm_config: EvmConfig,
-    ) -> ProviderResult<()>
-    where
-        EvmConfig: ConfigureEvmEnv<Header = Header>,
-    {
-        Ok(())
-    }
-}
-
-impl StateProviderFactory for MockEthProvider {
+impl<T: SignedTransaction, ChainSpec: EthChainSpec + 'static> StateProviderFactory
+    for MockEthProvider<T, ChainSpec>
+{
     fn latest(&self) -> ProviderResult<StateProviderBox> {
-        Ok(Box::new(self.clone()))
-    }
-
-    fn history_by_block_number(&self, _block: BlockNumber) -> ProviderResult<StateProviderBox> {
-        Ok(Box::new(self.clone()))
-    }
-
-    fn history_by_block_hash(&self, _block: BlockHash) -> ProviderResult<StateProviderBox> {
-        Ok(Box::new(self.clone()))
-    }
-
-    fn state_by_block_hash(&self, _block: BlockHash) -> ProviderResult<StateProviderBox> {
         Ok(Box::new(self.clone()))
     }
 
@@ -796,6 +795,18 @@ impl StateProviderFactory for MockEthProvider {
         }
     }
 
+    fn history_by_block_number(&self, _block: BlockNumber) -> ProviderResult<StateProviderBox> {
+        Ok(Box::new(self.clone()))
+    }
+
+    fn history_by_block_hash(&self, _block: BlockHash) -> ProviderResult<StateProviderBox> {
+        Ok(Box::new(self.clone()))
+    }
+
+    fn state_by_block_hash(&self, _block: BlockHash) -> ProviderResult<StateProviderBox> {
+        Ok(Box::new(self.clone()))
+    }
+
     fn pending(&self) -> ProviderResult<StateProviderBox> {
         Ok(Box::new(self.clone()))
     }
@@ -805,7 +816,9 @@ impl StateProviderFactory for MockEthProvider {
     }
 }
 
-impl WithdrawalsProvider for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> WithdrawalsProvider
+    for MockEthProvider<T, ChainSpec>
+{
     fn withdrawals_by_block(
         &self,
         _id: BlockHashOrNumber,
@@ -813,22 +826,29 @@ impl WithdrawalsProvider for MockEthProvider {
     ) -> ProviderResult<Option<Withdrawals>> {
         Ok(None)
     }
-    fn latest_withdrawal(&self) -> ProviderResult<Option<Withdrawal>> {
+}
+
+impl<T: Transaction, ChainSpec: EthChainSpec> OmmersProvider for MockEthProvider<T, ChainSpec> {
+    fn ommers(&self, _id: BlockHashOrNumber) -> ProviderResult<Option<Vec<Header>>> {
         Ok(None)
     }
 }
 
-impl RequestsProvider for MockEthProvider {
-    fn requests_by_block(
+impl<T: Transaction, ChainSpec: EthChainSpec> BlockBodyIndicesProvider
+    for MockEthProvider<T, ChainSpec>
+{
+    fn block_body_indices(&self, _num: u64) -> ProviderResult<Option<StoredBlockBodyIndices>> {
+        Ok(None)
+    }
+    fn block_body_indices_range(
         &self,
-        _id: BlockHashOrNumber,
-        _timestamp: u64,
-    ) -> ProviderResult<Option<reth_primitives::Requests>> {
-        Ok(None)
+        _range: RangeInclusive<BlockNumber>,
+    ) -> ProviderResult<Vec<StoredBlockBodyIndices>> {
+        Ok(vec![])
     }
 }
 
-impl ChangeSetReader for MockEthProvider {
+impl<T: Transaction, ChainSpec: EthChainSpec> ChangeSetReader for MockEthProvider<T, ChainSpec> {
     fn account_block_changeset(
         &self,
         _block_number: BlockNumber,
@@ -837,16 +857,9 @@ impl ChangeSetReader for MockEthProvider {
     }
 }
 
-impl BlockExecutionReader for MockEthProvider {
-    fn get_block_and_execution_range(
-        &self,
-        _range: RangeInclusive<BlockNumber>,
-    ) -> ProviderResult<Chain> {
-        Ok(Chain::default())
-    }
-}
+impl<T: Transaction, ChainSpec: EthChainSpec> StateReader for MockEthProvider<T, ChainSpec> {
+    type Receipt = Receipt;
 
-impl StateReader for MockEthProvider {
     fn get_state(&self, _block: BlockNumber) -> ProviderResult<Option<ExecutionOutcome>> {
         Ok(None)
     }
