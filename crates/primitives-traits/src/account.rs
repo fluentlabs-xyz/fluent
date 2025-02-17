@@ -25,7 +25,7 @@ pub mod compact_ids {
     pub const EIP7702_BYTECODE_ID: u8 = 4;
 
     /// Identifier for [`Rwasm`](revm_primitives::Bytecode::Rwasm).
-    pub const RWASM_BYTECODE_ID: u8 = 99;
+    pub const RWASM_BYTECODE_ID: u8 = 0x52; // ASCII code for the letter 'R'
 }
 
 /// An Ethereum account.
@@ -177,7 +177,7 @@ impl reth_codecs::Compact for Bytecode {
                     revm_primitives::JumpTable::from_slice(buf),
                 )
             }),
-            EOF_BYTECODE_ID | EIP7702_BYTECODE_ID => {
+            EOF_BYTECODE_ID | EIP7702_BYTECODE_ID | RWASM_BYTECODE_ID => {
                 // EOF and EIP-7702 bytecode objects will be decoded from the raw bytecode
                 Self(RevmBytecode::new_raw(bytes))
             }
