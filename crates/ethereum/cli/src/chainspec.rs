@@ -1,9 +1,10 @@
-use reth_chainspec::{ChainSpec, DEV, HOLESKY, MAINNET, SEPOLIA, DEVELOPER_PREVIEW};
+use reth_chainspec::{ChainSpec, DEV, DEVELOPER_PREVIEW, HOLESKY, MAINNET, SEPOLIA};
 use reth_cli::chainspec::{parse_genesis, ChainSpecParser};
 use std::sync::Arc;
 
 /// Chains supported by reth. First value should be used as the default.
-pub const SUPPORTED_CHAINS: &[&str] = &["mainnet", "sepolia", "holesky", "dev", "developer-preview"];
+pub const SUPPORTED_CHAINS: &[&str] =
+    &["mainnet", "sepolia", "holesky", "dev", "developer-preview"];
 
 /// Clap value parser for [`ChainSpec`]s.
 ///

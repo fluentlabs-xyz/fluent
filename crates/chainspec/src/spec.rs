@@ -18,6 +18,7 @@ use alloy_genesis::Genesis;
 use alloy_primitives::{address, b256, Address, BlockNumber, B256, U256};
 use alloy_trie::root::state_root_ref_unhashed;
 use derive_more::From;
+use fluentbase_genesis::{devnet_genesis_from_file, devnet_genesis_v0_1_0_dev5_from_file};
 use reth_ethereum_forks::{
     ChainHardforks, DisplayHardforks, EthereumHardfork, EthereumHardforks, ForkCondition,
     ForkFilter, ForkFilterKey, ForkHash, ForkId, Hardfork, Hardforks, Head, DEV_HARDFORKS,
@@ -30,7 +31,6 @@ use reth_primitives_traits::{
     sync::{LazyLock, OnceLock},
     SealedHeader,
 };
-use fluentbase_genesis::{devnet_genesis_from_file, devnet_genesis_v0_1_0_dev5_from_file};
 
 /// The Ethereum mainnet spec
 pub static MAINNET: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
@@ -124,7 +124,8 @@ pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
         hardforks: DEV_HARDFORKS.clone(),
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
         deposit_contract: None, // TODO: do we even have?
-        ..Default::default()    }
+        ..Default::default()
+    }
     .into()
 });
 
@@ -135,7 +136,9 @@ pub static DEVELOPER_PREVIEW: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
         // genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json"))
         //             .expect("Can't deserialize Dev testnet genesis json"),
         // genesis_hash: once_cell_set(DEV_GENESIS_HASH),
-        genesis_hash: once_cell_set(b256!("bc0f43f427499b652b4156e6a36991e4b2682af46cdb85808b51464b58200cb9")),
+        genesis_hash: once_cell_set(b256!(
+            "bc0f43f427499b652b4156e6a36991e4b2682af46cdb85808b51464b58200cb9"
+        )),
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks: DEV_HARDFORKS.clone(),
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),

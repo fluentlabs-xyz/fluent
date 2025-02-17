@@ -45,8 +45,8 @@ impl Account {
         self.bytecode_hash.is_some()
     }
 
-    /// After `SpuriousDragon` empty account is defined as an account with nonce == 0 && balance == 0
-    /// && bytecode = None (or hash is [`KECCAK_EMPTY`]).
+    /// After `SpuriousDragon` empty account is defined as an account with nonce == 0 && balance ==
+    /// 0 && bytecode = None (or hash is [`KECCAK_EMPTY`]).
     pub fn is_empty(&self) -> bool {
         self.nonce == 0 &&
             self.balance.is_zero() &&
@@ -140,7 +140,9 @@ impl reth_codecs::Compact for Bytecode {
                 buf.put_u8(EIP7702_BYTECODE_ID);
                 1
             }
-            RevmBytecode::Rwasm(bytes) => todo!("to compact/from compact is not yet implemented for rwasm")
+            RevmBytecode::Rwasm(bytes) => {
+                todo!("to compact/from compact is not yet implemented for rwasm")
+            }
         };
         len + bytecode.len() + 4
     }

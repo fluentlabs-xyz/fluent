@@ -948,11 +948,7 @@ mod tests {
 
         db.insert_account(
             sender_address,
-            Account {
-                nonce: 1,
-                balance: U256::from(ETH_TO_WEI),
-                bytecode_hash: None,
-            },
+            Account { nonce: 1, balance: U256::from(ETH_TO_WEI), bytecode_hash: None },
             None,
             HashMap::default(),
         );
@@ -1027,11 +1023,7 @@ mod tests {
         // Insert the sender account into the state with a nonce of 1 and a balance of 1 ETH in Wei
         db.insert_account(
             sender_address,
-            Account {
-                nonce: 1,
-                balance: U256::from(ETH_TO_WEI),
-                bytecode_hash: None,
-            },
+            Account { nonce: 1, balance: U256::from(ETH_TO_WEI), bytecode_hash: None },
             None,
             HashMap::default(),
         );

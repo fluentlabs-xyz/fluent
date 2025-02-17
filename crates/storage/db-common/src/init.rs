@@ -3,6 +3,8 @@
 use alloy_consensus::BlockHeader;
 use alloy_genesis::GenesisAccount;
 use alloy_primitives::{map::HashMap, Address, B256, U256};
+use fluentbase_genesis::GENESIS_POSEIDON_HASH_SLOT;
+use fluentbase_poseidon::poseidon_hash;
 use reth_chainspec::EthChainSpec;
 use reth_codecs::Compact;
 use reth_config::config::EtlConfig;
@@ -25,8 +27,6 @@ use reth_trie_db::DatabaseStateRoot;
 use serde::{Deserialize, Serialize};
 use std::io::BufRead;
 use tracing::{debug, error, info, trace};
-use fluentbase_genesis::GENESIS_POSEIDON_HASH_SLOT;
-use fluentbase_poseidon::poseidon_hash;
 
 /// Default soft limit for number of bytes to read from state dump file, before inserting into
 /// database.
@@ -199,14 +199,15 @@ where
                 Ok(bytecode) => {
                     let hash = bytecode.hash_slow();
                     contracts.insert(hash, bytecode.clone());
-            let rwasm_hash = account.storage
-                .as_ref()
-                .and_then(|s| s.get(&GENESIS_POSEIDON_HASH_SLOT))
-                .cloned()
-                .unwrap_or_else(|| {
-                    poseidon_hash(bytecode.original_bytes().as_ref()).into()
-                });
-            contracts.insert(rwasm_hash, bytecode);
+                    let rwasm_hash = account
+                        .storage
+                        .as_ref()
+                        .and_then(|s| s.get(&GENESIS_POSEIDON_HASH_SLOT))
+                        .cloned()
+                        .unwrap_or_else(|| {
+                            poseidon_hash(bytecode.original_bytes().as_ref()).into()
+                        });
+                    contracts.insert(rwasm_hash, bytecode);
                     Some((hash, rwasm_hash))
                 }
                 Err(err) => {
