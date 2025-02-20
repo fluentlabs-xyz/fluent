@@ -564,8 +564,6 @@ impl From<revm::primitives::InvalidTransaction> for RpcInvalidTransactionError {
 
                 Self::other(internal_rpc_err(format!("unexpected transaction error: {err}")))
             }
-            // TODO(EOF)
-            InvalidTransaction::EofCrateShouldHaveToAddress => todo!("EOF"),
         }
     }
 }

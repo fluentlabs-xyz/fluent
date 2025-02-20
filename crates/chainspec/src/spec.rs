@@ -5,7 +5,7 @@ use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::V
 use alloy_chains::{Chain, NamedChain};
 use alloy_consensus::{
     constants::{
-        DEV_GENESIS_HASH, EMPTY_WITHDRAWALS, HOLESKY_GENESIS_HASH, MAINNET_GENESIS_HASH,
+        EMPTY_WITHDRAWALS, HOLESKY_GENESIS_HASH, MAINNET_GENESIS_HASH,
         SEPOLIA_GENESIS_HASH,
     },
     Header,
@@ -129,6 +129,7 @@ pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     .into()
 });
 
+/// Fluent Developer Preview
 pub static DEVELOPER_PREVIEW: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     ChainSpec {
         chain: Chain::from(0x5201),

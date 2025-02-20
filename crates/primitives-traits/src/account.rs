@@ -2,7 +2,6 @@ use alloy_consensus::constants::KECCAK_EMPTY;
 use alloy_genesis::GenesisAccount;
 use alloy_primitives::{keccak256, Bytes, B256, U256};
 use alloy_trie::TrieAccount;
-use bytes::BufMut;
 use derive_more::Deref;
 use revm_primitives::{AccountInfo, Bytecode as RevmBytecode, BytecodeDecodeError};
 
@@ -144,7 +143,7 @@ impl reth_codecs::Compact for Bytecode {
                 buf.put_u8(EIP7702_BYTECODE_ID);
                 1
             }
-            RevmBytecode::Rwasm(bytes) => {
+            RevmBytecode::Rwasm(_) => {
                 buf.put_u8(RWASM_BYTECODE_ID);
                 1
             }

@@ -21,9 +21,6 @@ reth-trie = { workspace = true, optional = true }
 # alloy
 alloy-primitives.workspace = true
 
-# fluentbase
-fluentbase-sdk.workspace = true
-
 # revm
 revm.workspace = true
 
