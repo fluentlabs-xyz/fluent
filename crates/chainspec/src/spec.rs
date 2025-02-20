@@ -358,9 +358,14 @@ impl ChainSpec {
             };
 
         // If Prague is activated at genesis we set requests root to an empty trie root.
-        let requests_hash = self
+        let mut requests_hash = self
             .is_prague_active_at_timestamp(self.genesis.timestamp)
             .then_some(EMPTY_REQUESTS_HASH);
+
+        // TODO(dmitry123): "we temporarily disable this hash for Fluent"
+        if self.chain.id() == 1337 || self.chain.id() == 0x5201 {
+            requests_hash = None;
+        }
 
         Header {
             gas_limit: self.genesis.gas_limit,
