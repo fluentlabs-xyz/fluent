@@ -539,7 +539,7 @@ thiserror = { version = "2.0.0", default-features = false }
 tracing = "0.1.0"
 tracing-appender = "0.2"
 url = { version = "2.3", default-features = false }
-zstd = "0.13"
+zstd = { version = "0.13", default-features = false, features = ["no_asm"] }
 byteorder = "1"
 mini-moka = "0.10"
 
