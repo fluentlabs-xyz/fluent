@@ -30,11 +30,10 @@ ENV FEATURES=$FEATURES
 # Builds dependencies
 #RUN cargo chef cook --profile $BUILD_PROFILE --features "$FEATURES" --recipe-path recipe.json
 
-# Make sure wasm32 target is installed
-RUN rustup target add wasm32-unknown-unknown
-
 # Build application
 COPY . .
+# Make sure wasm32 target is installed
+RUN rustup target add wasm32-unknown-unknown
 RUN cargo build --profile $BUILD_PROFILE --features "$FEATURES" --locked --bin reth
 
 # ARG is not resolved in COPY so we have to hack around it by copying the
