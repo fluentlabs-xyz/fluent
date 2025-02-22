@@ -28,10 +28,6 @@ alloy-consensus.workspace = true
 alloy-genesis.workspace = true
 alloy-primitives.workspace = true
 
-# fluent
-fluentbase-genesis = {workspace=true}
-fluentbase-poseidon = {workspace=true}
-
 # misc
 eyre.workspace = true
 thiserror.workspace = true

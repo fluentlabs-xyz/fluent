@@ -2,9 +2,7 @@
 
 use alloy_consensus::BlockHeader;
 use alloy_genesis::GenesisAccount;
-use alloy_primitives::{map::HashMap, Address, B256, U256};
-use fluentbase_genesis::GENESIS_POSEIDON_HASH_SLOT;
-use fluentbase_poseidon::poseidon_hash;
+use alloy_primitives::{keccak256, map::HashMap, Address, B256, U256};
 use reth_chainspec::EthChainSpec;
 use reth_codecs::Compact;
 use reth_config::config::EtlConfig;
@@ -199,14 +197,7 @@ where
                 Ok(bytecode) => {
                     let hash = bytecode.hash_slow();
                     contracts.insert(hash, bytecode.clone());
-                    let rwasm_hash = account
-                        .storage
-                        .as_ref()
-                        .and_then(|s| s.get(&GENESIS_POSEIDON_HASH_SLOT))
-                        .cloned()
-                        .unwrap_or_else(|| {
-                            poseidon_hash(bytecode.original_bytes().as_ref()).into()
-                        });
+                    let rwasm_hash = keccak256(bytecode.original_bytes().as_ref());
                     contracts.insert(rwasm_hash, bytecode);
                     Some((hash, rwasm_hash))
                 }
