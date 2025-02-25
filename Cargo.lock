@@ -10737,8 +10737,6 @@ name = "revm-interpreter"
 version = "15.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/stf-sp1#40b3e3d57433787dae1139f798d171fc1ac78c74"
 dependencies = [
- "paste",
- "phf",
  "revm-primitives 15.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?branch=feat/stf-sp1)",
  "serde",
 ]

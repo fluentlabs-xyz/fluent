@@ -429,8 +429,8 @@ reth-zstd-compressors = { path = "crates/storage/zstd-compressors", default-feat
 revm = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/stf-sp1", features = [
     "std",
 ], default-features = false }
-revm-primitives = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/stf-sp1" }
-revm-interpreter = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/stf-sp1" }
+revm-primitives = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/stf-sp1", default-features = false }
+revm-interpreter = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/stf-sp1", default-features = false }
 revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "devel" }
 fluentbase-poseidon = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/stf-sp1", default-features = false }
 fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/stf-sp1", default-features = false }
