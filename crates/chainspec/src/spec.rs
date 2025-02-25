@@ -18,7 +18,7 @@ use alloy_genesis::Genesis;
 use alloy_primitives::{address, b256, Address, BlockNumber, B256, U256};
 use alloy_trie::root::state_root_ref_unhashed;
 use derive_more::From;
-use fluentbase_genesis::{devnet_genesis_v0_1_0_dev10_from_file};
+use fluentbase_genesis::{devnet_genesis_from_file, devnet_genesis_v0_1_0_dev10_from_file};
 use reth_ethereum_forks::{
     ChainHardforks, DisplayHardforks, EthereumHardfork, EthereumHardforks, ForkCondition,
     ForkFilter, ForkFilterKey, ForkHash, ForkId, Hardfork, Hardforks, Head, DEV_HARDFORKS,
@@ -115,7 +115,7 @@ pub static HOLESKY: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     ChainSpec {
         chain: Chain::dev(),
-        genesis: devnet_genesis_v0_1_0_dev10_from_file(),
+        genesis: devnet_genesis_from_file(),
         // genesis: serde_json::from_str(include_str!("../res/genesis/dev.json"))
         //             .expect("Can't deserialize Dev testnet genesis json"),
         // genesis_hash: once_cell_set(DEV_GENESIS_HASH),
