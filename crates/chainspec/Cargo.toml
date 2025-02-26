@@ -67,3 +67,6 @@ arbitrary = [
 test-utils = [
     "reth-primitives-traits/test-utils",
 ]
+generate-genesis = [
+    "fluentbase-genesis/generate-genesis"
+]
