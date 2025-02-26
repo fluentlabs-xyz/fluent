@@ -114,9 +114,9 @@ pub static HOLESKY: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     ChainSpec {
         chain: Chain::dev(),
-        #[cfg(feature="generate-genesis")]
+        #[cfg(feature="fluentbase-genesis/generate-genesis")]
         genesis: fluentbase_genesis::devnet_genesis_from_file(),
-        #[cfg(not(feature="generate-genesis"))]
+        #[cfg(not(feature="fluentbase-genesis/generate-genesis"))]
         genesis: fluentbase_genesis::devnet_genesis_v0_1_0_dev10_from_file(),
         genesis_hash: OnceLock::new(),
         paris_block_and_final_difficulty: Some((0, U256::from(0))),

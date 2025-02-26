@@ -440,8 +440,8 @@ revm = { path = "../fluentbase/revm/crates/revm", features = [
 ], default-features = false }
 revm-primitives = { path = "../fluentbase/revm/crates/primitives", default-features = false }
 revm-interpreter = { path = "../fluentbase/revm/crates/interpreter", default-features = false }
-revm-inspectors = { path = "../revm-inspectors", default-features = false }
 fluentbase-genesis = { path = "../fluentbase/crates/genesis", default-features = false }
+revm-inspectors = { path = "../revm-inspectors", default-features = false }
 
 # eth
 alloy-chains = { version = "0.1.32", default-features = false }
