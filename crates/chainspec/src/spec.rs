@@ -113,7 +113,7 @@ pub static HOLESKY: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 /// test test test test test test test junk".
 pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     ChainSpec {
-        chain: Chain::dev(),
+        chain: Chain::from(0x5201),
         #[cfg(feature="generate-genesis")]
         genesis: fluentbase_genesis::devnet_genesis_from_file(),
         #[cfg(not(feature="generate-genesis"))]
@@ -136,9 +136,7 @@ pub static DEVELOPER_PREVIEW: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
         // genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json"))
         //             .expect("Can't deserialize Dev testnet genesis json"),
         // genesis_hash: once_cell_set(DEV_GENESIS_HASH),
-        genesis_hash: once_cell_set(b256!(
-            "bc0f43f427499b652b4156e6a36991e4b2682af46cdb85808b51464b58200cb9"
-        )),
+        genesis_hash: OnceLock::new(),
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks: DEV_HARDFORKS.clone(),
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
