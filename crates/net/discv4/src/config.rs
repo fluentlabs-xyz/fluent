@@ -3,24 +3,19 @@
 //! This basis of this file has been taken from the discv5 codebase:
 //! <https://github.com/sigp/discv5>
 
+use alloy_primitives::bytes::Bytes;
 use alloy_rlp::Encodable;
-use reth_net_common::ban_list::BanList;
+use reth_net_banlist::BanList;
 use reth_net_nat::{NatResolver, ResolveNatInterval};
-use reth_primitives::{
-    bytes::{Bytes, BytesMut},
-    NodeRecord,
-};
+use reth_network_peers::NodeRecord;
 use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
 /// Configuration parameters that define the performance of the discovery network.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Discv4Config {
     /// Whether to enable the incoming packet filter. Default: false.
     pub enable_packet_filter: bool,
@@ -28,20 +23,20 @@ pub struct Discv4Config {
     pub udp_egress_message_buffer: usize,
     /// Size of the channel buffer for incoming messages.
     pub udp_ingress_message_buffer: usize,
-    /// The number of allowed failures for `FindNode` requests. Default: 5.
+    /// The number of allowed consecutive failures for `FindNode` requests. Default: 5.
     pub max_find_node_failures: u8,
     /// The interval to use when checking for expired nodes that need to be re-pinged. Default:
     /// 10min.
     pub ping_interval: Duration,
     /// The duration of we consider a ping timed out.
     pub ping_expiration: Duration,
-    /// The rate at which lookups should be triggered.
+    /// The rate at which new random lookups should be triggered.
     pub lookup_interval: Duration,
-    /// The duration of we consider a FindNode request timed out.
+    /// The duration of we consider a `FindNode` request timed out.
     pub request_timeout: Duration,
     /// The duration after which we consider an enr request timed out.
     pub enr_expiration: Duration,
-    /// The duration we set for neighbours responses
+    /// The duration we set for neighbours responses.
     pub neighbours_expiration: Duration,
     /// Provides a way to ban peers and ips.
     #[cfg_attr(feature = "serde", serde(skip))]
@@ -58,9 +53,9 @@ pub struct Discv4Config {
     pub enable_dht_random_walk: bool,
     /// Whether to automatically lookup peers.
     pub enable_lookup: bool,
-    /// Whether to enforce EIP-868 extension
+    /// Whether to enforce EIP-868 extension.
     pub enable_eip868: bool,
-    /// Whether to respect expiration timestamps in messages
+    /// Whether to respect expiration timestamps in messages.
     pub enforce_expiration_timestamps: bool,
     /// Additional pairs to include in The [`Enr`](enr::Enr) if EIP-868 extension is enabled <https://eips.ethereum.org/EIPS/eip-868>
     pub additional_eip868_rlp_pairs: HashMap<Vec<u8>, Bytes>,
@@ -80,30 +75,28 @@ impl Discv4Config {
     }
 
     /// Add another key value pair to include in the ENR
-    pub fn add_eip868_pair(&mut self, key: impl AsRef<[u8]>, value: impl Encodable) -> &mut Self {
-        let mut buf = BytesMut::new();
-        value.encode(&mut buf);
-        self.add_eip868_rlp_pair(key, buf.freeze())
+    pub fn add_eip868_pair(&mut self, key: impl Into<Vec<u8>>, value: impl Encodable) -> &mut Self {
+        self.add_eip868_rlp_pair(key, Bytes::from(alloy_rlp::encode(&value)))
     }
 
     /// Add another key value pair to include in the ENR
-    pub fn add_eip868_rlp_pair(&mut self, key: impl AsRef<[u8]>, rlp: Bytes) -> &mut Self {
-        self.additional_eip868_rlp_pairs.insert(key.as_ref().to_vec(), rlp);
+    pub fn add_eip868_rlp_pair(&mut self, key: impl Into<Vec<u8>>, rlp: Bytes) -> &mut Self {
+        self.additional_eip868_rlp_pairs.insert(key.into(), rlp);
         self
     }
 
     /// Extend additional key value pairs to include in the ENR
     pub fn extend_eip868_rlp_pairs(
         &mut self,
-        pairs: impl IntoIterator<Item = (impl AsRef<[u8]>, Bytes)>,
+        pairs: impl IntoIterator<Item = (impl Into<Vec<u8>>, Bytes)>,
     ) -> &mut Self {
-        for (k, v) in pairs.into_iter() {
+        for (k, v) in pairs {
             self.add_eip868_rlp_pair(k, v);
         }
         self
     }
 
-    /// Returns the corresponding [`ResolveNatInterval`], if a [NatResolver] and an interval was
+    /// Returns the corresponding [`ResolveNatInterval`], if a [`NatResolver`] and an interval was
     /// configured
     pub fn resolve_external_ip_interval(&self) -> Option<ResolveNatInterval> {
         let resolver = self.external_ip_resolver?;
@@ -123,7 +116,7 @@ impl Default for Discv4Config {
             // Every outgoing request will eventually lead to an incoming response
             udp_ingress_message_buffer: 1024,
             max_find_node_failures: 5,
-            ping_interval: Duration::from_secs(60 * 10),
+            ping_interval: Duration::from_secs(10),
             // Unified expiration and timeout durations, mirrors geth's `expiration` duration
             ping_expiration: Duration::from_secs(20),
             bond_expiration: Duration::from_secs(60 * 60),
@@ -149,7 +142,7 @@ impl Default for Discv4Config {
 
 /// Builder type for [`Discv4Config`]
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Discv4ConfigBuilder {
     config: Discv4Config,
 }
@@ -203,6 +196,12 @@ impl Discv4ConfigBuilder {
         self
     }
 
+    /// Sets the expiration duration for lookup neighbor requests
+    pub fn lookup_neighbours_expiration(&mut self, duration: Duration) -> &mut Self {
+        self.config.neighbours_expiration = duration;
+        self
+    }
+
     /// Sets the expiration duration for a bond with a peer
     pub fn bond_expiration(&mut self, duration: Duration) -> &mut Self {
         self.config.bond_expiration = duration;
@@ -237,30 +236,28 @@ impl Discv4ConfigBuilder {
     }
 
     /// Add another key value pair to include in the ENR
-    pub fn add_eip868_pair(&mut self, key: impl AsRef<[u8]>, value: impl Encodable) -> &mut Self {
-        let mut buf = BytesMut::new();
-        value.encode(&mut buf);
-        self.add_eip868_rlp_pair(key, buf.freeze())
+    pub fn add_eip868_pair(&mut self, key: impl Into<Vec<u8>>, value: impl Encodable) -> &mut Self {
+        self.add_eip868_rlp_pair(key, Bytes::from(alloy_rlp::encode(&value)))
     }
 
     /// Add another key value pair to include in the ENR
-    pub fn add_eip868_rlp_pair(&mut self, key: impl AsRef<[u8]>, rlp: Bytes) -> &mut Self {
-        self.config.additional_eip868_rlp_pairs.insert(key.as_ref().to_vec(), rlp);
+    pub fn add_eip868_rlp_pair(&mut self, key: impl Into<Vec<u8>>, rlp: Bytes) -> &mut Self {
+        self.config.additional_eip868_rlp_pairs.insert(key.into(), rlp);
         self
     }
 
     /// Extend additional key value pairs to include in the ENR
     pub fn extend_eip868_rlp_pairs(
         &mut self,
-        pairs: impl IntoIterator<Item = (impl AsRef<[u8]>, Bytes)>,
+        pairs: impl IntoIterator<Item = (impl Into<Vec<u8>>, Bytes)>,
     ) -> &mut Self {
-        for (k, v) in pairs.into_iter() {
+        for (k, v) in pairs {
             self.add_eip868_rlp_pair(k, v);
         }
         self
     }
 
-    /// A set of lists that can ban IP's or PeerIds from the server. See
+    /// A set of lists that can ban IP's or `PeerIds` from the server. See
     /// [`BanList`].
     pub fn ban_list(&mut self, ban_list: BanList) -> &mut Self {
         self.config.ban_list = ban_list;

@@ -1,10 +1,10 @@
+#![allow(missing_docs)]
 mod utils;
 
-use ::ffi::*;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use pprof::criterion::{Output, PProfProfiler};
-use reth_libmdbx::*;
-use std::ptr;
+use reth_libmdbx::{ffi::*, *};
+use std::{hint::black_box, ptr};
 use utils::*;
 
 /// Benchmark of iterator sequential read performance.
@@ -33,7 +33,7 @@ fn bench_get_seq_iter(c: &mut Criterion) {
                 count += 1;
             }
 
-            fn iterate<K: TransactionKind>(cursor: &mut Cursor<'_, K>) -> Result<()> {
+            fn iterate<K: TransactionKind>(cursor: &mut Cursor<K>) -> Result<()> {
                 let mut i = 0;
                 for result in cursor.iter::<ObjectLength, ObjectLength>() {
                     let (key_len, data_len) = result?;
@@ -77,8 +77,7 @@ fn bench_get_seq_raw(c: &mut Criterion) {
     let (_dir, env) = setup_bench_db(n);
 
     let dbi = env.begin_ro_txn().unwrap().open_db(None).unwrap().dbi();
-    let _txn = env.begin_ro_txn().unwrap();
-    let txn = _txn.txn();
+    let txn = env.begin_ro_txn().unwrap();
 
     let mut key = MDBX_val { iov_len: 0, iov_base: ptr::null_mut() };
     let mut data = MDBX_val { iov_len: 0, iov_base: ptr::null_mut() };
@@ -86,18 +85,21 @@ fn bench_get_seq_raw(c: &mut Criterion) {
 
     c.bench_function("bench_get_seq_raw", |b| {
         b.iter(|| unsafe {
-            mdbx_cursor_open(txn, dbi, &mut cursor);
-            let mut i = 0;
-            let mut count = 0u32;
+            txn.txn_execute(|txn| {
+                mdbx_cursor_open(txn, dbi, &mut cursor);
+                let mut i = 0;
+                let mut count = 0u32;
 
-            while mdbx_cursor_get(cursor, &mut key, &mut data, MDBX_NEXT) == 0 {
-                i += key.iov_len + data.iov_len;
-                count += 1;
-            }
+                while mdbx_cursor_get(cursor, &mut key, &mut data, MDBX_NEXT) == 0 {
+                    i += key.iov_len + data.iov_len;
+                    count += 1;
+                }
 
-            black_box(i);
-            assert_eq!(count, n);
-            mdbx_cursor_close(cursor);
+                black_box(i);
+                assert_eq!(count, n);
+                mdbx_cursor_close(cursor);
+            })
+            .unwrap();
         })
     });
 }

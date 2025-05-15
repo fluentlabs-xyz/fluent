@@ -31,8 +31,23 @@ pub struct TxPoolMetrics {
     /// Total amount of memory used by the transactions in the queued sub-pool in bytes
     pub(crate) queued_pool_size_bytes: Gauge,
 
-    /// Number of all transactions of all sub-pools: pending + basefee + queued
+    /// Number of transactions in the blob sub-pool
+    pub(crate) blob_pool_transactions: Gauge,
+    /// Total amount of memory used by the transactions in the blob sub-pool in bytes
+    pub(crate) blob_pool_size_bytes: Gauge,
+
+    /// Number of all transactions of all sub-pools: pending + basefee + queued + blob
     pub(crate) total_transactions: Gauge,
+    /// Number of all legacy transactions in the pool
+    pub(crate) total_legacy_transactions: Gauge,
+    /// Number of all EIP-2930 transactions in the pool
+    pub(crate) total_eip2930_transactions: Gauge,
+    /// Number of all EIP-1559 transactions in the pool
+    pub(crate) total_eip1559_transactions: Gauge,
+    /// Number of all EIP-4844 transactions in the pool
+    pub(crate) total_eip4844_transactions: Gauge,
+    /// Number of all EIP-7702 transactions in the pool
+    pub(crate) total_eip7702_transactions: Gauge,
 
     /// How often the pool was updated after the canonical state changed
     pub(crate) performed_state_updates: Counter,
@@ -56,11 +71,17 @@ pub struct BlobStoreMetrics {
 #[derive(Metrics)]
 #[metrics(scope = "transaction_pool")]
 pub struct MaintainPoolMetrics {
-    /// Number of currently dirty addresses that need to be updated in the pool by fetching account
-    /// info
+    /// Gauge indicating the number of addresses with pending updates in the pool,
+    /// requiring their account information to be fetched.
     pub(crate) dirty_accounts: Gauge,
-    /// Number of transaction reinserted into the pool after reorg.
+    /// Counter for the number of times the pool state diverged from the canonical blockchain
+    /// state.
+    pub(crate) drift_count: Counter,
+    /// Counter for the number of transactions reinserted into the pool following a blockchain
+    /// reorganization (reorg).
     pub(crate) reinserted_transactions: Counter,
+    /// Counter for the number of finalized blob transactions that have been removed from tracking.
+    pub(crate) deleted_tracked_finalized_blobs: Counter,
 }
 
 impl MaintainPoolMetrics {
@@ -73,4 +94,32 @@ impl MaintainPoolMetrics {
     pub(crate) fn inc_reinserted_transactions(&self, count: usize) {
         self.reinserted_transactions.increment(count as u64);
     }
+
+    #[inline]
+    pub(crate) fn inc_deleted_tracked_blobs(&self, count: usize) {
+        self.deleted_tracked_finalized_blobs.increment(count as u64);
+    }
+
+    #[inline]
+    pub(crate) fn inc_drift(&self) {
+        self.drift_count.increment(1);
+    }
+}
+
+/// All Transactions metrics
+#[derive(Metrics)]
+#[metrics(scope = "transaction_pool")]
+pub struct AllTransactionsMetrics {
+    /// Number of all transactions by hash in the pool
+    pub(crate) all_transactions_by_hash: Gauge,
+    /// Number of all transactions by id in the pool
+    pub(crate) all_transactions_by_id: Gauge,
+    /// Number of all transactions by all senders in the pool
+    pub(crate) all_transactions_by_all_senders: Gauge,
+    /// Number of blob transactions nonce gaps.
+    pub(crate) blob_transactions_nonce_gaps: Counter,
+    /// The current blob base fee
+    pub(crate) blob_base_fee: Gauge,
+    /// The current base fee
+    pub(crate) base_fee: Gauge,
 }

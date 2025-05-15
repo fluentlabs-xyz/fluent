@@ -1,14 +1,17 @@
+use alloy_primitives::{B256, U256};
 use jsonrpsee_types::error::{
     INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE, INVALID_PARAMS_MSG, SERVER_ERROR_MSG,
 };
-use reth_beacon_consensus::{BeaconForkChoiceUpdateError, BeaconOnNewPayloadError};
-use reth_payload_builder::error::PayloadBuilderError;
-use reth_primitives::{B256, U256};
+use reth_engine_primitives::{BeaconForkChoiceUpdateError, BeaconOnNewPayloadError};
+use reth_payload_builder_primitives::PayloadBuilderError;
+use reth_payload_primitives::EngineObjectValidationError;
 use thiserror::Error;
 
 /// The Engine API result type
 pub type EngineApiResult<Ok> = Result<Ok, EngineApiError>;
 
+/// Invalid payload attributes code.
+pub const INVALID_PAYLOAD_ATTRIBUTES: i32 = -38003;
 /// Payload unsupported fork code.
 pub const UNSUPPORTED_FORK_CODE: i32 = -38005;
 /// Payload unknown error code.
@@ -18,6 +21,9 @@ pub const REQUEST_TOO_LARGE_CODE: i32 = -38004;
 
 /// Error message for the request too large error.
 const REQUEST_TOO_LARGE_MESSAGE: &str = "Too large request";
+
+/// Error message for the request too large error.
+const INVALID_PAYLOAD_ATTRIBUTES_MSG: &str = "Invalid payload attributes";
 
 /// Error returned by [`EngineApi`][crate::EngineApi]
 ///
@@ -35,7 +41,13 @@ pub enum EngineApiError {
         /// The length that was requested.
         len: u64,
     },
-    /// Thrown if engine_getPayloadBodiesByRangeV1 contains an invalid range
+    /// Too many requested versioned hashes for blobs request
+    #[error("requested blob count too large: {len}")]
+    BlobRequestTooLarge {
+        /// The length that was requested.
+        len: usize,
+    },
+    /// Thrown if `engine_getPayloadBodiesByRangeV1` contains an invalid range
     #[error("invalid start ({start}) or count ({count})")]
     InvalidBodiesRange {
         /// Start of the range
@@ -43,27 +55,6 @@ pub enum EngineApiError {
         /// Requested number of items
         count: u64,
     },
-    /// Thrown if `PayloadAttributes` provided in engine_forkchoiceUpdated before V3 contains a
-    /// parent beacon block root
-    #[error("parent beacon block root not supported before V3")]
-    ParentBeaconBlockRootNotSupportedBeforeV3,
-    /// Thrown if engine_forkchoiceUpdatedV1 contains withdrawals
-    #[error("withdrawals not supported in V1")]
-    WithdrawalsNotSupportedInV1,
-    /// Thrown if engine_forkchoiceUpdated contains no withdrawals after Shanghai
-    #[error("no withdrawals post-Shanghai")]
-    NoWithdrawalsPostShanghai,
-    /// Thrown if engine_forkchoiceUpdated contains withdrawals before Shanghai
-    #[error("withdrawals pre-Shanghai")]
-    HasWithdrawalsPreShanghai,
-    /// Thrown if the `PayloadAttributes` provided in engine_forkchoiceUpdated contains no parent
-    /// beacon block root after Cancun
-    #[error("no parent beacon block root post-cancun")]
-    NoParentBeaconBlockRootPostCancun,
-    /// Thrown if `PayloadAttributes` were provided with a timestamp, but the version of the engine
-    /// method called is meant for a fork that occurs after the provided timestamp.
-    #[error("Unsupported fork")]
-    UnsupportedFork,
     /// Terminal total difficulty mismatch during transition configuration exchange.
     #[error(
         "invalid transition terminal total difficulty: \
@@ -94,15 +85,23 @@ pub enum EngineApiError {
     NewPayload(#[from] BeaconOnNewPayloadError),
     /// Encountered an internal error.
     #[error(transparent)]
-    Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
+    Internal(#[from] Box<dyn core::error::Error + Send + Sync>),
     /// Fetching the payload failed
     #[error(transparent)]
     GetPayloadError(#[from] PayloadBuilderError),
-    /// If the optimism feature flag is enabled, the payload attributes must have a present
-    /// gas limit for the forkchoice updated method.
-    #[cfg(feature = "optimism")]
-    #[error("Missing gas limit in payload attributes")]
-    MissingGasLimitInPayloadAttributes,
+    /// The payload or attributes are known to be malformed before processing.
+    #[error(transparent)]
+    EngineObjectValidationError(#[from] EngineObjectValidationError),
+    /// Any other rpc error
+    #[error("{0}")]
+    Other(jsonrpsee_types::ErrorObject<'static>),
+}
+
+impl EngineApiError {
+    /// Crates a new [`EngineApiError::Other`] variant.
+    pub const fn other(err: jsonrpsee_types::ErrorObject<'static>) -> Self {
+        Self::Other(err)
+    }
 }
 
 /// Helper type to represent the `error` field in the error response:
@@ -123,11 +122,10 @@ impl From<EngineApiError> for jsonrpsee_types::error::ErrorObject<'static> {
     fn from(error: EngineApiError) -> Self {
         match error {
             EngineApiError::InvalidBodiesRange { .. } |
-            EngineApiError::WithdrawalsNotSupportedInV1 |
-            EngineApiError::ParentBeaconBlockRootNotSupportedBeforeV3 |
-            EngineApiError::NoParentBeaconBlockRootPostCancun |
-            EngineApiError::NoWithdrawalsPostShanghai |
-            EngineApiError::HasWithdrawalsPreShanghai => {
+            EngineApiError::EngineObjectValidationError(
+                EngineObjectValidationError::Payload(_) |
+                EngineObjectValidationError::InvalidParams(_),
+            ) => {
                 // Note: the data field is not required by the spec, but is also included by other
                 // clients
                 jsonrpsee_types::error::ErrorObject::owned(
@@ -136,19 +134,33 @@ impl From<EngineApiError> for jsonrpsee_types::error::ErrorObject<'static> {
                     Some(ErrorData::new(error)),
                 )
             }
+            EngineApiError::EngineObjectValidationError(
+                EngineObjectValidationError::PayloadAttributes(_),
+            ) => {
+                // Note: the data field is not required by the spec, but is also included by other
+                // clients
+                jsonrpsee_types::error::ErrorObject::owned(
+                    INVALID_PAYLOAD_ATTRIBUTES,
+                    INVALID_PAYLOAD_ATTRIBUTES_MSG,
+                    Some(ErrorData::new(error)),
+                )
+            }
             EngineApiError::UnknownPayload => jsonrpsee_types::error::ErrorObject::owned(
                 UNKNOWN_PAYLOAD_CODE,
                 error.to_string(),
                 None::<()>,
             ),
-            EngineApiError::PayloadRequestTooLarge { .. } => {
+            EngineApiError::PayloadRequestTooLarge { .. } |
+            EngineApiError::BlobRequestTooLarge { .. } => {
                 jsonrpsee_types::error::ErrorObject::owned(
                     REQUEST_TOO_LARGE_CODE,
                     REQUEST_TOO_LARGE_MESSAGE,
                     Some(ErrorData::new(error)),
                 )
             }
-            EngineApiError::UnsupportedFork => jsonrpsee_types::error::ErrorObject::owned(
+            EngineApiError::EngineObjectValidationError(
+                EngineObjectValidationError::UnsupportedFork,
+            ) => jsonrpsee_types::error::ErrorObject::owned(
                 UNSUPPORTED_FORK_CODE,
                 error.to_string(),
                 None::<()>,
@@ -165,59 +177,25 @@ impl From<EngineApiError> for jsonrpsee_types::error::ErrorObject<'static> {
                     )
                 }
             },
-            EngineApiError::NewPayload(ref err) => match err {
-                BeaconOnNewPayloadError::Internal(_) => jsonrpsee_types::error::ErrorObject::owned(
-                    INTERNAL_ERROR_CODE,
-                    SERVER_ERROR_MSG,
-                    Some(ErrorData::new(error)),
-                ),
-                BeaconOnNewPayloadError::PreCancunBlockWithBlobTransactions => {
-                    jsonrpsee_types::error::ErrorObject::owned(
-                        INVALID_PARAMS_CODE,
-                        INVALID_PARAMS_MSG,
-                        Some(ErrorData::new(error)),
-                    )
-                }
-                BeaconOnNewPayloadError::EngineUnavailable => {
-                    jsonrpsee_types::error::ErrorObject::owned(
-                        INTERNAL_ERROR_CODE,
-                        SERVER_ERROR_MSG,
-                        Some(ErrorData::new(error)),
-                    )
-                }
-            },
-            // Optimism errors
-            #[cfg(feature = "optimism")]
-            EngineApiError::MissingGasLimitInPayloadAttributes => {
-                jsonrpsee_types::error::ErrorObject::owned(
-                    INVALID_PARAMS_CODE,
-                    INVALID_PARAMS_MSG,
-                    Some(ErrorData::new(error)),
-                )
-            }
             // Any other server error
             EngineApiError::TerminalTD { .. } |
             EngineApiError::TerminalBlockHash { .. } |
+            EngineApiError::NewPayload(_) |
             EngineApiError::Internal(_) |
             EngineApiError::GetPayloadError(_) => jsonrpsee_types::error::ErrorObject::owned(
                 INTERNAL_ERROR_CODE,
                 SERVER_ERROR_MSG,
                 Some(ErrorData::new(error)),
             ),
+            EngineApiError::Other(err) => err,
         }
-    }
-}
-
-impl From<EngineApiError> for jsonrpsee_core::error::Error {
-    fn from(error: EngineApiError) -> Self {
-        jsonrpsee_core::error::Error::Call(error.into())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reth_rpc_types::engine::ForkchoiceUpdateError;
+    use alloy_rpc_types_engine::ForkchoiceUpdateError;
 
     #[track_caller]
     fn ensure_engine_rpc_error(
@@ -226,7 +204,6 @@ mod tests {
         err: impl Into<jsonrpsee_types::error::ErrorObject<'static>>,
     ) {
         let err = err.into();
-        dbg!(&err);
         assert_eq!(err.code(), code);
         assert_eq!(err.message(), message);
     }
@@ -238,7 +215,9 @@ mod tests {
         ensure_engine_rpc_error(
             UNSUPPORTED_FORK_CODE,
             "Unsupported fork",
-            EngineApiError::UnsupportedFork,
+            EngineApiError::EngineObjectValidationError(
+                EngineObjectValidationError::UnsupportedFork,
+            ),
         );
 
         ensure_engine_rpc_error(

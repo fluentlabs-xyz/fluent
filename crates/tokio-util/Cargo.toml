@@ -6,12 +6,20 @@ rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = """
-Additional utilities for working with Tokio in reth.
-"""
+description = "Additional utilities for working with Tokio in reth."
+
+[lints]
+workspace = true
 
 [dependencies]
+tracing.workspace = true
 
 # async
 tokio = { workspace = true, features = ["sync"] }
 tokio-stream = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "macros"] }
+
+[features]
+time = ["tokio/time"]

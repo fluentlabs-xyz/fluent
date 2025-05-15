@@ -9,9 +9,7 @@
     html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
-#![allow(clippy::result_large_err)] // TODO(danipopes): fix this
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub, rustdoc::all)]
-#![deny(unused_must_use, rust_2018_idioms)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 /// The collection of algorithms for downloading block bodies.
@@ -23,5 +21,24 @@ pub mod headers;
 /// Common downloader metrics.
 pub mod metrics;
 
+/// Module managing file-based data retrieval and buffering.
+///
+/// Contains [`FileClient`](file_client::FileClient) to read block data from files,
+/// efficiently buffering headers and bodies for retrieval.
+pub mod file_client;
+
+/// Module managing file-based data retrieval and buffering of receipts.
+///
+/// Contains [`ReceiptFileClient`](receipt_file_client::ReceiptFileClient) to read receipt data from
+/// files, efficiently buffering receipts for retrieval.
+pub mod receipt_file_client;
+
+/// Module with a codec for reading and encoding block bodies in files.
+///
+/// Enables decoding and encoding `Block` types within file contexts.
+pub mod file_codec;
+
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
+
+pub use file_client::{DecodedFileChunk, FileClientError};

@@ -1,9 +1,11 @@
-use reth_interfaces::p2p::{
+use alloy_primitives::B256;
+use reth_network_p2p::{
     bodies::client::{BodiesClient, BodiesFut},
     download::DownloadClient,
     priority::Priority,
 };
-use reth_primitives::{BlockBody, PeerId, B256};
+use reth_network_peers::PeerId;
+use reth_primitives::BlockBody;
 use std::{
     collections::HashMap,
     fmt::Debug,
@@ -15,7 +17,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-/// A [BodiesClient] for testing.
+/// A [`BodiesClient`] for testing.
 #[derive(Debug, Default)]
 pub struct TestBodiesClient {
     bodies: Arc<Mutex<HashMap<B256, BlockBody>>>,
@@ -31,19 +33,19 @@ impl TestBodiesClient {
         self
     }
 
-    pub(crate) fn with_should_delay(mut self, should_delay: bool) -> Self {
+    pub(crate) const fn with_should_delay(mut self, should_delay: bool) -> Self {
         self.should_delay = should_delay;
         self
     }
 
     /// Instructs the client to respond with empty responses some portion of the time. Every
     /// `empty_mod` responses, the client will respond with an empty response.
-    pub(crate) fn with_empty_responses(mut self, empty_mod: u64) -> Self {
+    pub(crate) const fn with_empty_responses(mut self, empty_mod: u64) -> Self {
         self.empty_response_mod = Some(empty_mod);
         self
     }
 
-    pub(crate) fn with_max_batch_size(mut self, max_batch_size: usize) -> Self {
+    pub(crate) const fn with_max_batch_size(mut self, max_batch_size: usize) -> Self {
         self.max_batch_size = Some(max_batch_size);
         self
     }
@@ -76,6 +78,7 @@ impl DownloadClient for TestBodiesClient {
 }
 
 impl BodiesClient for TestBodiesClient {
+    type Body = BlockBody;
     type Output = BodiesFut;
 
     fn get_block_bodies_with_priority(
@@ -92,7 +95,7 @@ impl BodiesClient for TestBodiesClient {
 
         Box::pin(async move {
             if should_respond_empty {
-                return Ok((PeerId::default(), vec![]).into());
+                return Ok((PeerId::default(), vec![]).into())
             }
 
             if should_delay {

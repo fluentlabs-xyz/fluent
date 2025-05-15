@@ -8,17 +8,27 @@ homepage.workspace = true
 repository.workspace = true
 description = "Implementation of Engine API"
 
+[lints]
+workspace = true
+
 [dependencies]
-# reth 
-reth-primitives.workspace = true
-reth-interfaces.workspace = true
-reth-provider.workspace = true
-reth-rpc-types.workspace = true
-reth-rpc-api = { path = "../rpc-api" }
-reth-beacon-consensus = { path = "../../consensus/beacon" }
+# reth
+reth-chainspec.workspace = true
+reth-rpc-api.workspace = true
+reth-storage-api.workspace = true
 reth-payload-builder.workspace = true
+reth-payload-builder-primitives.workspace = true
+reth-payload-primitives.workspace = true
 reth-tasks.workspace = true
-reth-rpc-types-compat.workspace = true
+reth-engine-primitives.workspace = true
+reth-transaction-pool.workspace = true
+reth-primitives-traits.workspace = true
+
+# ethereum
+alloy-eips.workspace = true
+alloy-primitives.workspace = true
+alloy-rpc-types-engine = { workspace = true, features = ["jsonrpsee-types"] }
+
 # async
 tokio = { workspace = true, features = ["sync"] }
 
@@ -28,18 +38,20 @@ metrics.workspace = true
 
 # misc
 async-trait.workspace = true
-thiserror.workspace = true
-jsonrpsee-types.workspace = true
 jsonrpsee-core.workspace = true
-tracing.workspace = true
+jsonrpsee-types.workspace = true
 serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
 
 [dev-dependencies]
-alloy-rlp.workspace = true
-reth-interfaces = { workspace = true, features = ["test-utils"] }
+reth-ethereum-engine-primitives.workspace = true
 reth-provider = { workspace = true, features = ["test-utils"] }
+reth-ethereum-primitives.workspace = true
+reth-primitives-traits.workspace = true
 reth-payload-builder = { workspace = true, features = ["test-utils"] }
-assert_matches.workspace = true
+reth-testing-utils.workspace = true
+alloy-rlp.workspace = true
 
-[features]
-optimism = ["reth-primitives/optimism", "reth-rpc-types/optimism"]
+assert_matches.workspace = true

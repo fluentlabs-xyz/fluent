@@ -6,143 +6,128 @@ rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = """
-Reth node implementation
-"""
+description = "Reth node implementation"
+default-run = "reth"
 
-[package.metadata.cargo-udeps.ignore]
-normal = [
-    # Used for diagrams in docs
-    "aquamarine",
-]
+[lints]
+workspace = true
 
 [dependencies]
 # reth
-reth-config = { path = "../../crates/config" }
-reth-primitives = { workspace = true, features = ["arbitrary", "clap"] }
-reth-db = { workspace = true, features = ["mdbx", "test-utils"] }
-# TODO: Temporary use of the test-utils feature
-reth-provider = { workspace = true, features = ["test-utils"] }
-reth-revm = { path = "../../crates/revm" }
-reth-revm-inspectors = { path = "../../crates/revm/revm-inspectors" }
-reth-stages = { path = "../../crates/stages" }
-reth-interfaces = { workspace = true, features = ["test-utils", "clap"] }
+reth-cli.workspace = true
+reth-ethereum-cli.workspace = true
+reth-chainspec.workspace = true
+reth-config.workspace = true
+reth-primitives.workspace = true
+reth-primitives-traits.workspace = true
+reth-fs-util.workspace = true
+reth-db = { workspace = true, features = ["mdbx"] }
+reth-db-api.workspace = true
+reth-exex.workspace = true
+reth-provider.workspace = true
+reth-evm.workspace = true
+reth-revm.workspace = true
+reth-stages.workspace = true
+reth-execution-types.workspace = true
+reth-errors.workspace = true
 reth-transaction-pool.workspace = true
-reth-beacon-consensus = { path = "../../crates/consensus/beacon" }
-reth-auto-seal-consensus = { path = "../../crates/consensus/auto-seal" }
-reth-consensus-common = { path = "../../crates/consensus/common" }
-reth-blockchain-tree = { path = "../../crates/blockchain-tree" }
-reth-rpc-engine-api = { path = "../../crates/rpc/rpc-engine-api" }
-reth-rpc-builder = { path = "../../crates/rpc/rpc-builder" }
-reth-rpc = { path = "../../crates/rpc/rpc" }
-reth-rpc-types = { path = "../../crates/rpc/rpc-types" }
-reth-rpc-types-compat = { path = "../../crates/rpc/rpc-types-compat" }
-reth-rpc-api = { path = "../../crates/rpc/rpc-api", features = ["client"] }
-reth-network = { path = "../../crates/net/network", features = ["serde"] }
+reth-cli-runner.workspace = true
+reth-cli-commands.workspace = true
+reth-cli-util.workspace = true
+reth-consensus-common.workspace = true
+reth-rpc-builder.workspace = true
+reth-rpc.workspace = true
+reth-rpc-types-compat.workspace = true
+reth-rpc-api = { workspace = true, features = ["client"] }
+reth-rpc-eth-types.workspace = true
+reth-rpc-server-types.workspace = true
+reth-network = { workspace = true, features = ["serde"] }
+reth-network-p2p.workspace = true
 reth-network-api.workspace = true
-reth-downloaders = { path = "../../crates/net/downloaders", features = ["test-utils"] }
+reth-downloaders.workspace = true
 reth-tracing.workspace = true
 reth-tasks.workspace = true
-reth-net-nat = { path = "../../crates/net/nat" }
 reth-payload-builder.workspace = true
-reth-basic-payload-builder = { path = "../../crates/payload/basic" }
-reth-discv4 = { path = "../../crates/net/discv4" }
-reth-prune = { path = "../../crates/prune" }
-reth-snapshot = { path = "../../crates/snapshot", features = ["clap"] }
-reth-trie = { path = "../../crates/trie" }
-reth-nippy-jar = { path = "../../crates/storage/nippy-jar" }
+reth-payload-primitives.workspace = true
+reth-payload-validator.workspace = true
+reth-basic-payload-builder.workspace = true
+reth-static-file.workspace = true
+reth-trie = { workspace = true, features = ["metrics"] }
+reth-trie-db = { workspace = true, features = ["metrics"] }
+reth-node-api.workspace = true
+reth-node-core.workspace = true
+reth-ethereum-payload-builder.workspace = true
+reth-ethereum-primitives.workspace = true
+reth-node-ethereum = { workspace = true, features = ["js-tracer"] }
+reth-node-builder.workspace = true
+reth-node-events.workspace = true
+reth-node-metrics.workspace = true
+reth-consensus.workspace = true
+reth-prune.workspace = true
 
 # crypto
+alloy-eips = { workspace = true, features = ["kzg"] }
 alloy-rlp.workspace = true
-secp256k1 = { workspace = true, features = ["global-context", "rand-std", "recovery"] }
+alloy-rpc-types = { workspace = true, features = ["engine"] }
+alloy-consensus.workspace = true
+alloy-primitives.workspace = true
 
 # tracing
 tracing.workspace = true
 
 # io
-fdlimit = "0.2.1"
-serde.workspace = true
 serde_json.workspace = true
-shellexpand = "3.0.0"
-dirs-next = "2.0.0"
-confy.workspace = true
-toml = { workspace = true, features = ["display"] }
-
-# metrics
-metrics-exporter-prometheus = "0.12.1"
-metrics-util = "0.15.0"
-metrics-process = "1.0.9"
-reth-metrics.workspace = true
-metrics.workspace = true
-
-# test vectors generation
-proptest.workspace = true
-rand.workspace = true
-
-# tui
-comfy-table = "7.0"
-crossterm = "0.27.0"
-tui = "0.19.0"
-human_bytes = "0.4.1"
 
 # async
 tokio = { workspace = true, features = ["sync", "macros", "time", "rt-multi-thread"] }
 futures.workspace = true
-pin-project.workspace = true
-
-# http/rpc
-hyper = "0.14.25"
 
 # misc
 aquamarine.workspace = true
 eyre.workspace = true
-clap = { workspace = true, features = ["derive"] }
-tempfile.workspace = true
-backon = "0.4"
-thiserror.workspace = true
-pretty_assertions = "1.3.0"
-humantime = "2.1.0"
-const-str = "0.5.6"
-boyer-moore-magiclen = "0.2.16"
-itertools.workspace = true
+clap = { workspace = true, features = ["derive", "env"] }
+backon.workspace = true
+similar-asserts.workspace = true
 
-[target.'cfg(not(windows))'.dependencies]
-jemallocator = { version = "0.5.0", optional = true }
-jemalloc-ctl = { version = "0.5.0", optional = true }
+[dev-dependencies]
+tempfile.workspace = true
 
 [features]
 default = ["jemalloc"]
-jemalloc = ["dep:jemallocator", "dep:jemalloc-ctl"]
-jemalloc-prof = ["jemalloc", "jemallocator?/profiling"]
+
+dev = ["reth-cli-commands/arbitrary"]
+
+asm-keccak = [
+    "reth-node-core/asm-keccak",
+    "reth-primitives/asm-keccak",
+    "alloy-primitives/asm-keccak",
+]
+
+jemalloc = [
+    "reth-cli-util/jemalloc",
+    "reth-node-core/jemalloc",
+    "reth-node-metrics/jemalloc",
+]
+jemalloc-prof = [
+    "reth-cli-util/jemalloc",
+    "reth-cli-util/jemalloc-prof",
+]
+tracy-allocator = ["reth-cli-util/tracy-allocator"]
+
+# Because jemalloc is default and preferred over snmalloc when both features are
+# enabled, `--no-default-features` should be used when enabling snmalloc or
+# snmalloc-native.
+snmalloc = ["reth-cli-util/snmalloc"]
+snmalloc-native = ["reth-cli-util/snmalloc-native"]
+
 min-error-logs = ["tracing/release_max_level_error"]
 min-warn-logs = ["tracing/release_max_level_warn"]
 min-info-logs = ["tracing/release_max_level_info"]
 min-debug-logs = ["tracing/release_max_level_debug"]
 min-trace-logs = ["tracing/release_max_level_trace"]
-optimism = [
-  "reth-primitives/optimism",
-  "reth-revm/optimism",
-  "reth-interfaces/optimism",
-  "reth-rpc/optimism",
-  "reth-rpc-engine-api/optimism",
-  "reth-transaction-pool/optimism",
-  "reth-provider/optimism",
-  "reth-beacon-consensus/optimism",
-  "reth-basic-payload-builder/optimism",
-  "reth-network/optimism",
-  "reth-network-api/optimism"
-]
-# no-op feature flag for switching between the `optimism` and default functionality in CI matrices
-ethereum = []
 
-[build-dependencies]
-vergen = { version = "8.0.0", features = ["build", "cargo", "git", "gitcl"] }
+generate-genesis = ["reth-chainspec/generate-genesis"]
 
 [[bin]]
 name = "reth"
 path = "src/main.rs"
-
-[[bin]]
-name = "op-reth"
-path = "src/optimism.rs"
-required-features = ["optimism"]

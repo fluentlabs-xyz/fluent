@@ -8,11 +8,13 @@ homepage.workspace = true
 repository.workspace = true
 description = "Task management"
 
-[dependencies]
+[lints]
+workspace = true
 
+[dependencies]
 # async
 tokio = { workspace = true, features = ["sync", "rt"] }
-tracing-futures = "0.2"
+tracing-futures.workspace = true
 futures-util.workspace = true
 
 # metrics
@@ -20,9 +22,17 @@ reth-metrics.workspace = true
 metrics.workspace = true
 
 # misc
+auto_impl.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
-dyn-clone = "1.0"
+dyn-clone.workspace = true
+
+# feature `rayon`
+rayon = { workspace = true, optional = true }
+pin-project = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["sync", "rt", "rt-multi-thread", "time", "macros"] }
+
+[features]
+rayon = ["dep:rayon", "pin-project"]

@@ -8,18 +8,23 @@ There are three core methods to obtain Reth:
 * [Docker images](./docker.md)
 * [Building from source.](./source.md)
 
+> **Note**
+> 
+> If you have Docker installed, we recommend using the [Docker Compose](./docker.md#using-docker-compose) configuration
+> that will get you Reth, Lighthouse (Consensus Client), Prometheus and Grafana running and syncing with just one command.
+
 ## Hardware Requirements
 
 The hardware requirements for running Reth depend on the node configuration and can change over time as the network grows or new features are implemented.
 
 The most important requirement is by far the disk, whereas CPU and RAM requirements are relatively flexible.
 
-|           | Archive Node                          | Full Node                           |
-|-----------|---------------------------------------|-------------------------------------|
-| Disk      | At least 2.2TB (TLC NVMe recommended) | At least 1TB (TLC NVMe recommended) |
-| Memory    | 8GB+                                  | 8GB+                                |
-| CPU       | Higher clock speed over core count    | Higher clock speeds over core count |
-| Bandwidth | Stable 24Mbps+                        | Stable 24Mbps+                      |
+|           | Archive Node                          | Full Node                             |
+|-----------|---------------------------------------|---------------------------------------|
+| Disk      | At least 2.2TB (TLC NVMe recommended) | At least 1.2TB (TLC NVMe recommended) |
+| Memory    | 8GB+                                  | 8GB+                                  |
+| CPU       | Higher clock speed over core count    | Higher clock speeds over core count   |
+| Bandwidth | Stable 24Mbps+                        | Stable 24Mbps+                        |
 
 #### QLC and TLC
 
@@ -34,18 +39,18 @@ Prior to purchasing an NVMe drive, it is advisable to research and determine whe
 ### Disk
 
 There are multiple types of disks to sync Reth, with varying size requirements, depending on the syncing mode.
-As of October 2023 at block number 18.3M:
+As of April 2024 at block number 19.6M:
 
-* Archive Node: At least 2.2TB is required
-* Full Node: At least 1TB is required
+* Archive Node: At least 2.14TB is required
+* Full Node: At least 1.13TB is required
 
-NVMe drives are recommended for the best performance, with SSDs being a cheaper alternative. HDDs are the cheapest option, but they will take the longest to sync, and are not recommended.
+NVMe based SSD drives are recommended for the best performance, with SATA SSDs being a cheaper alternative. HDDs are the cheapest option, but they will take the longest to sync, and are not recommended.
 
-As of July 2023, syncing an Ethereum mainnet node to block 17.7M on NVMe drives takes about 50 hours, while on a GCP "Persistent SSD" it takes around 5 days.
+As of February 2024, syncing an Ethereum mainnet node to block 19.3M on NVMe drives takes about 50 hours, while on a GCP "Persistent SSD" it takes around 5 days.
 
 > **Note**
 >
-> It is highly recommended to choose a TLC drive when using NVMe, and not a QLC drive. See [the note](#qlc-and-tlc) above. A list of recommended drives can be found [here]( https://gist.github.com/yorickdowne/f3a3e79a573bf35767cd002cc977b038).
+> It is highly recommended to choose a TLC drive when using an NVMe drive, and not a QLC drive. See [the note](#qlc-and-tlc) above. A list of recommended drives can be found [here]( https://gist.github.com/yorickdowne/f3a3e79a573bf35767cd002cc977b038).
 
 ### CPU
 
@@ -73,4 +78,4 @@ Once you're synced to the tip you will need a reliable connection, especially if
 
 If you are buying your own NVMe SSD, please consult [this hardware comparison](https://gist.github.com/yorickdowne/f3a3e79a573bf35767cd002cc977b038) which is being actively maintained. We recommend against buying DRAM-less or QLC devices as these are noticeably slower.
 
-All our benchmarks have been produced on [Latitude.sh](https://www.latitude.sh/), a bare metal provider. We use `c3.large.x86` boxes, and also recommend trying the `s2.small.x86` box for pruned/full nodes. So far our experience has been smooth with some users reporting that the NVMEs there outperform AWS NVMEs by 3x or more. We're excited for more Reth nodes on Latitude.sh, so for a limited time you can use `RETH400` for a $250 discount. [Run a node now!](https://metal.new/reth)
+All our benchmarks have been produced on [Latitude.sh](https://www.latitude.sh/), a bare metal provider. We use `c3.large.x86` boxes, and also recommend trying the `c3.small.x86` box for pruned/full nodes. So far our experience has been smooth with some users reporting that the NVMEs there outperform AWS NVMEs by 3x or more. We're excited for more Reth nodes on Latitude.sh, so for a limited time you can use `RETH400` for a $250 discount. [Run a node now!](https://metal.new/reth)

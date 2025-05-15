@@ -4,45 +4,43 @@
 //!
 //! This module defines the tables in reth, as well as some table-related abstractions:
 //!
-//! - [`codecs`] integrates different codecs into [`Encode`](crate::abstraction::table::Encode) and
-//!   [`Decode`](crate::abstraction::table::Decode)
-//! - [`models`] defines the values written to tables
+//! - [`codecs`] integrates different codecs into [`Encode`] and [`Decode`]
+//! - [`models`](reth_db_api::models) defines the values written to tables
 //!
 //! # Database Tour
 //!
 //! TODO(onbjerg): Find appropriate format for this...
 
 pub mod codecs;
-pub mod models;
+
 mod raw;
+pub use raw::{RawDupSort, RawKey, RawTable, RawValue, TableRawRow};
+
+#[cfg(feature = "mdbx")]
 pub(crate) mod utils;
 
-use crate::abstraction::table::Table;
-pub use raw::{RawDupSort, RawKey, RawTable, RawValue, TableRawRow};
-use std::{fmt::Display, str::FromStr};
-
-/// Declaration of all Database tables.
-use crate::{
-    table::DupSort,
-    tables::{
-        codecs::CompactU256,
-        models::{
-            accounts::{AccountBeforeTx, BlockNumberAddress},
-            blocks::{HeaderHash, StoredBlockOmmers},
-            storage_sharded_key::StorageShardedKey,
-            ShardedKey, StoredBlockBodyIndices, StoredBlockWithdrawals,
-        },
+use alloy_consensus::Header;
+use alloy_primitives::{Address, BlockHash, BlockNumber, TxHash, TxNumber, B256};
+use reth_db_api::{
+    models::{
+        accounts::BlockNumberAddress,
+        blocks::{HeaderHash, StoredBlockOmmers},
+        storage_sharded_key::StorageShardedKey,
+        AccountBeforeTx, ClientVersion, CompactU256, IntegerList, ShardedKey,
+        StoredBlockBodyIndices, StoredBlockWithdrawals,
     },
+    table::{Decode, DupSort, Encode, Table, TableInfo},
 };
-use reth_primitives::{
-    stage::StageCheckpoint,
-    trie::{BranchNodeCompact, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey},
-    Account, Address, BlockHash, BlockNumber, Bytecode, Header, IntegerList, PruneCheckpoint,
-    PruneSegment, Receipt, StorageEntry, TransactionSignedNoHash, TxHash, TxNumber, B256,
-};
+use reth_primitives::{Receipt, StorageEntry, TransactionSigned};
+use reth_primitives_traits::{Account, Bytecode};
+use reth_prune_types::{PruneCheckpoint, PruneSegment};
+use reth_stages_types::StageCheckpoint;
+use reth_trie_common::{BranchNodeCompact, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey};
+use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// Enum for the types of tables present in libmdbx.
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum TableType {
     /// key value table
     Table,
@@ -50,20 +48,14 @@ pub enum TableType {
     DupSort,
 }
 
-/// Number of tables that should be present inside database.
-pub const NUM_TABLES: usize = 26;
-
 /// The general purpose of this is to use with a combination of Tables enum,
 /// by implementing a `TableViewer` trait you can operate on db tables in an abstract way.
 ///
 /// # Example
 ///
 /// ```
-/// use reth_db::{table::Table, TableViewer, Tables};
-/// use std::str::FromStr;
-///
-/// let headers = Tables::from_str("Headers").unwrap();
-/// let transactions = Tables::from_str("Transactions").unwrap();
+/// use reth_db::{TableViewer, Tables};
+/// use reth_db_api::table::{DupSort, Table};
 ///
 /// struct MyTableViewer;
 ///
@@ -71,244 +63,340 @@ pub const NUM_TABLES: usize = 26;
 ///     type Error = &'static str;
 ///
 ///     fn view<T: Table>(&self) -> Result<(), Self::Error> {
-///         // operate on table in generic way
+///         // operate on table in a generic way
+///         Ok(())
+///     }
+///
+///     fn view_dupsort<T: DupSort>(&self) -> Result<(), Self::Error> {
+///         // operate on a dupsort table in a generic way
 ///         Ok(())
 ///     }
 /// }
 ///
 /// let viewer = MyTableViewer {};
 ///
-/// let _ = headers.view(&viewer);
-/// let _ = transactions.view(&viewer);
+/// let _ = Tables::Headers.view(&viewer);
+/// let _ = Tables::Transactions.view(&viewer);
 /// ```
 pub trait TableViewer<R> {
-    /// type of error to return
+    /// The error type returned by the viewer.
     type Error;
 
-    /// operate on table in generic way
+    /// Calls `view` with the correct table type.
+    fn view_rt(&self, table: Tables) -> Result<R, Self::Error> {
+        table.view(self)
+    }
+
+    /// Operate on the table in a generic way.
     fn view<T: Table>(&self) -> Result<R, Self::Error>;
+
+    /// Operate on the dupsort table in a generic way.
+    ///
+    /// By default, the `view` function is invoked unless overridden.
+    fn view_dupsort<T: DupSort>(&self) -> Result<R, Self::Error> {
+        self.view::<T>()
+    }
 }
 
+/// General trait for defining the set of tables
+/// Used to initialize database
+pub trait TableSet {
+    /// Returns an iterator over the tables
+    fn tables() -> Box<dyn Iterator<Item = Box<dyn TableInfo>>>;
+}
+
+/// Defines all the tables in the database.
+#[macro_export]
 macro_rules! tables {
-    ([$(($table:ident, $type:expr)),*]) => {
-        #[derive(Debug, PartialEq, Copy, Clone)]
-        /// Default tables that should be present inside database.
+    (@bool) => { false };
+    (@bool $($t:tt)+) => { true };
+
+    (@view $name:ident $v:ident) => { $v.view::<$name>() };
+    (@view $name:ident $v:ident $_subkey:ty) => { $v.view_dupsort::<$name>() };
+
+    (@value_doc $key:ty, $value:ty) => {
+        concat!("[`", stringify!($value), "`]")
+    };
+    // Don't generate links if we have generics
+    (@value_doc $key:ty, $value:ty, $($generic:ident),*) => {
+        concat!("`", stringify!($value), "`")
+    };
+
+    ($($(#[$attr:meta])* table $name:ident$(<$($generic:ident $(= $default:ty)?),*>)? { type Key = $key:ty; type Value = $value:ty; $(type SubKey = $subkey:ty;)? } )*) => {
+        // Table marker types.
+        $(
+            $(#[$attr])*
+            ///
+            #[doc = concat!("Marker type representing a database table mapping [`", stringify!($key), "`] to ", tables!(@value_doc $key, $value, $($($generic),*)?), ".")]
+            $(
+                #[doc = concat!("\n\nThis table's `DUPSORT` subkey is [`", stringify!($subkey), "`].")]
+            )?
+            pub struct $name$(<$($generic $( = $default)?),*>)? {
+                _private: std::marker::PhantomData<($($($generic,)*)?)>,
+            }
+
+            // Ideally this implementation wouldn't exist, but it is necessary to derive `Debug`
+            // when a type is generic over `T: Table`. See: https://github.com/rust-lang/rust/issues/26925
+            impl$(<$($generic),*>)? fmt::Debug for $name$(<$($generic),*>)? {
+                fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    unreachable!("this type cannot be instantiated")
+                }
+            }
+
+            impl$(<$($generic),*>)? reth_db_api::table::Table for $name$(<$($generic),*>)?
+            where
+                $value: reth_db_api::table::Value + 'static
+                $($(,$generic: Send + Sync)*)?
+            {
+                const NAME: &'static str = table_names::$name;
+                const DUPSORT: bool = tables!(@bool $($subkey)?);
+
+                type Key = $key;
+                type Value = $value;
+            }
+
+            $(
+                impl DupSort for $name {
+                    type SubKey = $subkey;
+                }
+            )?
+        )*
+
+        // Tables enum.
+        // NOTE: the ordering of the enum does not matter, but it is assumed that the discriminants
+        // start at 0 and increment by 1 for each variant (the default behavior).
+        // See for example `reth_db::implementation::mdbx::tx::Tx::db_handles`.
+
+        /// A table in the database.
+        #[derive(Clone, Copy, PartialEq, Eq, Hash)]
         pub enum Tables {
             $(
-                #[doc = concat!("Represents a ", stringify!($table), " table")]
-                $table,
+                #[doc = concat!("The [`", stringify!($name), "`] database table.")]
+                $name,
             )*
         }
 
         impl Tables {
-            /// Array of all tables in database
-            pub const ALL: [Tables; NUM_TABLES] = [$(Tables::$table,)*];
+            /// All the tables in the database.
+            pub const ALL: &'static [Self] = &[$(Self::$name,)*];
 
-            /// The name of the given table in database
-            pub const fn name(&self) -> &str {
+            /// The number of tables in the database.
+            pub const COUNT: usize = Self::ALL.len();
+
+            /// Returns the name of the table as a string.
+            pub const fn name(&self) -> &'static str {
                 match self {
-                    $(Tables::$table => {
-                        $table::NAME
-                    },)*
+                    $(
+                        Self::$name => table_names::$name,
+                    )*
                 }
             }
 
-            /// The type of the given table in database
-            pub const fn table_type(&self) -> TableType {
+            /// Returns `true` if the table is a `DUPSORT` table.
+            pub const fn is_dupsort(&self) -> bool {
                 match self {
-                    $(Tables::$table => {
-                        $type
-                    },)*
+                    $(
+                        Self::$name => tables!(@bool $($subkey)?),
+                    )*
+                }
+            }
+
+            /// The type of the given table in database.
+            pub const fn table_type(&self) -> TableType {
+                if self.is_dupsort() {
+                    TableType::DupSort
+                } else {
+                    TableType::Table
                 }
             }
 
             /// Allows to operate on specific table type
             pub fn view<T, R>(&self, visitor: &T) -> Result<R, T::Error>
             where
-                T: TableViewer<R>,
+                T: ?Sized + TableViewer<R>,
             {
                 match self {
-                    $(Tables::$table => {
-                        visitor.view::<$table>()
-                    },)*
+                    $(
+                        Self::$name => tables!(@view $name visitor $($subkey)?),
+                    )*
                 }
             }
         }
 
-        impl Display for Tables {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.name())
+        impl fmt::Debug for Tables {
+            #[inline]
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(self.name())
             }
         }
 
-        impl FromStr for Tables {
+        impl fmt::Display for Tables {
+            #[inline]
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                self.name().fmt(f)
+            }
+        }
+
+        impl std::str::FromStr for Tables {
             type Err = String;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 match s {
-                    $($table::NAME => {
-                        return Ok(Tables::$table)
-                    },)*
-                    _ => {
-                        return Err("Unknown table".to_string())
-                    }
+                    $(
+                        table_names::$name => Ok(Self::$name),
+                    )*
+                    s => Err(format!("unknown table: {s:?}")),
                 }
             }
         }
-    };
-}
 
-tables!([
-    (CanonicalHeaders, TableType::Table),
-    (HeaderTD, TableType::Table),
-    (HeaderNumbers, TableType::Table),
-    (Headers, TableType::Table),
-    (BlockBodyIndices, TableType::Table),
-    (BlockOmmers, TableType::Table),
-    (BlockWithdrawals, TableType::Table),
-    (TransactionBlock, TableType::Table),
-    (Transactions, TableType::Table),
-    (TxHashNumber, TableType::Table),
-    (Receipts, TableType::Table),
-    (PlainAccountState, TableType::Table),
-    (PlainStorageState, TableType::DupSort),
-    (Bytecodes, TableType::Table),
-    (AccountHistory, TableType::Table),
-    (StorageHistory, TableType::Table),
-    (AccountChangeSet, TableType::DupSort),
-    (StorageChangeSet, TableType::DupSort),
-    (HashedAccount, TableType::Table),
-    (HashedStorage, TableType::DupSort),
-    (AccountsTrie, TableType::Table),
-    (StoragesTrie, TableType::DupSort),
-    (TxSenders, TableType::Table),
-    (SyncStage, TableType::Table),
-    (SyncStageProgress, TableType::Table),
-    (PruneCheckpoints, TableType::Table)
-]);
+        impl TableInfo for Tables {
+            fn name(&self) -> &'static str {
+                self.name()
+            }
 
-/// Macro to declare key value table.
-#[macro_export]
-macro_rules! table {
-    ($(#[$docs:meta])+ ( $table_name:ident ) $key:ty | $value:ty) => {
-        $(#[$docs])+
-        ///
-        #[doc = concat!("Takes [`", stringify!($key), "`] as a key and returns [`", stringify!($value), "`].")]
-        #[derive(Clone, Copy, Debug, Default)]
-        pub struct $table_name;
-
-        impl $crate::table::Table for $table_name {
-            const NAME: &'static str = stringify!($table_name);
-            type Key = $key;
-            type Value = $value;
-        }
-
-        impl std::fmt::Display for $table_name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", stringify!($table_name))
+            fn is_dupsort(&self) -> bool {
+                self.is_dupsort()
             }
         }
-    };
-}
 
-#[macro_export]
-/// Macro to declare duplicate key value table.
-macro_rules! dupsort {
-    ($(#[$docs:meta])+ ( $table_name:ident ) $key:ty | [$subkey:ty] $value:ty) => {
-        table!(
-            $(#[$docs])+
-            ///
-            #[doc = concat!("`DUPSORT` table with subkey being: [`", stringify!($subkey), "`]")]
-            ( $table_name ) $key | $value
-        );
-        impl DupSort for $table_name {
-            type SubKey = $subkey;
+        impl TableSet for Tables {
+            fn tables() -> Box<dyn Iterator<Item = Box<dyn TableInfo>>> {
+                Box::new(Self::ALL.iter().map(|table| Box::new(*table) as Box<dyn TableInfo>))
+            }
+        }
+
+        // Need constants to match on in the `FromStr` implementation.
+        #[allow(non_upper_case_globals)]
+        mod table_names {
+            $(
+                pub(super) const $name: &'static str = stringify!($name);
+            )*
+        }
+
+        /// Maps a run-time [`Tables`] enum value to its corresponding compile-time [`Table`] type.
+        ///
+        /// This is a simpler alternative to [`TableViewer`].
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use reth_db::{Tables, tables_to_generic};
+        /// use reth_db_api::table::Table;
+        ///
+        /// let table = Tables::Headers;
+        /// let result = tables_to_generic!(table, |GenericTable| <GenericTable as Table>::NAME);
+        /// assert_eq!(result, table.name());
+        /// ```
+        #[macro_export]
+        macro_rules! tables_to_generic {
+            ($table:expr, |$generic_name:ident| $e:expr) => {
+                match $table {
+                    $(
+                        Tables::$name => {
+                            use $crate::tables::$name as $generic_name;
+                            $e
+                        },
+                    )*
+                }
+            };
         }
     };
 }
 
-//
-//  TABLE DEFINITIONS
-//
-
-table!(
+tables! {
     /// Stores the header hashes belonging to the canonical chain.
-    ( CanonicalHeaders ) BlockNumber | HeaderHash
-);
+    table CanonicalHeaders {
+        type Key = BlockNumber;
+        type Value = HeaderHash;
+    }
 
-table!(
     /// Stores the total difficulty from a block header.
-    ( HeaderTD ) BlockNumber | CompactU256
-);
+    table HeaderTerminalDifficulties {
+        type Key = BlockNumber;
+        type Value = CompactU256;
+    }
 
-table!(
     /// Stores the block number corresponding to a header.
-    ( HeaderNumbers ) BlockHash | BlockNumber
-);
+    table HeaderNumbers {
+        type Key = BlockHash;
+        type Value = BlockNumber;
+    }
 
-table!(
     /// Stores header bodies.
-    ( Headers ) BlockNumber | Header
-);
+    table Headers<H = Header> {
+        type Key = BlockNumber;
+        type Value = H;
+    }
 
-table!(
     /// Stores block indices that contains indexes of transaction and the count of them.
     ///
     /// More information about stored indices can be found in the [`StoredBlockBodyIndices`] struct.
-    ( BlockBodyIndices ) BlockNumber | StoredBlockBodyIndices
-);
+    table BlockBodyIndices {
+        type Key = BlockNumber;
+        type Value = StoredBlockBodyIndices;
+    }
 
-table!(
     /// Stores the uncles/ommers of the block.
-    ( BlockOmmers ) BlockNumber | StoredBlockOmmers
-);
+    table BlockOmmers<H = Header> {
+        type Key = BlockNumber;
+        type Value = StoredBlockOmmers<H>;
+    }
 
-table!(
     /// Stores the block withdrawals.
-    ( BlockWithdrawals ) BlockNumber | StoredBlockWithdrawals
-);
+    table BlockWithdrawals {
+        type Key = BlockNumber;
+        type Value = StoredBlockWithdrawals;
+    }
 
-table!(
-    /// (Canonical only) Stores the transaction body for canonical transactions.
-    ( Transactions ) TxNumber | TransactionSignedNoHash
-);
+    /// Canonical only Stores the transaction body for canonical transactions.
+    table Transactions<T = TransactionSigned> {
+        type Key = TxNumber;
+        type Value = T;
+    }
 
-table!(
     /// Stores the mapping of the transaction hash to the transaction number.
-    ( TxHashNumber ) TxHash | TxNumber
-);
+    table TransactionHashNumbers {
+        type Key = TxHash;
+        type Value = TxNumber;
+    }
 
-table!(
     /// Stores the mapping of transaction number to the blocks number.
     ///
     /// The key is the highest transaction ID in the block.
-    ( TransactionBlock ) TxNumber | BlockNumber
-);
+    table TransactionBlocks {
+        type Key = TxNumber;
+        type Value = BlockNumber;
+    }
 
-table!(
-    /// (Canonical only) Stores transaction receipts.
-    ( Receipts ) TxNumber | Receipt
-);
+    /// Canonical only Stores transaction receipts.
+    table Receipts<R = Receipt> {
+        type Key = TxNumber;
+        type Value = R;
+    }
 
-table!(
     /// Stores all smart contract bytecodes.
     /// There will be multiple accounts that have same bytecode
     /// So we would need to introduce reference counter.
     /// This will be small optimization on state.
-    ( Bytecodes ) B256 | Bytecode
-);
+    table Bytecodes {
+        type Key = B256;
+        type Value = Bytecode;
+    }
 
-table!(
     /// Stores the current state of an [`Account`].
-    ( PlainAccountState ) Address | Account
-);
+    table PlainAccountState {
+        type Key = Address;
+        type Value = Account;
+    }
 
-dupsort!(
     /// Stores the current value of a storage key.
-    ( PlainStorageState ) Address | [B256] StorageEntry
-);
+    table PlainStorageState {
+        type Key = Address;
+        type Value = StorageEntry;
+        type SubKey = B256;
+    }
 
-table!(
     /// Stores pointers to block changeset with changes for each account key.
     ///
     /// Last shard key of the storage will contain `u64::MAX` `BlockNumber`,
@@ -327,10 +415,11 @@ table!(
     /// * If there were no shard we would get `None` entry or entry of different storage key.
     ///
     /// Code example can be found in `reth_provider::HistoricalStateProviderRef`
-    ( AccountHistory ) ShardedKey<Address> | BlockNumberList
-);
+    table AccountsHistory {
+        type Key = ShardedKey<Address>;
+        type Value = BlockNumberList;
+    }
 
-table!(
     /// Stores pointers to block number changeset with changes for each storage key.
     ///
     /// Last shard key of the storage will contain `u64::MAX` `BlockNumber`,
@@ -349,75 +438,135 @@ table!(
     /// * If there were no shard we would get `None` entry or entry of different storage key.
     ///
     /// Code example can be found in `reth_provider::HistoricalStateProviderRef`
-    ( StorageHistory ) StorageShardedKey | BlockNumberList
-);
+    table StoragesHistory {
+        type Key = StorageShardedKey;
+        type Value = BlockNumberList;
+    }
 
-dupsort!(
     /// Stores the state of an account before a certain transaction changed it.
     /// Change on state can be: account is created, selfdestructed, touched while empty
-    /// or changed (balance,nonce).
-    ( AccountChangeSet ) BlockNumber | [Address] AccountBeforeTx
-);
+    /// or changed balance,nonce.
+    table AccountChangeSets {
+        type Key = BlockNumber;
+        type Value = AccountBeforeTx;
+        type SubKey = Address;
+    }
 
-dupsort!(
     /// Stores the state of a storage key before a certain transaction changed it.
     /// If [`StorageEntry::value`] is zero, this means storage was not existing
     /// and needs to be removed.
-    ( StorageChangeSet ) BlockNumberAddress | [B256] StorageEntry
-);
+    table StorageChangeSets {
+        type Key = BlockNumberAddress;
+        type Value = StorageEntry;
+        type SubKey = B256;
+    }
 
-table!(
-    /// Stores the current state of an [`Account`] indexed with `keccak256(Address)`
-    /// This table is in preparation for merkelization and calculation of state root.
+    /// Stores the current state of an [`Account`] indexed with `keccak256Address`
+    /// This table is in preparation for merklization and calculation of state root.
     /// We are saving whole account data as it is needed for partial update when
-    /// part of storage is changed. Benefit for merkelization is that hashed addresses are sorted.
-    ( HashedAccount ) B256 | Account
-);
+    /// part of storage is changed. Benefit for merklization is that hashed addresses are sorted.
+    table HashedAccounts {
+        type Key = B256;
+        type Value = Account;
+    }
 
-dupsort!(
-    /// Stores the current storage values indexed with `keccak256(Address)` and
-    /// hash of storage key `keccak256(key)`.
-    /// This table is in preparation for merkelization and calculation of state root.
+    /// Stores the current storage values indexed with `keccak256Address` and
+    /// hash of storage key `keccak256key`.
+    /// This table is in preparation for merklization and calculation of state root.
     /// Benefit for merklization is that hashed addresses/keys are sorted.
-    ( HashedStorage ) B256 | [B256] StorageEntry
-);
+    table HashedStorages {
+        type Key = B256;
+        type Value = StorageEntry;
+        type SubKey = B256;
+    }
 
-table!(
     /// Stores the current state's Merkle Patricia Tree.
-    ( AccountsTrie ) StoredNibbles | BranchNodeCompact
-);
+    table AccountsTrie {
+        type Key = StoredNibbles;
+        type Value = BranchNodeCompact;
+    }
 
-dupsort!(
     /// From HashedAddress => NibblesSubKey => Intermediate value
-    ( StoragesTrie ) B256 | [StoredNibblesSubKey] StorageTrieEntry
-);
+    table StoragesTrie {
+        type Key = B256;
+        type Value = StorageTrieEntry;
+        type SubKey = StoredNibblesSubKey;
+    }
 
-table!(
     /// Stores the transaction sender for each canonical transaction.
     /// It is needed to speed up execution stage and allows fetching signer without doing
     /// transaction signed recovery
-    ( TxSenders ) TxNumber | Address
-);
+    table TransactionSenders {
+        type Key = TxNumber;
+        type Value = Address;
+    }
 
-table!(
     /// Stores the highest synced block number and stage-specific checkpoint of each stage.
-    ( SyncStage ) StageId | StageCheckpoint
-);
+    table StageCheckpoints {
+        type Key = StageId;
+        type Value = StageCheckpoint;
+    }
 
-table!(
     /// Stores arbitrary data to keep track of a stage first-sync progress.
-    ( SyncStageProgress ) StageId | Vec<u8>
-);
+    table StageCheckpointProgresses {
+        type Key = StageId;
+        type Value = Vec<u8>;
+    }
 
-table!(
     /// Stores the highest pruned block number and prune mode of each prune segment.
-    ( PruneCheckpoints ) PruneSegment | PruneCheckpoint
-);
+    table PruneCheckpoints {
+        type Key = PruneSegment;
+        type Value = PruneCheckpoint;
+    }
 
-/// Alias Types
+    /// Stores the history of client versions that have accessed the database with write privileges by unix timestamp in seconds.
+    table VersionHistory {
+        type Key = u64;
+        type Value = ClientVersion;
+    }
+
+    /// Stores generic chain state info, like the last finalized block.
+    table ChainState {
+        type Key = ChainStateKey;
+        type Value = BlockNumber;
+    }
+}
+
+/// Keys for the `ChainState` table.
+#[derive(Ord, Clone, Eq, PartialOrd, PartialEq, Debug, Deserialize, Serialize, Hash)]
+pub enum ChainStateKey {
+    /// Last finalized block key
+    LastFinalizedBlock,
+    /// Last finalized block key
+    LastSafeBlockBlock,
+}
+
+impl Encode for ChainStateKey {
+    type Encoded = [u8; 1];
+
+    fn encode(self) -> Self::Encoded {
+        match self {
+            Self::LastFinalizedBlock => [0],
+            Self::LastSafeBlockBlock => [1],
+        }
+    }
+}
+
+impl Decode for ChainStateKey {
+    fn decode(value: &[u8]) -> Result<Self, reth_db_api::DatabaseError> {
+        match value {
+            [0] => Ok(Self::LastFinalizedBlock),
+            [1] => Ok(Self::LastSafeBlockBlock),
+            _ => Err(reth_db_api::DatabaseError::Decode),
+        }
+    }
+}
+
+// Alias types.
 
 /// List with transaction numbers.
 pub type BlockNumberList = IntegerList;
+
 /// Encoded stage id.
 pub type StageId = String;
 
@@ -426,43 +575,12 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
-    const TABLES: [(TableType, &str); NUM_TABLES] = [
-        (TableType::Table, CanonicalHeaders::NAME),
-        (TableType::Table, HeaderTD::NAME),
-        (TableType::Table, HeaderNumbers::NAME),
-        (TableType::Table, Headers::NAME),
-        (TableType::Table, BlockBodyIndices::NAME),
-        (TableType::Table, BlockOmmers::NAME),
-        (TableType::Table, BlockWithdrawals::NAME),
-        (TableType::Table, TransactionBlock::NAME),
-        (TableType::Table, Transactions::NAME),
-        (TableType::Table, TxHashNumber::NAME),
-        (TableType::Table, Receipts::NAME),
-        (TableType::Table, PlainAccountState::NAME),
-        (TableType::DupSort, PlainStorageState::NAME),
-        (TableType::Table, Bytecodes::NAME),
-        (TableType::Table, AccountHistory::NAME),
-        (TableType::Table, StorageHistory::NAME),
-        (TableType::DupSort, AccountChangeSet::NAME),
-        (TableType::DupSort, StorageChangeSet::NAME),
-        (TableType::Table, HashedAccount::NAME),
-        (TableType::DupSort, HashedStorage::NAME),
-        (TableType::Table, AccountsTrie::NAME),
-        (TableType::DupSort, StoragesTrie::NAME),
-        (TableType::Table, TxSenders::NAME),
-        (TableType::Table, SyncStage::NAME),
-        (TableType::Table, SyncStageProgress::NAME),
-        (TableType::Table, PruneCheckpoints::NAME),
-    ];
-
     #[test]
     fn parse_table_from_str() {
-        for (table_index, &(table_type, table_name)) in TABLES.iter().enumerate() {
-            let table = Tables::from_str(table_name).unwrap();
-
-            assert_eq!(table as usize, table_index);
-            assert_eq!(table.table_type(), table_type);
-            assert_eq!(table.name(), table_name);
+        for table in Tables::ALL {
+            assert_eq!(format!("{table:?}"), table.name());
+            assert_eq!(table.to_string(), table.name());
+            assert_eq!(Tables::from_str(table.name()).unwrap(), *table);
         }
     }
 }

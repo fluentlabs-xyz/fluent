@@ -5,34 +5,32 @@
     html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub, rustdoc::all)]
-#![deny(unused_must_use, rust_2018_idioms)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
+
+/// Cache database that reads from an underlying [`DatabaseRef`].
+/// Database adapters for payload building.
+pub mod cached;
+
+/// A marker that can be used to cancel execution.
+pub mod cancelled;
 
 /// Contains glue code for integrating reth database into revm's [Database].
 pub mod database;
 
-/// revm implementation of reth block and transaction executors.
-mod factory;
+/// Common test helpers
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils;
 
-/// new revm account state executor
-pub mod processor;
-
-/// State changes that are not related to transactions.
-pub mod state_change;
-
-/// revm executor factory.
-pub use factory::Factory;
-
-/// reexport for convenience
-pub use reth_revm_inspectors::*;
-
-/// Re-export everything
+// Convenience re-exports.
 pub use revm::{self, *};
 
-/// Ethereum DAO hardfork state change data.
-pub mod eth_dao_fork;
+/// Either type for flexible usage of different database types in the same context.
+pub mod either;
 
-/// Optimism-specific implementation and utilities for the executor
-#[cfg(feature = "optimism")]
-pub mod optimism;
+/// Helper types for execution witness generation.
+#[cfg(feature = "witness")]
+pub mod witness;

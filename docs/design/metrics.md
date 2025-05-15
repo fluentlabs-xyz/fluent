@@ -15,9 +15,10 @@ The main difference between metrics and traces is therefore that metrics are sys
 
 ### How to add a metric
 
-To add metrics use the [`metrics`][metrics] crate. 
+To add metrics use the [`metrics`][metrics] crate.
+
 1. Add the code emitting the metric.
-2. Add the metrics description in the crate's metrics describer module, e.g.: [stages metrics describer](https://github.com/paradigmxyz/reth/blob/main/crates/stages/src/metrics.rs).
+2. Add the metrics description in the crate's metrics describer module, e.g.: [network metrics describer](https://github.com/paradigmxyz/reth/blob/main/crates/net/network/src/metrics.rs).
 3. Document the metric in this file.
 
 #### Metric anatomy
@@ -41,7 +42,7 @@ There will only ever exist one description per metric `KeyName`; it is not possi
 The `metrics` crate provides three macros per metric variant: `register_<metric>!`, `<metric>!`, and `describe_<metric>!`. Prefer to use these where possible, since they generate the code necessary to register and update metrics under various conditions.
 
 - The `register_<metric>!` macro simply creates the metric and returns a handle to it (e.g. a `Counter`). These metric structs are thread-safe and cheap to clone.
-- The `<metric>!` macro registers the metric if it does not exist, and updates it's value.
+- The `<metric>!` macro registers the metric if it does not exist, and updates its value.
 - The `describe_<metric>!` macro adds an end-user description for the metric.
 
 How the metrics are exposed to the end-user is determined by the CLI.
@@ -83,6 +84,8 @@ This list may be non-exhaustive.
 - `transaction_pool.basefee_pool_size_bytes`: Total amount of memory used by the transactions in the basefee sub-pool in bytes
 - `transaction_pool.queued_pool_transactions`: Number of transactions in the queued sub-pool
 - `transaction_pool.queued_pool_size_bytes`: Total amount of memory used by the transactions in the queued sub-pool in bytes
+- `transaction_pool.blob_pool_transactions`: Number of transactions in the blob sub-pool
+- `transaction_pool.blob_pool_size_bytes`: Total amount of memory used by the transactions in the blob sub-pool in bytes
 
 #### Component: Network
 

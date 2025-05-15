@@ -42,13 +42,15 @@
 //! ### Configure and launch a standalone network
 //!
 //! The [`NetworkConfig`] is used to configure the network.
-//! It requires an instance of [`BlockReader`](reth_provider::BlockReader).
+//! It requires an instance of [`BlockReader`](reth_storage_api::BlockReader).
 //!
 //! ```
 //! # async fn launch() {
-//! use reth_network::{config::rng_secret_key, NetworkConfig, NetworkManager};
-//! use reth_primitives::mainnet_nodes;
-//! use reth_provider::test_utils::NoopProvider;
+//! use reth_network::{
+//!     config::rng_secret_key, EthNetworkPrimitives, NetworkConfig, NetworkManager,
+//! };
+//! use reth_network_peers::mainnet_nodes;
+//! use reth_storage_api::noop::NoopProvider;
 //!
 //! // This block provider implementation is used for testing purposes.
 //! let client = NoopProvider::default();
@@ -56,7 +58,9 @@
 //! // The key that's used for encrypting sessions and to identify our node.
 //! let local_key = rng_secret_key();
 //!
-//! let config = NetworkConfig::builder(local_key).boot_nodes(mainnet_nodes()).build(client);
+//! let config = NetworkConfig::<_, EthNetworkPrimitives>::builder(local_key)
+//!     .boot_nodes(mainnet_nodes())
+//!     .build(client);
 //!
 //! // create the network instance
 //! let network = NetworkManager::new(config).await.unwrap();
@@ -71,9 +75,11 @@
 //! ### Configure all components of the Network with the [`NetworkBuilder`]
 //!
 //! ```
-//! use reth_network::{config::rng_secret_key, NetworkConfig, NetworkManager};
-//! use reth_primitives::mainnet_nodes;
-//! use reth_provider::test_utils::NoopProvider;
+//! use reth_network::{
+//!     config::rng_secret_key, EthNetworkPrimitives, NetworkConfig, NetworkManager,
+//! };
+//! use reth_network_peers::mainnet_nodes;
+//! use reth_storage_api::noop::NoopProvider;
 //! use reth_transaction_pool::TransactionPool;
 //! async fn launch<Pool: TransactionPool>(pool: Pool) {
 //!     // This block provider implementation is used for testing purposes.
@@ -82,14 +88,16 @@
 //!     // The key that's used for encrypting sessions and to identify our node.
 //!     let local_key = rng_secret_key();
 //!
-//!     let config =
-//!         NetworkConfig::builder(local_key).boot_nodes(mainnet_nodes()).build(client.clone());
+//!     let config = NetworkConfig::<_, EthNetworkPrimitives>::builder(local_key)
+//!         .boot_nodes(mainnet_nodes())
+//!         .build(client.clone());
+//!     let transactions_manager_config = config.transactions_manager_config.clone();
 //!
 //!     // create the network instance
 //!     let (handle, network, transactions, request_handler) = NetworkManager::builder(config)
 //!         .await
 //!         .unwrap()
-//!         .transactions(pool)
+//!         .transactions(pool, transactions_manager_config)
 //!         .request_handler(client)
 //!         .split_with_handle();
 //! }
@@ -106,46 +114,63 @@
     html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
-#![warn(missing_debug_implementations, missing_docs, rustdoc::all)] // TODO(danipopes): unreachable_pub
-#![deny(unused_must_use, rust_2018_idioms)]
+#![allow(unreachable_pub)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 #[cfg(any(test, feature = "test-utils"))]
 /// Common helpers for network testing.
 pub mod test_utils;
 
-mod builder;
-mod cache;
+pub mod cache;
 pub mod config;
-mod discovery;
 pub mod error;
 pub mod eth_requests;
+pub mod import;
+pub mod message;
+pub mod peers;
+pub mod protocol;
+pub mod transactions;
+
+mod budget;
+mod builder;
+mod discovery;
 mod fetch;
 mod flattened_response;
-mod import;
 mod listener;
 mod manager;
-mod message;
 mod metrics;
 mod network;
-pub mod peers;
 mod session;
 mod state;
 mod swarm;
-pub mod transactions;
+
+pub use reth_eth_wire::{DisconnectReason, HelloMessageWithProtocols};
+pub use reth_eth_wire_types::{EthNetworkPrimitives, NetworkPrimitives};
+pub use reth_network_api::{
+    BlockDownloaderProvider, DiscoveredEvent, DiscoveryEvent, NetworkEvent,
+    NetworkEventListenerProvider, NetworkInfo, PeerRequest, PeerRequestSender, Peers, PeersInfo,
+};
+pub use reth_network_p2p::sync::{NetworkSyncUpdater, SyncState};
+pub use reth_network_types::{PeersConfig, SessionsConfig};
+pub use session::{
+    ActiveSessionHandle, ActiveSessionMessage, Direction, EthRlpxConnection, PeerInfo,
+    PendingSessionEvent, PendingSessionHandle, PendingSessionHandshakeError, SessionCommand,
+    SessionEvent, SessionId, SessionManager,
+};
 
 pub use builder::NetworkBuilder;
 pub use config::{NetworkConfig, NetworkConfigBuilder};
-pub use discovery::{Discovery, DiscoveryEvent};
+pub use discovery::Discovery;
 pub use fetch::FetchClient;
-pub use manager::{NetworkEvent, NetworkManager};
-pub use message::PeerRequest;
-pub use network::NetworkHandle;
-pub use peers::PeersConfig;
-pub use session::{
-    ActiveSessionHandle, ActiveSessionMessage, Direction, PeerInfo, PendingSessionEvent,
-    PendingSessionHandle, PendingSessionHandshakeError, SessionCommand, SessionEvent, SessionId,
-    SessionLimits, SessionManager, SessionsConfig,
-};
+pub use flattened_response::FlattenedResponse;
+pub use manager::NetworkManager;
+pub use metrics::TxTypesCounter;
+pub use network::{NetworkHandle, NetworkProtocols};
+pub use swarm::NetworkConnectionState;
+pub use transactions::{FilterAnnouncement, MessageFilter, ValidateTx68};
 
-pub use reth_eth_wire::{DisconnectReason, HelloBuilder, HelloMessage};
+/// re-export p2p interfaces
+pub use reth_network_p2p as p2p;
+
+/// re-export types crate
+pub use reth_eth_wire_types as types;

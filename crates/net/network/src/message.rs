@@ -1,176 +1,115 @@
 //! Capability messaging
 //!
-//! An RLPx stream is multiplexed via the prepended message-id of a framed message.
-//! Capabilities are exchanged via the RLPx `Hello` message as pairs of `(id, version)`, <https://github.com/ethereum/devp2p/blob/master/rlpx.md#capability-messaging>
+//! An `RLPx` stream is multiplexed via the prepended message-id of a framed message.
+//! Capabilities are exchanged via the `RLPx` `Hello` message as pairs of `(id, version)`, <https://github.com/ethereum/devp2p/blob/master/rlpx.md#capability-messaging>
 
+use alloy_consensus::BlockHeader;
+use alloy_primitives::{Bytes, B256};
 use futures::FutureExt;
 use reth_eth_wire::{
     capability::RawCapabilityMessage, message::RequestPair, BlockBodies, BlockHeaders, EthMessage,
-    GetBlockBodies, GetBlockHeaders, GetNodeData, GetPooledTransactions, GetReceipts, NewBlock,
+    EthNetworkPrimitives, GetBlockBodies, GetBlockHeaders, NetworkPrimitives, NewBlock,
     NewBlockHashes, NewPooledTransactionHashes, NodeData, PooledTransactions, Receipts,
     SharedTransactions, Transactions,
 };
-use reth_interfaces::p2p::error::{RequestError, RequestResult};
-use reth_primitives::{
-    BlockBody, Bytes, Header, PeerId, PooledTransactionsElement, ReceiptWithBloom, B256,
-};
+use reth_network_api::PeerRequest;
+use reth_network_p2p::error::{RequestError, RequestResult};
+use reth_primitives::ReceiptWithBloom;
 use std::{
-    fmt,
     sync::Arc,
     task::{ready, Context, Poll},
 };
-use tokio::sync::{mpsc, mpsc::error::TrySendError, oneshot};
+use tokio::sync::oneshot;
 
 /// Internal form of a `NewBlock` message
 #[derive(Debug, Clone)]
-pub struct NewBlockMessage {
+pub struct NewBlockMessage<B = reth_primitives::Block> {
     /// Hash of the block
     pub hash: B256,
     /// Raw received message
-    pub block: Arc<NewBlock>,
+    pub block: Arc<NewBlock<B>>,
 }
 
 // === impl NewBlockMessage ===
 
-impl NewBlockMessage {
+impl<B: reth_primitives_traits::Block> NewBlockMessage<B> {
     /// Returns the block number of the block
     pub fn number(&self) -> u64 {
-        self.block.block.header.number
+        self.block.block.header().number()
     }
 }
 
 /// All Bi-directional eth-message variants that can be sent to a session or received from a
 /// session.
 #[derive(Debug)]
-pub enum PeerMessage {
+pub enum PeerMessage<N: NetworkPrimitives = EthNetworkPrimitives> {
     /// Announce new block hashes
     NewBlockHashes(NewBlockHashes),
     /// Broadcast new block.
-    NewBlock(NewBlockMessage),
+    NewBlock(NewBlockMessage<N::Block>),
     /// Received transactions _from_ the peer
-    ReceivedTransaction(Transactions),
+    ReceivedTransaction(Transactions<N::BroadcastedTransaction>),
     /// Broadcast transactions _from_ local _to_ a peer.
-    SendTransactions(SharedTransactions),
+    SendTransactions(SharedTransactions<N::BroadcastedTransaction>),
     /// Send new pooled transactions
     PooledTransactions(NewPooledTransactionHashes),
     /// All `eth` request variants.
-    EthRequest(PeerRequest),
-    /// Other than eth namespace message
-    #[allow(unused)]
+    EthRequest(PeerRequest<N>),
+    /// Any other or manually crafted eth message.
+    ///
+    /// Caution: It is expected that this is a valid `eth_` capability message.
     Other(RawCapabilityMessage),
 }
 
 /// Request Variants that only target block related data.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(missing_docs)]
-#[allow(clippy::enum_variant_names)]
 pub enum BlockRequest {
+    /// Requests block headers from the peer.
+    ///
+    /// The response should be sent through the channel.
     GetBlockHeaders(GetBlockHeaders),
+
+    /// Requests block bodies from the peer.
+    ///
+    /// The response should be sent through the channel.
     GetBlockBodies(GetBlockBodies),
-}
-
-/// Protocol related request messages that expect a response
-#[derive(Debug)]
-#[allow(clippy::enum_variant_names, missing_docs)]
-pub enum PeerRequest {
-    /// Request Block headers from the peer.
-    ///
-    /// The response should be sent through the channel.
-    GetBlockHeaders {
-        request: GetBlockHeaders,
-        response: oneshot::Sender<RequestResult<BlockHeaders>>,
-    },
-    /// Request Block headers from the peer.
-    ///
-    /// The response should be sent through the channel.
-    GetBlockBodies {
-        request: GetBlockBodies,
-        response: oneshot::Sender<RequestResult<BlockBodies>>,
-    },
-    /// Request pooled transactions from the peer.
-    ///
-    /// The response should be sent through the channel.
-    GetPooledTransactions {
-        request: GetPooledTransactions,
-        response: oneshot::Sender<RequestResult<PooledTransactions>>,
-    },
-    /// Request NodeData from the peer.
-    ///
-    /// The response should be sent through the channel.
-    GetNodeData { request: GetNodeData, response: oneshot::Sender<RequestResult<NodeData>> },
-    /// Request Receipts from the peer.
-    ///
-    /// The response should be sent through the channel.
-    GetReceipts { request: GetReceipts, response: oneshot::Sender<RequestResult<Receipts>> },
-}
-
-// === impl PeerRequest ===
-
-impl PeerRequest {
-    /// Invoked if we received a response which does not match the request
-    pub(crate) fn send_bad_response(self) {
-        self.send_err_response(RequestError::BadResponse)
-    }
-
-    /// Send an error back to the receiver.
-    pub(crate) fn send_err_response(self, err: RequestError) {
-        let _ = match self {
-            PeerRequest::GetBlockHeaders { response, .. } => response.send(Err(err)).ok(),
-            PeerRequest::GetBlockBodies { response, .. } => response.send(Err(err)).ok(),
-            PeerRequest::GetPooledTransactions { response, .. } => response.send(Err(err)).ok(),
-            PeerRequest::GetNodeData { response, .. } => response.send(Err(err)).ok(),
-            PeerRequest::GetReceipts { response, .. } => response.send(Err(err)).ok(),
-        };
-    }
-
-    /// Returns the [`EthMessage`] for this type
-    pub fn create_request_message(&self, request_id: u64) -> EthMessage {
-        match self {
-            PeerRequest::GetBlockHeaders { request, .. } => {
-                EthMessage::GetBlockHeaders(RequestPair { request_id, message: *request })
-            }
-            PeerRequest::GetBlockBodies { request, .. } => {
-                EthMessage::GetBlockBodies(RequestPair { request_id, message: request.clone() })
-            }
-            PeerRequest::GetPooledTransactions { request, .. } => {
-                EthMessage::GetPooledTransactions(RequestPair {
-                    request_id,
-                    message: request.clone(),
-                })
-            }
-            PeerRequest::GetNodeData { request, .. } => {
-                EthMessage::GetNodeData(RequestPair { request_id, message: request.clone() })
-            }
-            PeerRequest::GetReceipts { request, .. } => {
-                EthMessage::GetReceipts(RequestPair { request_id, message: request.clone() })
-            }
-        }
-    }
-
-    /// Consumes the type and returns the inner [`GetPooledTransactions`] variant.
-    pub fn into_get_pooled_transactions(self) -> Option<GetPooledTransactions> {
-        match self {
-            PeerRequest::GetPooledTransactions { request, .. } => Some(request),
-            _ => None,
-        }
-    }
 }
 
 /// Corresponding variant for [`PeerRequest`].
 #[derive(Debug)]
-pub enum PeerResponse {
-    BlockHeaders { response: oneshot::Receiver<RequestResult<BlockHeaders>> },
-    BlockBodies { response: oneshot::Receiver<RequestResult<BlockBodies>> },
-    PooledTransactions { response: oneshot::Receiver<RequestResult<PooledTransactions>> },
-    NodeData { response: oneshot::Receiver<RequestResult<NodeData>> },
-    Receipts { response: oneshot::Receiver<RequestResult<Receipts>> },
+pub enum PeerResponse<N: NetworkPrimitives = EthNetworkPrimitives> {
+    /// Represents a response to a request for block headers.
+    BlockHeaders {
+        /// The receiver channel for the response to a block headers request.
+        response: oneshot::Receiver<RequestResult<BlockHeaders<N::BlockHeader>>>,
+    },
+    /// Represents a response to a request for block bodies.
+    BlockBodies {
+        /// The receiver channel for the response to a block bodies request.
+        response: oneshot::Receiver<RequestResult<BlockBodies<N::BlockBody>>>,
+    },
+    /// Represents a response to a request for pooled transactions.
+    PooledTransactions {
+        /// The receiver channel for the response to a pooled transactions request.
+        response: oneshot::Receiver<RequestResult<PooledTransactions<N::PooledTransaction>>>,
+    },
+    /// Represents a response to a request for `NodeData`.
+    NodeData {
+        /// The receiver channel for the response to a `NodeData` request.
+        response: oneshot::Receiver<RequestResult<NodeData>>,
+    },
+    /// Represents a response to a request for receipts.
+    Receipts {
+        /// The receiver channel for the response to a receipts request.
+        response: oneshot::Receiver<RequestResult<Receipts<N::Receipt>>>,
+    },
 }
 
 // === impl PeerResponse ===
 
-impl PeerResponse {
+impl<N: NetworkPrimitives> PeerResponse<N> {
     /// Polls the type to completion.
-    pub(crate) fn poll(&mut self, cx: &mut Context<'_>) -> Poll<PeerResponseResult> {
+    pub(crate) fn poll(&mut self, cx: &mut Context<'_>) -> Poll<PeerResponseResult<N>> {
         macro_rules! poll_request {
             ($response:ident, $item:ident, $cx:ident) => {
                 match ready!($response.poll_unpin($cx)) {
@@ -181,19 +120,19 @@ impl PeerResponse {
         }
 
         let res = match self {
-            PeerResponse::BlockHeaders { response } => {
+            Self::BlockHeaders { response } => {
                 poll_request!(response, BlockHeaders, cx)
             }
-            PeerResponse::BlockBodies { response } => {
+            Self::BlockBodies { response } => {
                 poll_request!(response, BlockBodies, cx)
             }
-            PeerResponse::PooledTransactions { response } => {
+            Self::PooledTransactions { response } => {
                 poll_request!(response, PooledTransactions, cx)
             }
-            PeerResponse::NodeData { response } => {
+            Self::NodeData { response } => {
                 poll_request!(response, NodeData, cx)
             }
-            PeerResponse::Receipts { response } => {
+            Self::Receipts { response } => {
                 poll_request!(response, Receipts, cx)
             }
         };
@@ -203,20 +142,24 @@ impl PeerResponse {
 
 /// All response variants for [`PeerResponse`]
 #[derive(Debug)]
-#[allow(missing_docs)]
-pub enum PeerResponseResult {
-    BlockHeaders(RequestResult<Vec<Header>>),
-    BlockBodies(RequestResult<Vec<BlockBody>>),
-    PooledTransactions(RequestResult<Vec<PooledTransactionsElement>>),
+pub enum PeerResponseResult<N: NetworkPrimitives = EthNetworkPrimitives> {
+    /// Represents a result containing block headers or an error.
+    BlockHeaders(RequestResult<Vec<N::BlockHeader>>),
+    /// Represents a result containing block bodies or an error.
+    BlockBodies(RequestResult<Vec<N::BlockBody>>),
+    /// Represents a result containing pooled transactions or an error.
+    PooledTransactions(RequestResult<Vec<N::PooledTransaction>>),
+    /// Represents a result containing node data or an error.
     NodeData(RequestResult<Vec<Bytes>>),
-    Receipts(RequestResult<Vec<Vec<ReceiptWithBloom>>>),
+    /// Represents a result containing receipts or an error.
+    Receipts(RequestResult<Vec<Vec<ReceiptWithBloom<N::Receipt>>>>),
 }
 
 // === impl PeerResponseResult ===
 
-impl PeerResponseResult {
+impl<N: NetworkPrimitives> PeerResponseResult<N> {
     /// Converts this response into an [`EthMessage`]
-    pub fn try_into_message(self, id: u64) -> RequestResult<EthMessage> {
+    pub fn try_into_message(self, id: u64) -> RequestResult<EthMessage<N>> {
         macro_rules! to_message {
             ($response:ident, $item:ident, $request_id:ident) => {
                 match $response {
@@ -229,19 +172,19 @@ impl PeerResponseResult {
             };
         }
         match self {
-            PeerResponseResult::BlockHeaders(resp) => {
+            Self::BlockHeaders(resp) => {
                 to_message!(resp, BlockHeaders, id)
             }
-            PeerResponseResult::BlockBodies(resp) => {
+            Self::BlockBodies(resp) => {
                 to_message!(resp, BlockBodies, id)
             }
-            PeerResponseResult::PooledTransactions(resp) => {
+            Self::PooledTransactions(resp) => {
                 to_message!(resp, PooledTransactions, id)
             }
-            PeerResponseResult::NodeData(resp) => {
+            Self::NodeData(resp) => {
                 to_message!(resp, NodeData, id)
             }
-            PeerResponseResult::Receipts(resp) => {
+            Self::Receipts(resp) => {
                 to_message!(resp, Receipts, id)
             }
         }
@@ -250,57 +193,16 @@ impl PeerResponseResult {
     /// Returns the `Err` value if the result is an error.
     pub fn err(&self) -> Option<&RequestError> {
         match self {
-            PeerResponseResult::BlockHeaders(res) => res.as_ref().err(),
-            PeerResponseResult::BlockBodies(res) => res.as_ref().err(),
-            PeerResponseResult::PooledTransactions(res) => res.as_ref().err(),
-            PeerResponseResult::NodeData(res) => res.as_ref().err(),
-            PeerResponseResult::Receipts(res) => res.as_ref().err(),
+            Self::BlockHeaders(res) => res.as_ref().err(),
+            Self::BlockBodies(res) => res.as_ref().err(),
+            Self::PooledTransactions(res) => res.as_ref().err(),
+            Self::NodeData(res) => res.as_ref().err(),
+            Self::Receipts(res) => res.as_ref().err(),
         }
     }
 
     /// Returns whether this result is an error.
-    #[allow(unused)]
     pub fn is_err(&self) -> bool {
-        match self {
-            PeerResponseResult::BlockHeaders(res) => res.is_err(),
-            PeerResponseResult::BlockBodies(res) => res.is_err(),
-            PeerResponseResult::PooledTransactions(res) => res.is_err(),
-            PeerResponseResult::NodeData(res) => res.is_err(),
-            PeerResponseResult::Receipts(res) => res.is_err(),
-        }
-    }
-}
-
-/// A Cloneable connection for sending _requests_ directly to the session of a peer.
-#[derive(Clone)]
-pub struct PeerRequestSender {
-    /// id of the remote node.
-    pub(crate) peer_id: PeerId,
-    /// The Sender half connected to a session.
-    pub(crate) to_session_tx: mpsc::Sender<PeerRequest>,
-}
-
-// === impl PeerRequestSender ===
-
-impl PeerRequestSender {
-    /// Constructs a new sender instance that's wired to a session
-    pub(crate) fn new(peer_id: PeerId, to_session_tx: mpsc::Sender<PeerRequest>) -> Self {
-        Self { peer_id, to_session_tx }
-    }
-
-    /// Attempts to immediately send a message on this Sender
-    pub fn try_send(&self, req: PeerRequest) -> Result<(), TrySendError<PeerRequest>> {
-        self.to_session_tx.try_send(req)
-    }
-
-    /// Returns the peer id of the remote peer.
-    pub fn peer_id(&self) -> &PeerId {
-        &self.peer_id
-    }
-}
-
-impl fmt::Debug for PeerRequestSender {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PeerRequestSender").field("peer_id", &self.peer_id).finish_non_exhaustive()
+        self.err().is_some()
     }
 }

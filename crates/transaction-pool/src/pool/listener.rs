@@ -5,8 +5,8 @@ use crate::{
     traits::PropagateKind,
     PoolTransaction, ValidPoolTransaction,
 };
+use alloy_primitives::{TxHash, B256};
 use futures_util::Stream;
-use reth_primitives::{TxHash, B256};
 use std::{
     collections::{hash_map::Entry, HashMap},
     pin::Pin,
@@ -20,7 +20,7 @@ use tokio::sync::mpsc::{
 /// The size of the event channel used to propagate transaction events.
 const TX_POOL_EVENT_CHANNEL_SIZE: usize = 1024;
 
-/// A Stream that receives [TransactionEvent] only for the transaction with the given hash.
+/// A Stream that receives [`TransactionEvent`] only for the transaction with the given hash.
 #[derive(Debug)]
 #[must_use = "streams do nothing unless polled"]
 pub struct TransactionEvents {
@@ -30,7 +30,7 @@ pub struct TransactionEvents {
 
 impl TransactionEvents {
     /// The hash for this transaction
-    pub fn hash(&self) -> TxHash {
+    pub const fn hash(&self) -> TxHash {
         self.hash
     }
 }
@@ -46,11 +46,18 @@ impl Stream for TransactionEvents {
     }
 }
 
-/// A Stream that receives [FullTransactionEvent] for _all_ transaction.
+/// A Stream that receives [`FullTransactionEvent`] for _all_ transaction.
 #[derive(Debug)]
 #[must_use = "streams do nothing unless polled"]
 pub struct AllTransactionsEvents<T: PoolTransaction> {
     pub(crate) events: Receiver<FullTransactionEvent<T>>,
+}
+
+impl<T: PoolTransaction> AllTransactionsEvents<T> {
+    /// Create a new instance of this stream.
+    pub const fn new(events: Receiver<FullTransactionEvent<T>>) -> Self {
+        Self { events }
+    }
 }
 
 impl<T: PoolTransaction> Stream for AllTransactionsEvents<T> {
@@ -122,7 +129,7 @@ impl<T: PoolTransaction> PoolEventBroadcast<T> {
     pub(crate) fn subscribe_all(&mut self) -> AllTransactionsEvents<T> {
         let (tx, rx) = tokio::sync::mpsc::channel(TX_POOL_EVENT_CHANNEL_SIZE);
         self.all_events_broadcaster.senders.push(tx);
-        AllTransactionsEvents { events: rx }
+        AllTransactionsEvents::new(rx)
     }
 
     /// Notify listeners about a transaction that was added to the pending queue.
@@ -177,7 +184,7 @@ impl<T: PoolTransaction> PoolEventBroadcast<T> {
 
 /// All Sender half(s) of the event channels for all transactions.
 ///
-/// This mimics [tokio::sync::broadcast] but uses separate channels.
+/// This mimics [`tokio::sync::broadcast`] but uses separate channels.
 #[derive(Debug)]
 struct AllPoolEventsBroadcaster<T: PoolTransaction> {
     /// Corresponding sender half(s) for event listener channel
@@ -202,7 +209,7 @@ impl<T: PoolTransaction> AllPoolEventsBroadcaster<T> {
 
 /// All Sender half(s) of the event channels for a specific transaction.
 ///
-/// This mimics [tokio::sync::broadcast] but uses separate channels and is unbounded.
+/// This mimics [`tokio::sync::broadcast`] but uses separate channels and is unbounded.
 #[derive(Default, Debug)]
 struct PoolEventBroadcaster {
     /// Corresponding sender half(s) for event listener channel

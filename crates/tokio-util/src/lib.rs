@@ -5,9 +5,13 @@
     html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub, rustdoc::all)]
-#![deny(unused_must_use, rust_2018_idioms)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-mod event_listeners;
-pub use event_listeners::EventListeners;
+mod event_sender;
+mod event_stream;
+pub use event_sender::EventSender;
+pub use event_stream::EventStream;
+
+#[cfg(feature = "time")]
+pub mod ratelimit;

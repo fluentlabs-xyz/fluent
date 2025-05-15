@@ -1,7 +1,10 @@
 //! Support for maintaining the blob pool.
 
-use reth_primitives::{BlockNumber, B256};
-use reth_provider::chain::ChainBlocks;
+use alloy_consensus::Typed2718;
+use alloy_eips::eip2718::Encodable2718;
+use alloy_primitives::{BlockNumber, B256};
+use reth_execution_types::ChainBlocks;
+use reth_primitives_traits::{Block, BlockBody, SignedTransaction};
 use std::collections::BTreeMap;
 
 /// The type that is used to track canonical blob transactions.
@@ -22,6 +25,8 @@ impl BlobStoreCanonTracker {
     }
 
     /// Adds all blocks to the tracked list of blocks.
+    ///
+    /// Replaces any previously tracked blocks with the set of transactions.
     pub fn add_blocks(
         &mut self,
         blocks: impl IntoIterator<Item = (BlockNumber, impl IntoIterator<Item = B256>)>,
@@ -32,20 +37,32 @@ impl BlobStoreCanonTracker {
     }
 
     /// Adds all blob transactions from the given chain to the tracker.
-    pub fn add_new_chain_blocks(&mut self, blocks: &ChainBlocks<'_>) {
-        let blob_txs = blocks.iter().map(|(num, blocks)| {
-            let iter =
-                blocks.body.iter().filter(|tx| tx.transaction.is_eip4844()).map(|tx| tx.hash);
+    ///
+    /// Note: In case this is a chain that's part of a reorg, this replaces previously tracked
+    /// blocks.
+    pub fn add_new_chain_blocks<B>(&mut self, blocks: &ChainBlocks<'_, B>)
+    where
+        B: Block<Body: BlockBody<Transaction: SignedTransaction>>,
+    {
+        let blob_txs = blocks.iter().map(|(num, block)| {
+            let iter = block
+                .body()
+                .transactions()
+                .iter()
+                .filter(|tx| tx.is_eip4844())
+                .map(|tx| tx.trie_hash());
             (*num, iter)
         });
         self.add_blocks(blob_txs);
     }
 
     /// Invoked when a block is finalized.
-    pub fn on_finalized_block(&mut self, number: BlockNumber) -> BlobStoreUpdates {
+    ///
+    /// This returns all blob transactions that were included in blocks that are now finalized.
+    pub fn on_finalized_block(&mut self, finalized_block: BlockNumber) -> BlobStoreUpdates {
         let mut finalized = Vec::new();
         while let Some(entry) = self.blob_txs_in_blocks.first_entry() {
-            if *entry.key() <= number {
+            if *entry.key() <= finalized_block {
                 finalized.extend(entry.remove_entry().1);
             } else {
                 break
@@ -71,6 +88,13 @@ pub enum BlobStoreUpdates {
 
 #[cfg(test)]
 mod tests {
+    use alloy_consensus::Header;
+    use alloy_primitives::PrimitiveSignature as Signature;
+    use reth_execution_types::Chain;
+    use reth_primitives::{
+        BlockBody, RecoveredBlock, SealedBlock, SealedHeader, Transaction, TransactionSigned,
+    };
+
     use super::*;
 
     #[test]
@@ -90,5 +114,80 @@ mod tests {
             tracker.on_finalized_block(3),
             BlobStoreUpdates::Finalized(block2.into_iter().chain(block3).collect::<Vec<_>>())
         );
+    }
+
+    #[test]
+    fn test_add_new_chain_blocks() {
+        let mut tracker = BlobStoreCanonTracker::default();
+
+        // Create sample transactions
+        let tx1_hash = B256::random(); // EIP-4844 transaction
+        let tx2_hash = B256::random(); // EIP-4844 transaction
+        let tx3_hash = B256::random(); // Non-EIP-4844 transaction
+
+        // Creating a first block with EIP-4844 transactions
+        let block1 = RecoveredBlock::new_sealed(
+            SealedBlock::from_sealed_parts(
+                SealedHeader::new(Header { number: 10, ..Default::default() }, B256::random()),
+                BlockBody {
+                    transactions: vec![
+                        TransactionSigned::new(
+                            Transaction::Eip4844(Default::default()),
+                            Signature::test_signature(),
+                            tx1_hash,
+                        ),
+                        TransactionSigned::new(
+                            Transaction::Eip4844(Default::default()),
+                            Signature::test_signature(),
+                            tx2_hash,
+                        ),
+                        // Another transaction that is not EIP-4844
+                        TransactionSigned::new(
+                            Transaction::Eip7702(Default::default()),
+                            Signature::test_signature(),
+                            B256::random(),
+                        ),
+                    ],
+                    ..Default::default()
+                },
+            ),
+            Default::default(),
+        );
+
+        // Creating a second block with EIP-1559 and EIP-2930 transactions
+        // Note: This block does not contain any EIP-4844 transactions
+        let block2 = RecoveredBlock::new_sealed(
+            SealedBlock::from_sealed_parts(
+                SealedHeader::new(Header { number: 11, ..Default::default() }, B256::random()),
+                BlockBody {
+                    transactions: vec![
+                        TransactionSigned::new(
+                            Transaction::Eip1559(Default::default()),
+                            Signature::test_signature(),
+                            tx3_hash,
+                        ),
+                        TransactionSigned::new(
+                            Transaction::Eip2930(Default::default()),
+                            Signature::test_signature(),
+                            tx2_hash,
+                        ),
+                    ],
+                    ..Default::default()
+                },
+            ),
+            Default::default(),
+        );
+
+        // Extract blocks from the chain
+        let chain: Chain = Chain::new(vec![block1, block2], Default::default(), None);
+        let blocks = chain.into_inner().0;
+
+        // Add new chain blocks to the tracker
+        tracker.add_new_chain_blocks(&blocks);
+
+        // Tx1 and tx2 should be in the block containing EIP-4844 transactions
+        assert_eq!(tracker.blob_txs_in_blocks.get(&10).unwrap(), &vec![tx1_hash, tx2_hash]);
+        // No transactions should be in the block containing non-EIP-4844 transactions
+        assert!(tracker.blob_txs_in_blocks.get(&11).unwrap().is_empty());
     }
 }

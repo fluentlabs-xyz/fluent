@@ -9,30 +9,19 @@
     html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub, rustdoc::all)]
-#![deny(unused_must_use, rust_2018_idioms)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 /// Various provider traits.
 mod traits;
-pub use traits::{
-    AccountExtReader, AccountReader, BlockExecutionWriter, BlockExecutor, BlockExecutorStats,
-    BlockHashReader, BlockIdReader, BlockNumReader, BlockReader, BlockReaderIdExt, BlockSource,
-    BlockWriter, BlockchainTreePendingStateProvider, BundleStateDataProvider, CanonChainTracker,
-    CanonStateNotification, CanonStateNotificationSender, CanonStateNotifications,
-    CanonStateSubscriptions, ChainSpecProvider, ChangeSetReader, EvmEnvProvider, ExecutorFactory,
-    HashingWriter, HeaderProvider, HistoryWriter, PrunableBlockExecutor, PruneCheckpointReader,
-    PruneCheckpointWriter, ReceiptProvider, ReceiptProviderIdExt, StageCheckpointReader,
-    StageCheckpointWriter, StateProvider, StateProviderBox, StateProviderFactory,
-    StateRootProvider, StorageReader, TransactionVariant, TransactionsProvider,
-    TransactionsProviderExt, WithdrawalsProvider,
-};
+pub use traits::*;
 
 /// Provider trait implementations.
 pub mod providers;
 pub use providers::{
     DatabaseProvider, DatabaseProviderRO, DatabaseProviderRW, HistoricalStateProvider,
     HistoricalStateProviderRef, LatestStateProvider, LatestStateProviderRef, ProviderFactory,
+    StaticFileAccess, StaticFileWriter,
 };
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -40,10 +29,38 @@ pub use providers::{
 pub mod test_utils;
 
 /// Re-export provider error.
-pub use reth_interfaces::provider::ProviderError;
+pub use reth_storage_errors::provider::{ProviderError, ProviderResult};
 
-pub mod chain;
-pub use chain::{Chain, DisplayBlocksChain};
+pub use reth_execution_types::*;
 
 pub mod bundle_state;
-pub use bundle_state::{BundleStateWithReceipts, OriginalValuesKnown, StateChanges, StateReverts};
+
+/// Re-export `OriginalValuesKnown`
+pub use revm::db::states::OriginalValuesKnown;
+
+/// Writer standalone type.
+pub mod writer;
+
+pub use reth_chain_state::{
+    CanonStateNotification, CanonStateNotificationSender, CanonStateNotificationStream,
+    CanonStateNotifications, CanonStateSubscriptions,
+};
+
+// reexport traits to avoid breaking changes
+pub use reth_storage_api::{HistoryWriter, StatsReader};
+
+pub(crate) fn to_range<R: std::ops::RangeBounds<u64>>(bounds: R) -> std::ops::Range<u64> {
+    let start = match bounds.start_bound() {
+        std::ops::Bound::Included(&v) => v,
+        std::ops::Bound::Excluded(&v) => v + 1,
+        std::ops::Bound::Unbounded => 0,
+    };
+
+    let end = match bounds.end_bound() {
+        std::ops::Bound::Included(&v) => v + 1,
+        std::ops::Bound::Excluded(&v) => v,
+        std::ops::Bound::Unbounded => u64::MAX,
+    };
+
+    start..end
+}

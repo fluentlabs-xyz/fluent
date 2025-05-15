@@ -4,22 +4,32 @@ use crate::{
     builder::ETH_REQUEST_CHANNEL_CAPACITY,
     error::NetworkError,
     eth_requests::EthRequestHandler,
-    transactions::{TransactionsHandle, TransactionsManager},
-    NetworkConfig, NetworkConfigBuilder, NetworkEvent, NetworkHandle, NetworkManager,
+    protocol::IntoRlpxSubProtocol,
+    transactions::{TransactionsHandle, TransactionsManager, TransactionsManagerConfig},
+    NetworkConfig, NetworkConfigBuilder, NetworkHandle, NetworkManager,
 };
 use futures::{FutureExt, StreamExt};
 use pin_project::pin_project;
-use reth_eth_wire::{capability::Capability, DisconnectReason, HelloBuilder};
-use reth_network_api::{NetworkInfo, Peers};
-use reth_primitives::{PeerId, MAINNET};
-use reth_provider::{
-    test_utils::NoopProvider, BlockReader, BlockReaderIdExt, HeaderProvider, StateProviderFactory,
+use reth_chainspec::{ChainSpecProvider, EthereumHardforks, Hardforks};
+use reth_eth_wire::{
+    protocol::Protocol, DisconnectReason, EthNetworkPrimitives, HelloMessageWithProtocols,
+};
+use reth_network_api::{
+    events::{PeerEvent, SessionInfo},
+    test_utils::{PeersHandle, PeersHandleProvider},
+    NetworkEvent, NetworkEventListenerProvider, NetworkInfo, Peers,
+};
+use reth_network_peers::PeerId;
+use reth_primitives::{PooledTransaction, TransactionSigned};
+use reth_storage_api::{
+    noop::NoopProvider, BlockReader, BlockReaderIdExt, HeaderProvider, StateProviderFactory,
 };
 use reth_tasks::TokioTaskExecutor;
+use reth_tokio_util::EventStream;
 use reth_transaction_pool::{
     blobstore::InMemoryBlobStore,
-    test_utils::{testing_pool, TestPool},
-    EthTransactionPool, TransactionPool, TransactionValidationTaskExecutor,
+    test_utils::{TestPool, TestPoolBuilder},
+    EthTransactionPool, PoolTransaction, TransactionPool, TransactionValidationTaskExecutor,
 };
 use secp256k1::SecretKey;
 use std::{
@@ -36,7 +46,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
 /// A test network consisting of multiple peers.
 pub struct Testnet<C, Pool> {
@@ -48,7 +57,7 @@ pub struct Testnet<C, Pool> {
 
 impl<C> Testnet<C, TestPool>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static + ChainSpecProvider<ChainSpec: Hardforks>,
 {
     /// Same as [`Self::try_create_with`] but panics on error
     pub async fn create_with(num_peers: usize, provider: C) -> Self {
@@ -82,7 +91,7 @@ where
 
 impl<C, Pool> Testnet<C, Pool>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static,
     Pool: TransactionPool,
 {
     /// Return a mutable slice of all peers.
@@ -93,6 +102,14 @@ where
     /// Return a slice of all peers.
     pub fn peers(&self) -> &[Peer<C, Pool>] {
         &self.peers
+    }
+
+    /// Remove a peer from the [`Testnet`] and return it.
+    ///
+    /// # Panics
+    /// If the index is out of bounds.
+    pub fn remove_peer(&mut self, index: usize) -> Peer<C, Pool> {
+        self.peers.remove(index)
     }
 
     /// Return a mutable iterator over all peers.
@@ -126,7 +143,7 @@ where
     }
 
     /// Returns all handles to the networks
-    pub fn handles(&self) -> impl Iterator<Item = NetworkHandle> + '_ {
+    pub fn handles(&self) -> impl Iterator<Item = NetworkHandle<EthNetworkPrimitives>> + '_ {
         self.peers.iter().map(|p| p.handle())
     }
 
@@ -158,7 +175,12 @@ where
 
 impl<C, Pool> Testnet<C, Pool>
 where
-    C: StateProviderFactory + BlockReaderIdExt + HeaderProvider + Clone + 'static,
+    C: ChainSpecProvider<ChainSpec: EthereumHardforks>
+        + StateProviderFactory
+        + BlockReaderIdExt
+        + HeaderProvider
+        + Clone
+        + 'static,
     Pool: TransactionPool,
 {
     /// Installs an eth pool on each peer
@@ -167,7 +189,6 @@ where
             let blob_store = InMemoryBlobStore::default();
             let pool = TransactionValidationTaskExecutor::eth(
                 peer.client.clone(),
-                MAINNET.clone(),
                 blob_store.clone(),
                 TokioTaskExecutor::default(),
             );
@@ -178,12 +199,42 @@ where
             ))
         })
     }
+
+    /// Installs an eth pool on each peer with custom transaction manager config
+    pub fn with_eth_pool_config(
+        self,
+        tx_manager_config: TransactionsManagerConfig,
+    ) -> Testnet<C, EthTransactionPool<C, InMemoryBlobStore>> {
+        self.map_pool(|peer| {
+            let blob_store = InMemoryBlobStore::default();
+            let pool = TransactionValidationTaskExecutor::eth(
+                peer.client.clone(),
+                blob_store.clone(),
+                TokioTaskExecutor::default(),
+            );
+
+            peer.map_transactions_manager_with_config(
+                EthTransactionPool::eth_pool(pool, blob_store, Default::default()),
+                tx_manager_config.clone(),
+            )
+        })
+    }
 }
 
 impl<C, Pool> Testnet<C, Pool>
 where
-    C: BlockReader + HeaderProvider + Clone + Unpin + 'static,
-    Pool: TransactionPool + Unpin + 'static,
+    C: BlockReader<
+            Block = reth_primitives::Block,
+            Receipt = reth_primitives::Receipt,
+            Header = reth_primitives::Header,
+        > + HeaderProvider
+        + Clone
+        + Unpin
+        + 'static,
+    Pool: TransactionPool<
+            Transaction: PoolTransaction<Consensus = TransactionSigned, Pooled = PooledTransaction>,
+        > + Unpin
+        + 'static,
 {
     /// Spawns the testnet to a separate task
     pub fn spawn(self) -> TestnetHandle<C, Pool> {
@@ -215,7 +266,7 @@ impl Testnet<NoopProvider, TestPool> {
 
     /// Creates a new [`Testnet`] with the given number of peers
     pub async fn try_create(num_peers: usize) -> Result<Self, NetworkError> {
-        let mut this = Testnet::default();
+        let mut this = Self::default();
 
         this.extend_peer_with_config((0..num_peers).map(|_| Default::default())).await?;
         Ok(this)
@@ -241,14 +292,23 @@ impl<C, Pool> fmt::Debug for Testnet<C, Pool> {
 
 impl<C, Pool> Future for Testnet<C, Pool>
 where
-    C: BlockReader + HeaderProvider + Unpin,
-    Pool: TransactionPool + Unpin + 'static,
+    C: BlockReader<
+            Block = reth_primitives::Block,
+            Receipt = reth_primitives::Receipt,
+            Header = reth_primitives::Header,
+        > + HeaderProvider
+        + Unpin
+        + 'static,
+    Pool: TransactionPool<
+            Transaction: PoolTransaction<Consensus = TransactionSigned, Pooled = PooledTransaction>,
+        > + Unpin
+        + 'static,
 {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        for peer in this.peers.iter_mut() {
+        for peer in &mut this.peers {
             let _ = peer.poll_unpin(cx);
         }
         Poll::Pending
@@ -278,28 +338,34 @@ impl<C, Pool> TestnetHandle<C, Pool> {
         &self.peers
     }
 
-    /// Connects all peers with each other
+    /// Connects all peers with each other.
+    ///
+    /// This establishes sessions concurrently between all peers.
+    ///
+    /// Returns once all sessions are established.
     pub async fn connect_peers(&self) {
         if self.peers.len() < 2 {
             return
         }
 
-        let mut streams = Vec::with_capacity(self.peers.len());
-        let mut num_sessions = Vec::with_capacity(self.peers.len());
+        // add an event stream for _each_ peer
+        let streams =
+            self.peers.iter().map(|handle| NetworkEventStream::new(handle.event_listener()));
+
+        // add all peers to each other
         for (idx, handle) in self.peers.iter().enumerate().take(self.peers.len() - 1) {
-            streams.push(NetworkEventStream::new(handle.event_listener()));
-            let mut num = 0;
             for idx in (idx + 1)..self.peers.len() {
                 let neighbour = &self.peers[idx];
                 handle.network.add_peer(*neighbour.peer_id(), neighbour.local_addr());
-                num += 1;
             }
-            num_sessions.push(num);
         }
-        let fut = streams
-            .into_iter()
-            .zip(num_sessions)
-            .map(|(mut stream, num)| async move { stream.take_session_established(num).await });
+
+        // await all sessions to be established
+        let num_sessions_per_peer = self.peers.len() - 1;
+        let fut = streams.into_iter().map(|mut stream| async move {
+            stream.take_session_established(num_sessions_per_peer).await
+        });
+
         futures::future::join_all(fut).await;
     }
 }
@@ -309,11 +375,11 @@ impl<C, Pool> TestnetHandle<C, Pool> {
 #[derive(Debug)]
 pub struct Peer<C, Pool = TestPool> {
     #[pin]
-    network: NetworkManager<C>,
+    network: NetworkManager<EthNetworkPrimitives>,
     #[pin]
-    request_handler: Option<EthRequestHandler<C>>,
+    request_handler: Option<EthRequestHandler<C, EthNetworkPrimitives>>,
     #[pin]
-    transactions_manager: Option<TransactionsManager<Pool>>,
+    transactions_manager: Option<TransactionsManager<Pool, EthNetworkPrimitives>>,
     pool: Option<Pool>,
     client: C,
     secret_key: SecretKey,
@@ -323,12 +389,17 @@ pub struct Peer<C, Pool = TestPool> {
 
 impl<C, Pool> Peer<C, Pool>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static,
     Pool: TransactionPool,
 {
     /// Returns the number of connected peers.
     pub fn num_peers(&self) -> usize {
         self.network.num_connected_peers()
+    }
+
+    /// Adds an additional protocol handler to the peer.
+    pub fn add_rlpx_sub_protocol(&mut self, protocol: impl IntoRlpxSubProtocol) {
+        self.network.add_rlpx_sub_protocol(protocol);
     }
 
     /// Returns a handle to the peer's network.
@@ -341,17 +412,27 @@ where
     }
 
     /// The address that listens for incoming connections.
-    pub fn local_addr(&self) -> SocketAddr {
+    pub const fn local_addr(&self) -> SocketAddr {
         self.network.local_addr()
     }
 
+    /// The [`PeerId`] of this peer.
+    pub fn peer_id(&self) -> PeerId {
+        *self.network.peer_id()
+    }
+
+    /// Returns mutable access to the network.
+    pub fn network_mut(&mut self) -> &mut NetworkManager<EthNetworkPrimitives> {
+        &mut self.network
+    }
+
     /// Returns the [`NetworkHandle`] of this peer.
-    pub fn handle(&self) -> NetworkHandle {
+    pub fn handle(&self) -> NetworkHandle<EthNetworkPrimitives> {
         self.network.handle().clone()
     }
 
     /// Returns the [`TestPool`] of this peer.
-    pub fn pool(&self) -> Option<&Pool> {
+    pub const fn pool(&self) -> Option<&Pool> {
         self.pool.as_ref()
     }
 
@@ -368,7 +449,12 @@ where
     pub fn install_transactions_manager(&mut self, pool: Pool) {
         let (tx, rx) = unbounded_channel();
         self.network.set_transactions(tx);
-        let transactions_manager = TransactionsManager::new(self.handle(), pool.clone(), rx);
+        let transactions_manager = TransactionsManager::new(
+            self.handle(),
+            pool.clone(),
+            rx,
+            TransactionsManagerConfig::default(),
+        );
         self.transactions_manager = Some(transactions_manager);
         self.pool = Some(pool);
     }
@@ -381,8 +467,42 @@ where
         let Self { mut network, request_handler, client, secret_key, .. } = self;
         let (tx, rx) = unbounded_channel();
         network.set_transactions(tx);
-        let transactions_manager =
-            TransactionsManager::new(network.handle().clone(), pool.clone(), rx);
+        let transactions_manager = TransactionsManager::new(
+            network.handle().clone(),
+            pool.clone(),
+            rx,
+            TransactionsManagerConfig::default(),
+        );
+        Peer {
+            network,
+            request_handler,
+            transactions_manager: Some(transactions_manager),
+            pool: Some(pool),
+            client,
+            secret_key,
+        }
+    }
+
+    /// Map transactions manager with custom config
+    pub fn map_transactions_manager_with_config<P>(
+        self,
+        pool: P,
+        config: TransactionsManagerConfig,
+    ) -> Peer<C, P>
+    where
+        P: TransactionPool,
+    {
+        let Self { mut network, request_handler, client, secret_key, .. } = self;
+        let (tx, rx) = unbounded_channel();
+        network.set_transactions(tx);
+
+        let transactions_manager = TransactionsManager::new(
+            network.handle().clone(),
+            pool.clone(),
+            rx,
+            config, // Use provided config
+        );
+
         Peer {
             network,
             request_handler,
@@ -396,18 +516,27 @@ where
 
 impl<C> Peer<C>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static,
 {
-    /// Installs a new [testing_pool]
+    /// Installs a new [`TestPool`]
     pub fn install_test_pool(&mut self) {
-        self.install_transactions_manager(testing_pool())
+        self.install_transactions_manager(TestPoolBuilder::default().into())
     }
 }
 
 impl<C, Pool> Future for Peer<C, Pool>
 where
-    C: BlockReader + HeaderProvider + Unpin,
-    Pool: TransactionPool + Unpin + 'static,
+    C: BlockReader<
+            Block = reth_primitives::Block,
+            Receipt = reth_primitives::Receipt,
+            Header = reth_primitives::Header,
+        > + HeaderProvider
+        + Unpin
+        + 'static,
+    Pool: TransactionPool<
+            Transaction: PoolTransaction<Consensus = TransactionSigned, Pooled = PooledTransaction>,
+        > + Unpin
+        + 'static,
 {
     type Output = ();
 
@@ -437,8 +566,8 @@ pub struct PeerConfig<C = NoopProvider> {
 /// A handle to a peer in the [`Testnet`].
 #[derive(Debug)]
 pub struct PeerHandle<Pool> {
-    network: NetworkHandle,
-    transactions: Option<TransactionsHandle>,
+    network: NetworkHandle<EthNetworkPrimitives>,
+    transactions: Option<TransactionsHandle<EthNetworkPrimitives>>,
     pool: Option<Pool>,
 }
 
@@ -450,27 +579,33 @@ impl<Pool> PeerHandle<Pool> {
         self.network.peer_id()
     }
 
+    /// Returns the [`PeersHandle`] from the network.
+    pub fn peer_handle(&self) -> &PeersHandle {
+        self.network.peers_handle()
+    }
+
+    /// Returns the local socket as configured for the network.
     pub fn local_addr(&self) -> SocketAddr {
         self.network.local_addr()
     }
 
     /// Creates a new [`NetworkEvent`] listener channel.
-    pub fn event_listener(&self) -> UnboundedReceiverStream<NetworkEvent> {
+    pub fn event_listener(&self) -> EventStream<NetworkEvent> {
         self.network.event_listener()
     }
 
     /// Returns the [`TransactionsHandle`] of this peer.
-    pub fn transactions(&self) -> Option<&TransactionsHandle> {
+    pub const fn transactions(&self) -> Option<&TransactionsHandle> {
         self.transactions.as_ref()
     }
 
     /// Returns the [`TestPool`] of this peer.
-    pub fn pool(&self) -> Option<&Pool> {
+    pub const fn pool(&self) -> Option<&Pool> {
         self.pool.as_ref()
     }
 
     /// Returns the [`NetworkHandle`] of this peer.
-    pub fn network(&self) -> &NetworkHandle {
+    pub const fn network(&self) -> &NetworkHandle<EthNetworkPrimitives> {
         &self.network
     }
 }
@@ -479,11 +614,11 @@ impl<Pool> PeerHandle<Pool> {
 
 impl<C> PeerConfig<C>
 where
-    C: BlockReader + HeaderProvider + Clone,
+    C: BlockReader + HeaderProvider + Clone + 'static,
 {
     /// Launches the network and returns the [Peer] that manages it
     pub async fn launch(self) -> Result<Peer<C>, NetworkError> {
-        let PeerConfig { config, client, secret_key } = self;
+        let Self { config, client, secret_key } = self;
         let network = NetworkManager::new(config).await?;
         let peer = Peer {
             network,
@@ -498,7 +633,10 @@ where
 
     /// Initialize the network with a random secret key, allowing the devp2p and discovery to bind
     /// to any available IP and port.
-    pub fn new(client: C) -> Self {
+    pub fn new(client: C) -> Self
+    where
+        C: ChainSpecProvider<ChainSpec: Hardforks>,
+    {
         let secret_key = SecretKey::new(&mut rand::thread_rng());
         let config = Self::network_config_builder(secret_key).build(client.clone());
         Self { config, client, secret_key }
@@ -506,18 +644,24 @@ where
 
     /// Initialize the network with a given secret key, allowing devp2p and discovery to bind any
     /// available IP and port.
-    pub fn with_secret_key(client: C, secret_key: SecretKey) -> Self {
+    pub fn with_secret_key(client: C, secret_key: SecretKey) -> Self
+    where
+        C: ChainSpecProvider<ChainSpec: Hardforks>,
+    {
         let config = Self::network_config_builder(secret_key).build(client.clone());
         Self { config, client, secret_key }
     }
 
     /// Initialize the network with a given capabilities.
-    pub fn with_capabilities(client: C, capabilities: Vec<Capability>) -> Self {
+    pub fn with_protocols(client: C, protocols: impl IntoIterator<Item = Protocol>) -> Self
+    where
+        C: ChainSpecProvider<ChainSpec: Hardforks>,
+    {
         let secret_key = SecretKey::new(&mut rand::thread_rng());
 
         let builder = Self::network_config_builder(secret_key);
         let hello_message =
-            HelloBuilder::new(builder.get_peer_id()).capabilities(capabilities).build();
+            HelloMessageWithProtocols::builder(builder.get_peer_id()).protocols(protocols).build();
         let config = builder.hello_message(hello_message).build(client.clone());
 
         Self { config, client, secret_key }
@@ -543,23 +687,22 @@ impl Default for PeerConfig {
 /// This makes it easier to await established connections
 #[derive(Debug)]
 pub struct NetworkEventStream {
-    inner: UnboundedReceiverStream<NetworkEvent>,
+    inner: EventStream<NetworkEvent>,
 }
 
 // === impl NetworkEventStream ===
 
 impl NetworkEventStream {
     /// Create a new [`NetworkEventStream`] from the given network event receiver stream.
-    pub fn new(inner: UnboundedReceiverStream<NetworkEvent>) -> Self {
+    pub const fn new(inner: EventStream<NetworkEvent>) -> Self {
         Self { inner }
     }
 
     /// Awaits the next event for a session to be closed
     pub async fn next_session_closed(&mut self) -> Option<(PeerId, Option<DisconnectReason>)> {
         while let Some(ev) = self.inner.next().await {
-            match ev {
-                NetworkEvent::SessionClosed { peer_id, reason } => return Some((peer_id, reason)),
-                _ => continue,
+            if let NetworkEvent::Peer(PeerEvent::SessionClosed { peer_id, reason }) = ev {
+                return Some((peer_id, reason))
             }
         }
         None
@@ -569,8 +712,11 @@ impl NetworkEventStream {
     pub async fn next_session_established(&mut self) -> Option<PeerId> {
         while let Some(ev) = self.inner.next().await {
             match ev {
-                NetworkEvent::SessionEstablished { peer_id, .. } => return Some(peer_id),
-                _ => continue,
+                NetworkEvent::ActivePeerSession { info, .. } |
+                NetworkEvent::Peer(PeerEvent::SessionEstablished(info)) => {
+                    return Some(info.peer_id)
+                }
+                _ => {}
             }
         }
         None
@@ -579,39 +725,62 @@ impl NetworkEventStream {
     /// Awaits the next `num` events for an established session
     pub async fn take_session_established(&mut self, mut num: usize) -> Vec<PeerId> {
         if num == 0 {
-            return Vec::new()
+            return Vec::new();
         }
         let mut peers = Vec::with_capacity(num);
         while let Some(ev) = self.inner.next().await {
-            match ev {
-                NetworkEvent::SessionEstablished { peer_id, .. } => {
-                    peers.push(peer_id);
-                    num -= 1;
-                    if num == 0 {
-                        return peers
-                    }
+            if let NetworkEvent::ActivePeerSession { info: SessionInfo { peer_id, .. }, .. } = ev {
+                peers.push(peer_id);
+                num -= 1;
+                if num == 0 {
+                    return peers;
                 }
-                _ => continue,
             }
         }
         peers
     }
 
-    /// Ensures that the first two events are a [`NetworkEvent::PeerAdded`] and
-    /// [`NetworkEvent::SessionEstablished`], returning the [`PeerId`] of the established
+    /// Ensures that the first two events are a [`NetworkEvent::Peer(PeerEvent::PeerAdded`] and
+    /// [`NetworkEvent::ActivePeerSession`], returning the [`PeerId`] of the established
     /// session.
     pub async fn peer_added_and_established(&mut self) -> Option<PeerId> {
         let peer_id = match self.inner.next().await {
-            Some(NetworkEvent::PeerAdded(peer_id)) => peer_id,
+            Some(NetworkEvent::Peer(PeerEvent::PeerAdded(peer_id))) => peer_id,
             _ => return None,
         };
 
         match self.inner.next().await {
-            Some(NetworkEvent::SessionEstablished { peer_id: peer_id2, .. }) => {
-                debug_assert_eq!(peer_id, peer_id2, "PeerAdded peer_id {peer_id} does not match SessionEstablished peer_id {peer_id2}");
+            Some(NetworkEvent::ActivePeerSession {
+                info: SessionInfo { peer_id: peer_id2, .. },
+                ..
+            }) => {
+                debug_assert_eq!(
+                    peer_id, peer_id2,
+                    "PeerAdded peer_id {peer_id} does not match SessionEstablished peer_id {peer_id2}"
+                );
                 Some(peer_id)
             }
             _ => None,
         }
+    }
+
+    /// Awaits the next event for a peer added.
+    pub async fn peer_added(&mut self) -> Option<PeerId> {
+        let peer_id = match self.inner.next().await {
+            Some(NetworkEvent::Peer(PeerEvent::PeerAdded(peer_id))) => peer_id,
+            _ => return None,
+        };
+
+        Some(peer_id)
+    }
+
+    /// Awaits the next event for a peer removed.
+    pub async fn peer_removed(&mut self) -> Option<PeerId> {
+        let peer_id = match self.inner.next().await {
+            Some(NetworkEvent::Peer(PeerEvent::PeerRemoved(peer_id))) => peer_id,
+            _ => return None,
+        };
+
+        Some(peer_id)
     }
 }

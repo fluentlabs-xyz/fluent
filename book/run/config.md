@@ -12,7 +12,6 @@ The configuration file contains the following sections:
 
 - [`[stages]`](#the-stages-section) -- Configuration of the individual sync stages
   - [`headers`](#headers)
-  - [`total_difficulty`](#total_difficulty)
   - [`bodies`](#bodies)
   - [`sender_recovery`](#sender_recovery)
   - [`execution`](#execution)
@@ -37,7 +36,7 @@ The defaults shipped with Reth try to be relatively reasonable, but may not be o
 
 ### `headers`
 
-The headers section controls both the behavior of the header stage, which download historical headers, as well as the primary downloader that fetches headers over P2P.
+The headers section controls both the behavior of the header stage, which downloads historical headers, as well as the primary downloader that fetches headers over P2P.
 
 ```toml
 [stages.headers]
@@ -64,23 +63,9 @@ downloader_request_limit = 1000
 commit_threshold = 10000
 ```
 
-### `total_difficulty`
-
-The total difficulty stage calculates the total difficulty reached for each header in the chain.
-
-```toml
-[stages.total_difficulty]
-# The amount of headers to calculate the total difficulty for
-# before writing the results to disk.
-#
-# Lower thresholds correspond to more frequent disk I/O (writes),
-# but lowers memory usage
-commit_threshold = 100000
-```
-
 ### `bodies`
 
-The bodies section controls both the behavior of the bodies stage, which download historical block bodies, as well as the primary downloader that fetches block bodies over P2P.
+The bodies section controls both the behavior of the bodies stage, which downloads historical block bodies, as well as the primary downloader that fetches block bodies over P2P.
 
 ```toml
 [stages.bodies]
@@ -117,7 +102,7 @@ The sender recovery stage recovers the address of transaction senders using tran
 
 ```toml
 [stages.sender_recovery]
-# The amount of transactions to recover senders for before
+# The number of transactions to recover senders for before
 # writing the results to disk.
 #
 # Lower thresholds correspond to more frequent disk I/O (writes),
@@ -131,22 +116,21 @@ The execution stage executes historical transactions. This stage is generally ve
 
 Each executed transaction also generates a number of changesets, and mutates the current state of accounts and storage.
 
-For this reason, there are two ways to control how much work to perform before the results are written to disk.
+For this reason, there are several ways to control how much work to perform before the results are written to disk.
 
 ```toml
 [stages.execution]
-# The maximum amount of blocks to execute before writing the results to disk.
+# The maximum number of blocks to process before the execution stage commits.
 max_blocks = 500000
-# The maximum amount of account and storage changes to collect before writing
-# the results to disk.
+# The maximum number of state changes to keep in memory before the execution stage commits.
 max_changes = 5000000
+# The maximum cumulative amount of gas to process before the execution stage commits.
+max_cumulative_gas = 1500000000000 # 30_000_000 * 50_000_000
+# The maximum time spent on blocks processing before the execution stage commits.
+max_duration = '10m'
 ```
 
-Either one of `max_blocks` or `max_changes` must be specified, and both can also be specified at the same time:
-
-- If only `max_blocks` is specified, reth will execute (up to) that amount of blocks before writing to disk.
-- If only `max_changes` is specified, reth will execute as many blocks as possible until the target amount of state transitions have occurred before writing to disk.
-- If both are specified, then the first threshold to be hit will determine when the results are written to disk.
+For all thresholds specified, the first to be hit will determine when the results are written to disk.
 
 Lower values correspond to more frequent disk writes, but also lower memory consumption. A lower value also negatively impacts sync speed, since reth keeps a cache around for the entire duration of blocks executed in the same range.
 
@@ -195,7 +179,7 @@ The merkle stage uses the indexes built in the hashing stages (storage and accou
 # The threshold in number of blocks before the stage starts from scratch
 # and re-computes the state root, discarding the trie that has already been built,
 # as opposed to incrementally updating the trie.
-clean_threshold = 50000
+clean_threshold = 5000
 ```
 
 ### `transaction_lookup`
@@ -208,7 +192,7 @@ The transaction lookup stage builds an index of transaction hashes to their sequ
 #
 # Lower thresholds correspond to more frequent disk I/O (writes),
 # but lowers memory usage
-commit_threshold = 5000000
+chunk_size = 5000000
 ```
 
 ### `index_account_history`
@@ -235,6 +219,19 @@ The storage history indexing stage builds an index of what blocks a particular s
 # Lower thresholds correspond to more frequent disk I/O (writes),
 # but lowers memory usage
 commit_threshold = 100000
+```
+
+### `etl`
+
+An ETL (extract, transform, load) data collector. Used mainly to insert data into `MDBX` in a sorted manner.
+
+```toml
+[stages.etl]
+# The maximum size in bytes of data held in memory before being flushed to disk as a file.
+#
+# Lower threshold corresponds to more frequent flushes,
+# but lowers temporary storage usage
+file_size = 524_288_000 # 500 * 1024 * 1024
 ```
 
 ## The `[peers]` section
@@ -355,9 +352,9 @@ i.e. keep the data for the last `100_000` blocks
 # Minimum pruning interval measured in blocks
 block_interval = 5
 
-[prune.parts]
+[prune.segments]
 # Sender Recovery pruning configuration
-sender_recovery = { distance = 100_000 } # Prune all transaction senders before the block `head-128`, i.e. keep transaction senders for the last 129 blocks
+sender_recovery = { distance = 100_000 } # Prune all transaction senders before the block `head-100000`, i.e. keep transaction senders for the last 100001 blocks
 
 # Transaction Lookup pruning configuration
 transaction_lookup = "full" # Prune all TxNumber => TxHash mappings
@@ -366,17 +363,17 @@ transaction_lookup = "full" # Prune all TxNumber => TxHash mappings
 receipts = { before = 1920000 } # Prune all receipts from transactions before the block 1920000, i.e. keep receipts from the block 1920000
 
 # Account History pruning configuration
-account_history = { distance = 100_000 } # Prune all historical account states before the block `head-128`
+account_history = { distance = 100_000 } # Prune all historical account states before the block `head-100000`
 
 # Storage History pruning configuration
-storage_history = { distance = 100_000 } # Prune all historical storage states before the block `head-128`
+storage_history = { distance = 100_000 } # Prune all historical storage states before the block `head-100000`
 ```
 
 We can also prune receipts more granular, using the logs filtering:
 ```toml
 # Receipts pruning configuration by retaining only those receipts that contain logs emitted
 # by the specified addresses, discarding all others. This setting is overridden by `receipts`.
-[prune.parts.receipts_log_filter]
+[prune.segments.receipts_log_filter]
 # Prune all receipts, leaving only those which:
 # - Contain logs from address `0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`, starting from the block 17000000
 # - Contain logs from address `0xdac17f958d2ee523a2206206994597c13d831ec7` in the last 1001 blocks

@@ -7,20 +7,33 @@ license.workspace = true
 homepage.workspace = true
 repository.workspace = true
 
-[dependencies]
-# reth 
-reth-primitives.workspace = true
-reth-interfaces.workspace = true
-reth-provider.workspace = true
+[lints]
+workspace = true
 
-# misc
-cfg-if = "1.0.0"
+[dependencies]
+# reth
+reth-chainspec.workspace = true
+reth-consensus.workspace = true
+
+# ethereum
+alloy-primitives.workspace = true
+reth-primitives-traits.workspace = true
+alloy-consensus.workspace = true
+alloy-eips.workspace = true
 
 [dev-dependencies]
-reth-interfaces = { workspace = true, features = ["test-utils"] }
-reth-provider = { workspace = true, features = ["test-utils"] }
-assert_matches.workspace = true
-mockall = "0.11.3"
+reth-primitives.workspace = true
+alloy-consensus.workspace = true
+rand.workspace = true
 
 [features]
-optimism = ["reth-primitives/optimism"]
+default = ["std"]
+std = [
+    "alloy-consensus/std",
+    "alloy-eips/std",
+    "alloy-primitives/std",
+    "reth-chainspec/std",
+    "reth-consensus/std",
+    "reth-primitives-traits/std",
+    "reth-primitives/std",
+]

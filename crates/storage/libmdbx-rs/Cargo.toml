@@ -1,36 +1,38 @@
 [package]
 name = "reth-libmdbx"
+description = "Idiomatic and safe MDBX wrapper"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license = "Apache-2.0"
-description = "Idiomatic and safe MDBX wrapper with good licence"
 homepage.workspace = true
 repository.workspace = true
 
-[lib]
-name = "reth_libmdbx"
+[lints]
+workspace = true
 
 [dependencies]
+reth-mdbx-sys.workspace = true
+
 bitflags.workspace = true
-byteorder = "1"
-derive_more = "0.99"
+byteorder.workspace = true
+derive_more.workspace = true
 indexmap = "2"
-libc = "0.2"
 parking_lot.workspace = true
+smallvec.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
-ffi = { package = "reth-mdbx-sys", path = "./mdbx-sys" }
-
-lifetimed-bytes = { version = "0.1", optional = true }
+dashmap = { workspace = true, features = ["inline"], optional = true }
 
 [features]
 default = []
 return-borrowed = []
+read-tx-timeouts = ["dep:dashmap"]
 
 [dev-dependencies]
-pprof = { version = "0.12", features = ["flamegraph", "frame-pointer", "criterion"] }
-criterion = "0.5"
+pprof = { workspace = true, features = ["flamegraph", "frame-pointer", "criterion"] }
+criterion.workspace = true
 rand.workspace = true
 rand_xorshift = "0.3"
 tempfile.workspace = true

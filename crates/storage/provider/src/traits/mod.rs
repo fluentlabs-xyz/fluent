@@ -1,67 +1,21 @@
 //! Collection of common provider traits.
 
-mod account;
-pub use account::{AccountExtReader, AccountReader, ChangeSetReader};
-
-mod storage;
-pub use storage::StorageReader;
+// Re-export all the traits
+pub use reth_storage_api::*;
 
 mod block;
-pub use block::{
-    BlockExecutionWriter, BlockReader, BlockReaderIdExt, BlockSource, BlockWriter,
-    TransactionVariant,
-};
+pub use block::*;
 
-mod block_hash;
-pub use block_hash::BlockHashReader;
-
-mod block_id;
-pub use block_id::{BlockIdReader, BlockNumReader};
-
-mod evm_env;
-pub use evm_env::EvmEnvProvider;
-
-mod chain_info;
-pub use chain_info::CanonChainTracker;
-
-mod header;
-pub use header::HeaderProvider;
-
-mod receipts;
-pub use receipts::{ReceiptProvider, ReceiptProviderIdExt};
+mod header_sync_gap;
+pub use header_sync_gap::{HeaderSyncGap, HeaderSyncGapProvider};
 
 mod state;
-pub use state::{
-    BlockchainTreePendingStateProvider, BundleStateDataProvider, StateProvider, StateProviderBox,
-    StateProviderFactory, StateRootProvider,
-};
+pub use state::StateWriter;
 
-mod transactions;
-pub use transactions::{TransactionsProvider, TransactionsProviderExt};
+pub use reth_chainspec::ChainSpecProvider;
 
-mod withdrawals;
-pub use withdrawals::WithdrawalsProvider;
+mod static_file_provider;
+pub use static_file_provider::StaticFileProviderFactory;
 
-mod executor;
-pub use executor::{BlockExecutor, BlockExecutorStats, ExecutorFactory, PrunableBlockExecutor};
-
-mod chain;
-pub use chain::{
-    CanonStateNotification, CanonStateNotificationSender, CanonStateNotifications,
-    CanonStateSubscriptions,
-};
-
-mod spec;
-pub use spec::ChainSpecProvider;
-
-mod stage_checkpoint;
-pub use stage_checkpoint::{StageCheckpointReader, StageCheckpointWriter};
-
-mod hashing;
-pub use hashing::HashingWriter;
-
-mod history;
-pub use history::HistoryWriter;
-
-mod prune_checkpoint;
-pub use prune_checkpoint::{PruneCheckpointReader, PruneCheckpointWriter};
+mod full;
+pub use full::{FullProvider, FullRpcProvider};

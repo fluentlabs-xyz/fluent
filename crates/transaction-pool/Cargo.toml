@@ -6,28 +6,32 @@ rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = """
-Transaction pool implementation
-"""
+description = "Transaction pool implementation"
 
-[package.metadata.cargo-udeps.ignore]
-normal = [
-    # Used for diagrams in docs
-    "aquamarine",
-]
+[lints]
+workspace = true
 
 [dependencies]
 # reth
-reth-primitives.workspace = true
-reth-provider.workspace = true
-reth-interfaces.workspace = true
+reth-chain-state.workspace = true
+reth-chainspec.workspace = true
+reth-eth-wire-types.workspace = true
+reth-primitives = { workspace = true, features = ["c-kzg", "secp256k1"] }
+reth-primitives-traits.workspace = true
+reth-execution-types.workspace = true
+reth-fs-util.workspace = true
+reth-storage-api.workspace = true
 reth-tasks.workspace = true
-revm.workspace = true
+revm-primitives.workspace = true
+revm-interpreter.workspace = true
+
+# ethereum
+alloy-eips = { workspace = true, features = ["kzg"] }
+alloy-primitives.workspace = true
 alloy-rlp.workspace = true
-reth-revm = { path = "../revm", optional = true }
+alloy-consensus.workspace = true
 
 # async/futures
-async-trait.workspace = true
 futures-util.workspace = true
 parking_lot.workspace = true
 tokio = { workspace = true, default-features = false, features = ["sync"] }
@@ -41,39 +45,88 @@ metrics.workspace = true
 aquamarine.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+rustc-hash.workspace = true
+schnellru.workspace = true
 serde = { workspace = true, features = ["derive", "rc"], optional = true }
-fnv = "1.0.7"
 bitflags.workspace = true
-auto_impl = "1.0"
+auto_impl.workspace = true
+smallvec.workspace = true
 
 # testing
 rand = { workspace = true, optional = true }
-paste = { version = "1.0", optional = true }
+paste = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
+proptest-arbitrary-interop = { workspace = true, optional = true }
 
 [dev-dependencies]
 reth-primitives = { workspace = true, features = ["arbitrary"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
-paste = "1.0"
-rand = "0.8"
+reth-tracing.workspace = true
+paste.workspace = true
+rand.workspace = true
 proptest.workspace = true
-criterion = "0.5"
+proptest-arbitrary-interop.workspace = true
+criterion.workspace = true
+pprof = { workspace = true, features = ["criterion", "flamegraph"] }
 assert_matches.workspace = true
+tempfile.workspace = true
+serde_json.workspace = true
 
 [features]
 default = ["serde"]
-serde = ["dep:serde"]
-test-utils = ["rand", "paste", "serde"]
-arbitrary = ["proptest", "reth-primitives/arbitrary"]
-optimism = [
-    "dep:reth-revm",
-    "reth-primitives/optimism",
-    "reth-provider/test-utils",
-    "reth-provider/optimism",
-    "revm/optimism"
+serde = [
+    "dep:serde",
+    "reth-execution-types/serde",
+    "reth-eth-wire-types/serde",
+    "reth-provider/serde",
+    "alloy-consensus/serde",
+    "alloy-eips/serde",
+    "alloy-primitives/serde",
+    "bitflags/serde",
+    "parking_lot/serde",
+    "rand?/serde",
+    "smallvec/serde",
+    "reth-primitives-traits/serde",
+    "revm-interpreter/serde",
+    "revm-primitives/serde",
 ]
+test-utils = [
+    "rand",
+    "paste",
+    "serde",
+    "reth-chain-state/test-utils",
+    "reth-chainspec/test-utils",
+    "reth-primitives/test-utils",
+    "reth-provider/test-utils",
+    "reth-primitives-traits/test-utils",
+]
+arbitrary = [
+    "proptest",
+    "reth-primitives/arbitrary",
+    "proptest-arbitrary-interop",
+    "reth-chainspec/arbitrary",
+    "reth-eth-wire-types/arbitrary",
+    "alloy-consensus/arbitrary",
+    "alloy-eips/arbitrary",
+    "alloy-primitives/arbitrary",
+    "bitflags/arbitrary",
+    "reth-primitives-traits/arbitrary",
+    "smallvec/arbitrary",
+    "revm-interpreter/arbitrary",
+    "revm-primitives/arbitrary",
+]
+
+[[bench]]
+name = "truncate"
+required-features = ["test-utils", "arbitrary"]
+harness = false
 
 [[bench]]
 name = "reorder"
 required-features = ["test-utils", "arbitrary"]
+harness = false
+
+[[bench]]
+name = "priority"
+required-features = ["arbitrary"]
 harness = false

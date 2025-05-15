@@ -1,7 +1,10 @@
 //! Trait abstractions used by the payload crate.
 
-use crate::{error::PayloadBuilderError, BuiltPayload, PayloadBuilderAttributes};
-use std::{future::Future, sync::Arc};
+use reth_chain_state::CanonStateNotification;
+use reth_payload_builder_primitives::PayloadBuilderError;
+use reth_payload_primitives::{BuiltPayload, PayloadBuilderAttributes, PayloadKind};
+use reth_primitives_traits::NodePrimitives;
+use std::future::Future;
 
 /// A type that can build a payload.
 ///
@@ -15,19 +18,23 @@ use std::{future::Future, sync::Arc};
 ///
 /// Note: A `PayloadJob` need to be cancel safe because it might be dropped after the CL has requested the payload via `engine_getPayloadV1` (see also [engine API docs](https://github.com/ethereum/execution-apis/blob/6709c2a795b707202e93c4f2867fa0bf2640a84f/src/engine/paris.md#engine_getpayloadv1))
 pub trait PayloadJob: Future<Output = Result<(), PayloadBuilderError>> + Send + Sync {
+    /// Represents the payload attributes type that is used to spawn this payload job.
+    type PayloadAttributes: PayloadBuilderAttributes + std::fmt::Debug;
     /// Represents the future that resolves the block that's returned to the CL.
-    type ResolvePayloadFuture: Future<Output = Result<Arc<BuiltPayload>, PayloadBuilderError>>
+    type ResolvePayloadFuture: Future<Output = Result<Self::BuiltPayload, PayloadBuilderError>>
         + Send
         + Sync
         + 'static;
+    /// Represents the built payload type that is returned to the CL.
+    type BuiltPayload: BuiltPayload + Clone + std::fmt::Debug;
 
     /// Returns the best payload that has been built so far.
     ///
     /// Note: This is never called by the CL.
-    fn best_payload(&self) -> Result<Arc<BuiltPayload>, PayloadBuilderError>;
+    fn best_payload(&self) -> Result<Self::BuiltPayload, PayloadBuilderError>;
 
     /// Returns the payload attributes for the payload being built.
-    fn payload_attributes(&self) -> Result<PayloadBuilderAttributes, PayloadBuilderError>;
+    fn payload_attributes(&self) -> Result<Self::PayloadAttributes, PayloadBuilderError>;
 
     /// Called when the payload is requested by the CL.
     ///
@@ -48,7 +55,23 @@ pub trait PayloadJob: Future<Output = Result<(), PayloadBuilderError>> + Send + 
     /// If this returns [`KeepPayloadJobAlive::Yes`], then the [`PayloadJob`] will be polled
     /// once more. If this returns [`KeepPayloadJobAlive::No`] then the [`PayloadJob`] will be
     /// dropped after this call.
-    fn resolve(&mut self) -> (Self::ResolvePayloadFuture, KeepPayloadJobAlive);
+    ///
+    /// The [`PayloadKind`] determines how the payload should be resolved in the
+    /// `ResolvePayloadFuture`. [`PayloadKind::Earliest`] should return the earliest available
+    /// payload (as fast as possible), e.g. racing an empty payload job against a pending job if
+    /// there's no payload available yet. [`PayloadKind::WaitForPending`] is allowed to wait
+    /// until a built payload is available.
+    fn resolve_kind(
+        &mut self,
+        kind: PayloadKind,
+    ) -> (Self::ResolvePayloadFuture, KeepPayloadJobAlive);
+
+    /// Resolves the payload as fast as possible.
+    ///
+    /// See also [`PayloadJob::resolve_kind`]
+    fn resolve(&mut self) -> (Self::ResolvePayloadFuture, KeepPayloadJobAlive) {
+        self.resolve_kind(PayloadKind::Earliest)
+    }
 }
 
 /// Whether the payload job should be kept alive or terminated after the payload was requested by
@@ -78,6 +101,14 @@ pub trait PayloadJobGenerator: Send + Sync {
     /// returned directly.
     fn new_payload_job(
         &self,
-        attr: PayloadBuilderAttributes,
+        attr: <Self::Job as PayloadJob>::PayloadAttributes,
     ) -> Result<Self::Job, PayloadBuilderError>;
+
+    /// Handles new chain state events
+    ///
+    /// This is intended for any logic that needs to be run when the chain state changes or used to
+    /// use the in memory state for the head block.
+    fn on_new_state<N: NodePrimitives>(&mut self, new_state: CanonStateNotification<N>) {
+        let _ = new_state;
+    }
 }

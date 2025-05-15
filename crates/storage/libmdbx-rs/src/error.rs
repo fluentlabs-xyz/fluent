@@ -1,34 +1,52 @@
-use libc::c_int;
-use std::{ffi::CStr, fmt, result, str};
+use std::{ffi::c_int, result};
+
+/// An MDBX result.
+pub type Result<T> = result::Result<T, Error>;
 
 /// An MDBX error kind.
-#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
-    /// The key/value pair already exists.
+    /// Key/data pair already exists.
+    #[error("key/data pair already exists")]
     KeyExist,
-    /// The requested key/value pair was not found.
+    /// No matching key/data pair found.
+    #[error("no matching key/data pair found")]
     NotFound,
+    /// The cursor is already at the end of data.
+    #[error("the cursor is already at the end of data")]
     NoData,
-    /// The requested page was not found.
+    /// Requested page not found.
+    #[error("requested page not found")]
     PageNotFound,
-    /// The database is corrupted (e.g. a page was a wrong type)
+    /// Database is corrupted.
+    #[error("database is corrupted")]
     Corrupted,
-    /// The environment had a fatal error (e.g. failed to update a meta page)
+    /// Fatal environment error.
+    #[error("fatal environment error")]
     Panic,
+    /// DB version mismatch.
+    #[error("DB version mismatch")]
     VersionMismatch,
-    /// File is not a valid MDBX file
+    /// File is not an MDBX file.
+    #[error("file is not an MDBX file")]
     Invalid,
-    /// Environment map size reached.
+    /// Environment map size limit reached.
+    #[error("environment map size limit reached")]
     MapFull,
-    /// Environment reached the maximum number of databases.
+    /// Too many DBI-handles (maxdbs reached).
+    #[error("too many DBI-handles (maxdbs reached)")]
     DbsFull,
-    /// Environment reached the maximum number of readers.
+    /// Too many readers (maxreaders reached).
+    #[error("too many readers (maxreaders reached)")]
     ReadersFull,
-    /// The transaction has too many dirty pages (i.e. the transaction is too big).
+    /// Transaction has too many dirty pages (i.e., the transaction is too big).
+    #[error("transaction has too many dirty pages (i.e., the transaction is too big)")]
     TxnFull,
-    /// The cursor stack is too deep.
+    /// Cursor stack limit reached.
+    #[error("cursor stack limit reached")]
     CursorFull,
-    /// The page does not have enough space.
+    /// Page has no more space.
+    #[error("page has no more space")]
     PageFull,
     /// The database engine was unable to extend mapping, e.g. the address space is unavailable or
     /// busy.
@@ -39,96 +57,151 @@ pub enum Error {
     ///   environment should be re-opened to continue.
     /// - The engine was unable to extend the mapping during a write transaction or an explicit
     ///   call to change the geometry of the environment.
+    #[error("database engine was unable to extend mapping")]
     UnableExtendMapSize,
+    /// Environment or database is not compatible with the requested operation or flags.
+    #[error("environment or database is not compatible with the requested operation or flags")]
     Incompatible,
+    /// Invalid reuse of reader locktable slot.
+    #[error("invalid reuse of reader locktable slot")]
     BadRslot,
+    /// Transaction is not valid for requested operation.
+    #[error("transaction is not valid for requested operation")]
     BadTxn,
+    /// Invalid size or alignment of key or data for the target database.
+    #[error("invalid size or alignment of key or data for the target database")]
     BadValSize,
+    /// The specified DBI-handle is invalid.
+    #[error("the specified DBI-handle is invalid")]
     BadDbi,
+    /// Unexpected internal error.
+    #[error("unexpected internal error")]
     Problem,
+    /// Another write transaction is running.
+    #[error("another write transaction is running")]
     Busy,
+    /// The specified key has more than one associated value.
+    #[error("the specified key has more than one associated value")]
     Multival,
+    /// Wrong signature of a runtime object(s).
+    #[error("wrong signature of a runtime object(s)")]
     BadSignature,
+    /// Database should be recovered, but cannot be done automatically since it's in read-only
+    /// mode.
+    #[error("database should be recovered, but cannot be done automatically since it's in read-only mode")]
     WannaRecovery,
+    /// The given key value is mismatched to the current cursor position.
+    #[error("the given key value is mismatched to the current cursor position")]
     KeyMismatch,
+    /// Decode error: An invalid parameter was specified.
+    #[error("invalid parameter specified")]
     DecodeError,
+    /// The environment opened in read-only.
+    #[error("the environment opened in read-only, check <https://reth.rs/run/troubleshooting.html> for more")]
     Access,
+    /// Database is too large for the current system.
+    #[error("database is too large for the current system")]
     TooLarge,
+    /// Decode error length difference:
+    ///
+    /// An invalid parameter was specified, or the environment has an active write transaction.
+    #[error("invalid parameter specified or active write transaction")]
     DecodeErrorLenDiff,
+    /// If the [Environment](crate::Environment) was opened with
+    /// [`EnvironmentKind::WriteMap`](crate::EnvironmentKind::WriteMap) flag, nested transactions
+    /// are not supported.
+    #[error("nested transactions are not supported with WriteMap")]
+    NestedTransactionsUnsupportedWithWriteMap,
+    /// If the [Environment](crate::Environment) was opened with in read-only mode
+    /// [`Mode::ReadOnly`](crate::flags::Mode::ReadOnly), write transactions can't be opened.
+    #[error("write transactions are not supported in read-only mode")]
+    WriteTransactionUnsupportedInReadOnlyMode,
+    /// Read transaction has been timed out.
+    #[error("read transaction has been timed out")]
+    ReadTransactionTimeout,
+    /// Permission defined
+    #[error("permission denied to setup database")]
+    Permission,
+    /// Unknown error code.
+    #[error("unknown error code: {0}")]
     Other(i32),
 }
 
 impl Error {
     /// Converts a raw error code to an [Error].
-    pub fn from_err_code(err_code: c_int) -> Error {
+    pub const fn from_err_code(err_code: c_int) -> Self {
         match err_code {
-            ffi::MDBX_KEYEXIST => Error::KeyExist,
-            ffi::MDBX_NOTFOUND => Error::NotFound,
-            ffi::MDBX_ENODATA => Error::NoData,
-            ffi::MDBX_PAGE_NOTFOUND => Error::PageNotFound,
-            ffi::MDBX_CORRUPTED => Error::Corrupted,
-            ffi::MDBX_PANIC => Error::Panic,
-            ffi::MDBX_VERSION_MISMATCH => Error::VersionMismatch,
-            ffi::MDBX_INVALID => Error::Invalid,
-            ffi::MDBX_MAP_FULL => Error::MapFull,
-            ffi::MDBX_DBS_FULL => Error::DbsFull,
-            ffi::MDBX_READERS_FULL => Error::ReadersFull,
-            ffi::MDBX_TXN_FULL => Error::TxnFull,
-            ffi::MDBX_CURSOR_FULL => Error::CursorFull,
-            ffi::MDBX_PAGE_FULL => Error::PageFull,
-            ffi::MDBX_UNABLE_EXTEND_MAPSIZE => Error::UnableExtendMapSize,
-            ffi::MDBX_INCOMPATIBLE => Error::Incompatible,
-            ffi::MDBX_BAD_RSLOT => Error::BadRslot,
-            ffi::MDBX_BAD_TXN => Error::BadTxn,
-            ffi::MDBX_BAD_VALSIZE => Error::BadValSize,
-            ffi::MDBX_BAD_DBI => Error::BadDbi,
-            ffi::MDBX_PROBLEM => Error::Problem,
-            ffi::MDBX_BUSY => Error::Busy,
-            ffi::MDBX_EMULTIVAL => Error::Multival,
-            ffi::MDBX_WANNA_RECOVERY => Error::WannaRecovery,
-            ffi::MDBX_EKEYMISMATCH => Error::KeyMismatch,
-            ffi::MDBX_EINVAL => Error::DecodeError,
-            ffi::MDBX_EACCESS => Error::Access,
-            ffi::MDBX_TOO_LARGE => Error::TooLarge,
-            ffi::MDBX_EBADSIGN => Error::BadSignature,
-            other => Error::Other(other),
+            ffi::MDBX_KEYEXIST => Self::KeyExist,
+            ffi::MDBX_NOTFOUND => Self::NotFound,
+            ffi::MDBX_ENODATA => Self::NoData,
+            ffi::MDBX_PAGE_NOTFOUND => Self::PageNotFound,
+            ffi::MDBX_CORRUPTED => Self::Corrupted,
+            ffi::MDBX_PANIC => Self::Panic,
+            ffi::MDBX_VERSION_MISMATCH => Self::VersionMismatch,
+            ffi::MDBX_INVALID => Self::Invalid,
+            ffi::MDBX_MAP_FULL => Self::MapFull,
+            ffi::MDBX_DBS_FULL => Self::DbsFull,
+            ffi::MDBX_READERS_FULL => Self::ReadersFull,
+            ffi::MDBX_TXN_FULL => Self::TxnFull,
+            ffi::MDBX_CURSOR_FULL => Self::CursorFull,
+            ffi::MDBX_PAGE_FULL => Self::PageFull,
+            ffi::MDBX_UNABLE_EXTEND_MAPSIZE => Self::UnableExtendMapSize,
+            ffi::MDBX_INCOMPATIBLE => Self::Incompatible,
+            ffi::MDBX_BAD_RSLOT => Self::BadRslot,
+            ffi::MDBX_BAD_TXN => Self::BadTxn,
+            ffi::MDBX_BAD_VALSIZE => Self::BadValSize,
+            ffi::MDBX_BAD_DBI => Self::BadDbi,
+            ffi::MDBX_PROBLEM => Self::Problem,
+            ffi::MDBX_BUSY => Self::Busy,
+            ffi::MDBX_EMULTIVAL => Self::Multival,
+            ffi::MDBX_WANNA_RECOVERY => Self::WannaRecovery,
+            ffi::MDBX_EKEYMISMATCH => Self::KeyMismatch,
+            ffi::MDBX_EINVAL => Self::DecodeError,
+            ffi::MDBX_EACCESS => Self::Access,
+            ffi::MDBX_TOO_LARGE => Self::TooLarge,
+            ffi::MDBX_EBADSIGN => Self::BadSignature,
+            ffi::MDBX_EPERM => Self::Permission,
+            other => Self::Other(other),
         }
     }
 
     /// Converts an [Error] to the raw error code.
-    pub fn to_err_code(&self) -> i32 {
+    pub const fn to_err_code(&self) -> i32 {
         match self {
-            Error::KeyExist => ffi::MDBX_KEYEXIST,
-            Error::NotFound => ffi::MDBX_NOTFOUND,
-            Error::NoData => ffi::MDBX_ENODATA,
-            Error::PageNotFound => ffi::MDBX_PAGE_NOTFOUND,
-            Error::Corrupted => ffi::MDBX_CORRUPTED,
-            Error::Panic => ffi::MDBX_PANIC,
-            Error::VersionMismatch => ffi::MDBX_VERSION_MISMATCH,
-            Error::Invalid => ffi::MDBX_INVALID,
-            Error::MapFull => ffi::MDBX_MAP_FULL,
-            Error::DbsFull => ffi::MDBX_DBS_FULL,
-            Error::ReadersFull => ffi::MDBX_READERS_FULL,
-            Error::TxnFull => ffi::MDBX_TXN_FULL,
-            Error::CursorFull => ffi::MDBX_CURSOR_FULL,
-            Error::PageFull => ffi::MDBX_PAGE_FULL,
-            Error::UnableExtendMapSize => ffi::MDBX_UNABLE_EXTEND_MAPSIZE,
-            Error::Incompatible => ffi::MDBX_INCOMPATIBLE,
-            Error::BadRslot => ffi::MDBX_BAD_RSLOT,
-            Error::BadTxn => ffi::MDBX_BAD_TXN,
-            Error::BadValSize => ffi::MDBX_BAD_VALSIZE,
-            Error::BadDbi => ffi::MDBX_BAD_DBI,
-            Error::Problem => ffi::MDBX_PROBLEM,
-            Error::Busy => ffi::MDBX_BUSY,
-            Error::Multival => ffi::MDBX_EMULTIVAL,
-            Error::WannaRecovery => ffi::MDBX_WANNA_RECOVERY,
-            Error::KeyMismatch => ffi::MDBX_EKEYMISMATCH,
-            Error::DecodeError => ffi::MDBX_EINVAL,
-            Error::Access => ffi::MDBX_EACCESS,
-            Error::TooLarge => ffi::MDBX_TOO_LARGE,
-            Error::BadSignature => ffi::MDBX_EBADSIGN,
-            Error::Other(err_code) => *err_code,
-            _ => unreachable!(),
+            Self::KeyExist => ffi::MDBX_KEYEXIST,
+            Self::NotFound => ffi::MDBX_NOTFOUND,
+            Self::NoData => ffi::MDBX_ENODATA,
+            Self::PageNotFound => ffi::MDBX_PAGE_NOTFOUND,
+            Self::Corrupted => ffi::MDBX_CORRUPTED,
+            Self::Panic => ffi::MDBX_PANIC,
+            Self::VersionMismatch => ffi::MDBX_VERSION_MISMATCH,
+            Self::Invalid => ffi::MDBX_INVALID,
+            Self::MapFull => ffi::MDBX_MAP_FULL,
+            Self::DbsFull => ffi::MDBX_DBS_FULL,
+            Self::ReadersFull => ffi::MDBX_READERS_FULL,
+            Self::TxnFull => ffi::MDBX_TXN_FULL,
+            Self::CursorFull => ffi::MDBX_CURSOR_FULL,
+            Self::PageFull => ffi::MDBX_PAGE_FULL,
+            Self::UnableExtendMapSize => ffi::MDBX_UNABLE_EXTEND_MAPSIZE,
+            Self::Incompatible => ffi::MDBX_INCOMPATIBLE,
+            Self::BadRslot => ffi::MDBX_BAD_RSLOT,
+            Self::BadTxn => ffi::MDBX_BAD_TXN,
+            Self::BadValSize => ffi::MDBX_BAD_VALSIZE,
+            Self::BadDbi => ffi::MDBX_BAD_DBI,
+            Self::Problem => ffi::MDBX_PROBLEM,
+            Self::Busy => ffi::MDBX_BUSY,
+            Self::Multival => ffi::MDBX_EMULTIVAL,
+            Self::WannaRecovery => ffi::MDBX_WANNA_RECOVERY,
+            Self::KeyMismatch => ffi::MDBX_EKEYMISMATCH,
+            Self::DecodeErrorLenDiff | Self::DecodeError => ffi::MDBX_EINVAL,
+            Self::TooLarge => ffi::MDBX_TOO_LARGE,
+            Self::BadSignature => ffi::MDBX_EBADSIGN,
+            Self::Access |
+            Self::WriteTransactionUnsupportedInReadOnlyMode |
+            Self::NestedTransactionsUnsupportedWithWriteMap => ffi::MDBX_EACCESS,
+            Self::ReadTransactionTimeout => -96000, // Custom non-MDBX error code
+            Self::Permission => ffi::MDBX_EPERM,
+            Self::Other(err_code) => *err_code,
         }
     }
 }
@@ -139,23 +212,8 @@ impl From<Error> for i32 {
     }
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let value = match self {
-            Self::DecodeErrorLenDiff => "Mismatched data length",
-            _ => unsafe {
-                let err = ffi::mdbx_strerror(self.to_err_code());
-                str::from_utf8_unchecked(CStr::from_ptr(err).to_bytes())
-            },
-        };
-        write!(fmt, "{value}")
-    }
-}
-
-/// An MDBX result.
-pub type Result<T> = result::Result<T, Error>;
-
-pub fn mdbx_result(err_code: c_int) -> Result<bool> {
+#[inline]
+pub(crate) const fn mdbx_result(err_code: c_int) -> Result<bool> {
     match err_code {
         ffi::MDBX_SUCCESS => Ok(false),
         ffi::MDBX_RESULT_TRUE => Ok(true),
@@ -175,14 +233,17 @@ macro_rules! mdbx_try_optional {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]
     fn test_description() {
-        assert_eq!("Permission denied", Error::from_err_code(13).to_string());
+        assert_eq!(
+            "the environment opened in read-only, check <https://reth.rs/run/troubleshooting.html> for more",
+            Error::from_err_code(13).to_string()
+        );
 
-        assert_eq!("MDBX_INVALID: File is not an MDBX file", Error::Invalid.to_string());
+        assert_eq!("file is not an MDBX file", Error::Invalid.to_string());
     }
 
     #[test]

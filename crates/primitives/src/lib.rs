@@ -1,138 +1,77 @@
-//! Commonly used types in reth.
+//! Commonly used types in Reth.
 //!
 //! This crate contains Ethereum primitive types and helper functions.
 //!
 //! ## Feature Flags
 //!
+//! - `alloy-compat`: Adds compatibility conversions for certain alloy types.
 //! - `arbitrary`: Adds `proptest` and `arbitrary` support for primitive types.
 //! - `test-utils`: Export utilities for testing
+//! - `reth-codec`: Enables db codec support for reth types including zstd compression for certain
+//!   types.
 
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/paradigmxyz/reth/main/assets/reth-docs.png",
     html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub, rustdoc::all)]
-#![deny(unused_must_use, rust_2018_idioms)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
-#![allow(clippy::non_canonical_clone_impl)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-mod account;
-pub mod basefee;
 mod block;
-mod chain;
-mod compression;
-pub mod constants;
-pub mod eip4844;
-mod error;
-mod forkid;
-pub mod fs;
-mod genesis;
-mod hardfork;
-mod header;
-mod integer_list;
-mod log;
-mod net;
-mod peer;
-pub mod proofs;
-mod prune;
 mod receipt;
-/// Helpers for working with revm
-pub mod revm;
-pub mod serde_helper;
-pub mod snapshot;
-pub mod stage;
-mod storage;
-/// Helpers for working with transactions
+pub use reth_static_file_types as static_file;
 pub mod transaction;
-pub mod trie;
-mod withdrawal;
+#[cfg(any(test, feature = "arbitrary"))]
+pub use block::{generate_valid_header, valid_header_strategy};
+pub use block::{Block, BlockBody, SealedBlock};
+#[allow(deprecated)]
+pub use block::{BlockWithSenders, SealedBlockFor, SealedBlockWithSenders};
 
-pub use account::{Account, Bytecode};
-pub use block::{
-    Block, BlockBody, BlockBodyRoots, BlockHashOrNumber, BlockId, BlockNumHash, BlockNumberOrTag,
-    BlockWithSenders, ForkBlock, RpcBlockHash, SealedBlock, SealedBlockWithSenders,
+pub use receipt::{gas_spent_by_transactions, Receipt};
+pub use reth_primitives_traits::{
+    logs_bloom, Account, Bytecode, GotExpected, GotExpectedBoxed, Header, HeaderError, Log,
+    LogData, NodePrimitives, RecoveredBlock, SealedHeader, StorageEntry,
 };
-pub use bytes::{Buf, BufMut, BytesMut};
-pub use chain::{
-    AllGenesisFormats, BaseFeeParams, Chain, ChainInfo, ChainSpec, ChainSpecBuilder,
-    DisplayHardforks, ForkCondition, ForkTimestamps, NamedChain, DEV, GOERLI, HOLESKY, MAINNET,
-    SEPOLIA,
-};
-#[cfg(feature = "optimism")]
-pub use chain::{BASE_GOERLI, BASE_MAINNET, OP_GOERLI};
-pub use compression::*;
-pub use constants::{
-    DEV_GENESIS_HASH, EMPTY_OMMER_ROOT_HASH, GOERLI_GENESIS_HASH, HOLESKY_GENESIS_HASH,
-    KECCAK_EMPTY, MAINNET_GENESIS_HASH, SEPOLIA_GENESIS_HASH,
-};
-pub use error::{GotExpected, GotExpectedBoxed};
-pub use forkid::{ForkFilter, ForkHash, ForkId, ForkTransition, ValidationError};
-pub use genesis::{ChainConfig, Genesis, GenesisAccount};
-pub use hardfork::Hardfork;
-pub use header::{Head, Header, HeadersDirection, SealedHeader};
-pub use integer_list::IntegerList;
-pub use log::{logs_bloom, Log};
-pub use net::{
-    goerli_nodes, holesky_nodes, mainnet_nodes, sepolia_nodes, NodeRecord, GOERLI_BOOTNODES,
-    HOLESKY_BOOTNODES, MAINNET_BOOTNODES, SEPOLIA_BOOTNODES,
-};
-pub use peer::{PeerId, WithPeerId};
-pub use prune::{
-    PruneCheckpoint, PruneMode, PruneModes, PruneProgress, PruneSegment, PruneSegmentError,
-    ReceiptsLogPruneConfig, MINIMUM_PRUNING_DISTANCE,
-};
-pub use receipt::{Receipt, ReceiptWithBloom, ReceiptWithBloomRef, Receipts};
-pub use serde_helper::JsonU256;
-pub use snapshot::SnapshotSegment;
-pub use storage::StorageEntry;
+pub use static_file::StaticFileSegment;
 
-#[cfg(feature = "c-kzg")]
-pub use transaction::{
-    BlobTransaction, BlobTransactionSidecar, BlobTransactionValidationError,
-    FromRecoveredPooledTransaction, PooledTransactionsElement,
-    PooledTransactionsElementEcRecovered,
+pub use alloy_consensus::{
+    transaction::{PooledTransaction, Recovered, TransactionMeta},
+    ReceiptWithBloom,
 };
+
+/// Recovered transaction
+#[deprecated(note = "use `Recovered` instead")]
+pub type RecoveredTx<T> = Recovered<T>;
 
 pub use transaction::{
-    util::secp256k1::{public_key_to_address, recover_signer, sign_message},
-    AccessList, AccessListItem, FromRecoveredTransaction, IntoRecoveredTransaction,
-    InvalidTransactionError, Signature, Transaction, TransactionKind, TransactionMeta,
-    TransactionSigned, TransactionSignedEcRecovered, TransactionSignedNoHash, TxEip1559, TxEip2930,
-    TxEip4844, TxHashOrNumber, TxLegacy, TxType, TxValue, EIP1559_TX_TYPE_ID, EIP2930_TX_TYPE_ID,
-    EIP4844_TX_TYPE_ID, LEGACY_TX_TYPE_ID,
+    util::secp256k1::{public_key_to_address, recover_signer_unchecked, sign_message},
+    InvalidTransactionError, Transaction, TransactionSigned, TxType,
 };
-#[cfg(feature = "optimism")]
-pub use transaction::{TxDeposit, DEPOSIT_TX_TYPE_ID};
-pub use withdrawal::Withdrawal;
+#[allow(deprecated)]
+pub use transaction::{PooledTransactionsElementEcRecovered, TransactionSignedEcRecovered};
 
 // Re-exports
-pub use self::ruint::UintTryTo;
-pub use alloy_primitives::{
-    self, address, b256, bloom, bytes, eip191_hash_message, hex, hex_literal, keccak256, ruint,
-    Address, BlockHash, BlockNumber, Bloom, BloomInput, Bytes, ChainId, Selector, StorageKey,
-    StorageValue, TxHash, TxIndex, TxNumber, B128, B256, B512, B64, U128, U256, U64, U8,
-};
-pub use revm_primitives::{self, JumpMap};
-
-#[doc(hidden)]
-#[deprecated = "use B64 instead"]
-pub type H64 = B64;
-#[doc(hidden)]
-#[deprecated = "use B128 instead"]
-pub type H128 = B128;
-#[doc(hidden)]
-#[deprecated = "use Address instead"]
-pub type H160 = Address;
-#[doc(hidden)]
-#[deprecated = "use B256 instead"]
-pub type H256 = B256;
-#[doc(hidden)]
-#[deprecated = "use B512 instead"]
-pub type H512 = B512;
+pub use reth_ethereum_forks::*;
 
 #[cfg(any(test, feature = "arbitrary"))]
 pub use arbitrary;
 
 #[cfg(feature = "c-kzg")]
 pub use c_kzg as kzg;
+
+/// Bincode-compatible serde implementations for commonly used types in Reth.
+///
+/// `bincode` crate doesn't work with optionally serializable serde fields, but some of the
+/// Reth types require optional serialization for RPC compatibility. This module makes so that
+/// all fields are serialized.
+///
+/// Read more: <https://github.com/bincode-org/bincode/issues/326>
+#[cfg(feature = "serde-bincode-compat")]
+pub mod serde_bincode_compat {
+    pub use reth_primitives_traits::serde_bincode_compat::*;
+}
+
+// Re-export of `EthPrimitives`
+pub use reth_ethereum_primitives::EthPrimitives;

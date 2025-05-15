@@ -8,23 +8,33 @@ homepage.workspace = true
 repository.workspace = true
 description = "A basic payload builder for reth that uses the txpool API to build payloads."
 
+[lints]
+workspace = true
+
 [dependencies]
 # reth
+reth-chainspec.workspace = true
 reth-primitives.workspace = true
-reth-revm = { path = "../../revm" }
-reth-transaction-pool.workspace = true
+reth-primitives-traits.workspace = true
 reth-provider.workspace = true
 reth-payload-builder.workspace = true
+reth-payload-builder-primitives.workspace = true
+reth-payload-primitives.workspace = true
 reth-tasks.workspace = true
-reth-interfaces.workspace = true
+reth-evm.workspace = true
+reth-revm.workspace = true
+
+# revm
+revm.workspace = true
 
 # ethereum
-alloy-rlp.workspace = true
-revm.workspace = true
+alloy-primitives.workspace = true
+alloy-consensus.workspace = true
+alloy-eips.workspace = true
 
 # async
 tokio = { workspace = true, features = ["sync", "time"] }
-futures-core = "0.3"
+futures-core.workspace = true
 futures-util.workspace = true
 
 # metrics
@@ -33,12 +43,3 @@ metrics.workspace = true
 
 # misc
 tracing.workspace = true
-
-[features]
-optimism = [
-  "reth-primitives/optimism",
-  "reth-revm/optimism",
-  "reth-transaction-pool/optimism",
-  "reth-provider/optimism",
-  "reth-payload-builder/optimism"
-]

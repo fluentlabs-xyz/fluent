@@ -3,27 +3,30 @@
 name: docker
 
 on:
-  workflow_dispatch: {}
   push:
     tags:
       - v*
 
 env:
-  REPO_NAME: ${{ github.repository_owner }}/reth
-  IMAGE_NAME: ${{ github.repository_owner }}/reth
+  REPO_NAME: ${{ github.repository_owner }}/fluent
+  IMAGE_NAME: ${{ github.repository_owner }}/fluent
+  OP_IMAGE_NAME: ${{ github.repository_owner }}/op-reth
   CARGO_TERM_COLOR: always
-  DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/reth
+  DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/fluent
+  OP_DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/op-reth
   DOCKER_USERNAME: ${{ github.actor }}
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   build:
     name: build and push
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     permissions:
       packages: write
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: rui314/setup-mold@v1
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -36,9 +39,11 @@ jobs:
         run: |
           docker run --privileged --rm tonistiigi/binfmt --install arm64,amd64
           docker buildx create --use --name cross-builder
-      - name: Install openssl
-        run: |
-          sudo apt-get install -y libssl-dev python3
-          which python3
-      - name: Build and push image
-        run: make PROFILE=maxperf docker-build-latest
+      - name: Build and push reth image, tag as "latest"
+        run: make PROFILE=maxperf docker-build-push-latest
+      - name: Build and push reth image
+        run: make PROFILE=maxperf docker-build-push
+#      - name: Build and push op-reth image, tag as "latest"
+#        run: make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push-latest
+#      - name: Build and push op-reth image
+#        run: make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push

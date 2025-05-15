@@ -10,8 +10,7 @@
     html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub, rustdoc::all)]
-#![deny(unused_must_use, rust_2018_idioms)]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 pub use crate::resolver::{DnsResolver, MapResolver, Resolver};
@@ -22,8 +21,9 @@ use crate::{
 };
 pub use config::DnsDiscoveryConfig;
 use enr::Enr;
-use error::ParseDnsEntryError;
-use reth_primitives::{ForkId, NodeRecord, PeerId};
+pub use error::ParseDnsEntryError;
+use reth_ethereum_forks::{EnrForkIdEntry, ForkId};
+use reth_network_peers::{pk2id, NodeRecord};
 use schnellru::{ByLength, LruMap};
 use secp256k1::SecretKey;
 use std::{
@@ -47,7 +47,7 @@ use tokio_stream::{
     wrappers::{ReceiverStream, UnboundedReceiverStream},
     Stream, StreamExt,
 };
-use tracing::{debug, trace, warn};
+use tracing::{debug, trace};
 
 mod config;
 mod error;
@@ -56,7 +56,7 @@ pub mod resolver;
 mod sync;
 pub mod tree;
 
-/// [DnsDiscoveryService] front-end.
+/// [`DnsDiscoveryService`] front-end.
 #[derive(Clone, Debug)]
 pub struct DnsDiscoveryHandle {
     /// Channel for sending commands to the service.
@@ -67,13 +67,13 @@ pub struct DnsDiscoveryHandle {
 
 impl DnsDiscoveryHandle {
     /// Starts syncing the given link to a tree.
-    pub fn sync_tree(&mut self, link: &str) -> Result<(), ParseDnsEntryError> {
+    pub fn sync_tree(&self, link: &str) -> Result<(), ParseDnsEntryError> {
         self.sync_tree_with_link(link.parse()?);
         Ok(())
     }
 
     /// Starts syncing the given link to a tree.
-    pub fn sync_tree_with_link(&mut self, link: LinkEntry) {
+    pub fn sync_tree_with_link(&self, link: LinkEntry) {
         let _ = self.to_service.send(DnsDiscoveryCommand::SyncTree(link));
     }
 
@@ -96,7 +96,7 @@ pub struct DnsDiscoveryService<R: Resolver = DnsResolver> {
     command_tx: UnboundedSender<DnsDiscoveryCommand>,
     /// Receiver half of the command channel.
     command_rx: UnboundedReceiverStream<DnsDiscoveryCommand>,
-    /// All subscribers for resolved [NodeRecord]s.
+    /// All subscribers for resolved [`NodeRecord`]s.
     node_record_listeners: Vec<mpsc::Sender<DnsNodeRecordUpdate>>,
     /// All the trees that can be synced.
     trees: HashMap<LinkEntry, SyncTree>,
@@ -115,7 +115,7 @@ pub struct DnsDiscoveryService<R: Resolver = DnsResolver> {
 // === impl DnsDiscoveryService ===
 
 impl<R: Resolver> DnsDiscoveryService<R> {
-    /// Creates a new instance of the [DnsDiscoveryService] using the given settings.
+    /// Creates a new instance of the [`DnsDiscoveryService`] using the given settings.
     ///
     /// ```
     /// use reth_dns_discovery::{DnsDiscoveryService, DnsResolver};
@@ -158,7 +158,7 @@ impl<R: Resolver> DnsDiscoveryService<R> {
             self.bootstrap();
 
             while let Some(event) = self.next().await {
-                trace!(target: "disc::dns", ?event,  "processed");
+                trace!(target: "disc::dns", ?event, "processed");
             }
         })
     }
@@ -170,7 +170,7 @@ impl<R: Resolver> DnsDiscoveryService<R> {
         }
     }
 
-    /// Same as [DnsDiscoveryService::new] but also returns a new handle that's connected to the
+    /// Same as [`DnsDiscoveryService::new`] but also returns a new handle that's connected to the
     /// service
     pub fn new_pair(resolver: Arc<R>, config: DnsDiscoveryConfig) -> (Self, DnsDiscoveryHandle) {
         let service = Self::new(resolver, config);
@@ -236,7 +236,7 @@ impl<R: Resolver> DnsDiscoveryService<R> {
                 }
             },
             Err((err, link)) => {
-                debug!(target: "disc::dns",?err, ?link, "Failed to lookup root")
+                debug!(target: "disc::dns",%err, ?link, "Failed to lookup root")
             }
         }
     }
@@ -253,10 +253,10 @@ impl<R: Resolver> DnsDiscoveryService<R> {
 
         match entry {
             Some(Err(err)) => {
-                debug!(target: "disc::dns",?err, domain=%link.domain, ?hash, "Failed to lookup entry")
+                debug!(target: "disc::dns",%err, domain=%link.domain, ?hash, "Failed to lookup entry")
             }
             None => {
-                debug!(target: "disc::dns",domain=%link.domain, ?hash, "No dns entry")
+                trace!(target: "disc::dns",domain=%link.domain, ?hash, "No dns entry")
             }
             Some(Ok(entry)) => {
                 // cache entry
@@ -373,9 +373,11 @@ pub struct DnsNodeRecordUpdate {
     pub node_record: NodeRecord,
     /// The forkid of the node, if present in the ENR
     pub fork_id: Option<ForkId>,
+    /// Original [`Enr`].
+    pub enr: Enr<SecretKey>,
 }
 
-/// Commands sent from [DnsDiscoveryHandle] to [DnsDiscoveryService]
+/// Commands sent from [`DnsDiscoveryHandle`] to [`DnsDiscoveryService`]
 enum DnsDiscoveryCommand {
     /// Sync a tree
     SyncTree(LinkEntry),
@@ -389,34 +391,84 @@ pub enum DnsDiscoveryEvent {
     Enr(Enr<SecretKey>),
 }
 
-/// Converts an [Enr] into a [NodeRecord]
+/// Converts an [Enr] into a [`NodeRecord`]
 fn convert_enr_node_record(enr: &Enr<SecretKey>) -> Option<DnsNodeRecordUpdate> {
-    use alloy_rlp::Decodable;
-
     let node_record = NodeRecord {
         address: enr.ip4().map(IpAddr::from).or_else(|| enr.ip6().map(IpAddr::from))?,
         tcp_port: enr.tcp4().or_else(|| enr.tcp6())?,
         udp_port: enr.udp4().or_else(|| enr.udp6())?,
-        id: PeerId::from_slice(&enr.public_key().serialize_uncompressed()[1..]),
+        id: pk2id(&enr.public_key()),
     }
     .into_ipv4_mapped();
 
-    let mut maybe_fork_id = enr.get(b"eth")?;
-    let fork_id = ForkId::decode(&mut maybe_fork_id).ok();
+    let fork_id =
+        enr.get_decodable::<EnrForkIdEntry>(b"eth").transpose().ok().flatten().map(Into::into);
 
-    Some(DnsNodeRecordUpdate { node_record, fork_id })
+    Some(DnsNodeRecordUpdate { node_record, fork_id, enr: enr.clone() })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tree::TreeRootEntry;
-    use alloy_rlp::Encodable;
-    use enr::{EnrBuilder, EnrKey};
-    use reth_primitives::{Chain, Hardfork, MAINNET};
+    use alloy_chains::Chain;
+    use alloy_rlp::{Decodable, Encodable};
+    use enr::EnrKey;
+    use reth_chainspec::MAINNET;
+    use reth_ethereum_forks::{EthereumHardfork, ForkHash};
     use secp256k1::rand::thread_rng;
     use std::{future::poll_fn, net::Ipv4Addr};
-    use tokio_stream::StreamExt;
+
+    #[test]
+    fn test_convert_enr_node_record() {
+        // rig
+        let secret_key = SecretKey::new(&mut secp256k1::rand::thread_rng());
+        let enr = Enr::builder()
+            .ip("127.0.0.1".parse().unwrap())
+            .udp4(9000)
+            .tcp4(30303)
+            .add_value(b"eth", &EnrForkIdEntry::from(MAINNET.latest_fork_id()))
+            .build(&secret_key)
+            .unwrap();
+
+        // test
+        let node_record_update = convert_enr_node_record(&enr).unwrap();
+
+        assert_eq!(node_record_update.node_record.address, "127.0.0.1".parse::<IpAddr>().unwrap());
+        assert_eq!(node_record_update.node_record.tcp_port, 30303);
+        assert_eq!(node_record_update.node_record.udp_port, 9000);
+        assert_eq!(node_record_update.fork_id, Some(MAINNET.latest_fork_id()));
+        assert_eq!(node_record_update.enr, enr);
+    }
+
+    #[test]
+    fn test_decode_and_convert_enr_node_record() {
+        // rig
+
+        let secret_key = SecretKey::new(&mut secp256k1::rand::thread_rng());
+        let enr = Enr::builder()
+            .ip("127.0.0.1".parse().unwrap())
+            .udp4(9000)
+            .tcp4(30303)
+            .add_value(b"eth", &EnrForkIdEntry::from(MAINNET.latest_fork_id()))
+            .add_value(b"opstack", &ForkId { hash: ForkHash(rand::random()), next: rand::random() })
+            .build(&secret_key)
+            .unwrap();
+
+        let mut encoded_enr = vec![];
+        enr.encode(&mut encoded_enr);
+
+        // test
+        let decoded_enr = Enr::decode(&mut &encoded_enr[..]).unwrap();
+
+        let node_record_update = convert_enr_node_record(&decoded_enr).unwrap();
+
+        assert_eq!(node_record_update.node_record.address, "127.0.0.1".parse::<IpAddr>().unwrap());
+        assert_eq!(node_record_update.node_record.tcp_port, 30303);
+        assert_eq!(node_record_update.node_record.udp_port, 9000);
+        assert_eq!(node_record_update.fork_id, Some(MAINNET.latest_fork_id()));
+        assert_eq!(node_record_update.enr, enr);
+    }
 
     #[tokio::test]
     async fn test_start_root_sync() {
@@ -460,11 +512,13 @@ mod tests {
             LinkEntry { domain: "nodes.example.org".to_string(), pubkey: secret_key.public() };
         resolver.insert(link.domain.clone(), root.to_string());
 
-        let mut builder = EnrBuilder::new("v4");
-        let mut buf = Vec::new();
-        let fork_id = Hardfork::Frontier.fork_id(&MAINNET).unwrap();
-        fork_id.encode(&mut buf);
-        builder.ip4(Ipv4Addr::LOCALHOST).udp4(30303).tcp4(30303).add_value(b"eth", &buf);
+        let mut builder = Enr::builder();
+        let fork_id = MAINNET.hardfork_fork_id(EthereumHardfork::Frontier).unwrap();
+        builder
+            .ip4(Ipv4Addr::LOCALHOST)
+            .udp4(30303)
+            .tcp4(30303)
+            .add_value(b"eth", &EnrForkIdEntry::from(fork_id));
         let enr = builder.build(&secret_key).unwrap();
 
         resolver.insert(format!("{}.{}", root.enr_root.clone(), link.domain), enr.to_base64());
@@ -529,7 +583,7 @@ mod tests {
         // await recheck timeout
         tokio::time::sleep(config.recheck_interval).await;
 
-        let enr = EnrBuilder::new("v4").build(&secret_key).unwrap();
+        let enr = Enr::empty(&secret_key).unwrap();
         resolver.insert(format!("{}.{}", root.enr_root.clone(), link.domain), enr.to_base64());
 
         let event = poll_fn(|cx| service.poll(cx)).await;

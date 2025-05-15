@@ -11,6 +11,7 @@
 !Cross.toml
 !deny.toml
 !Makefile
+!rust-toolchain
 
 # include for vergen constants
 !/.git

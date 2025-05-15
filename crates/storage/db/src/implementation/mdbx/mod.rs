@@ -1,104 +1,399 @@
 //! Module that interacts with MDBX.
 
 use crate::{
-    database::{Database, DatabaseGAT},
-    tables::{TableType, Tables},
+    lockfile::StorageLock,
+    metrics::DatabaseEnvMetrics,
+    tables::{self, Tables},
     utils::default_page_size,
-    DatabaseError,
+    DatabaseError, TableSet,
 };
-use reth_interfaces::db::LogLevel;
+use eyre::Context;
+use metrics::{gauge, Label};
+use reth_db_api::{
+    cursor::{DbCursorRO, DbCursorRW},
+    database::Database,
+    database_metrics::DatabaseMetrics,
+    models::ClientVersion,
+    transaction::{DbTx, DbTxMut},
+};
 use reth_libmdbx::{
-    DatabaseFlags, Environment, EnvironmentFlags, EnvironmentKind, Geometry, Mode, PageSize,
-    SyncMode, RO, RW,
+    ffi, DatabaseFlags, Environment, EnvironmentFlags, Geometry, HandleSlowReadersReturnCode,
+    MaxReadTransactionDuration, Mode, PageSize, SyncMode, RO, RW,
 };
-use std::{ops::Deref, path::Path};
+use reth_storage_errors::db::LogLevel;
+use reth_tracing::tracing::error;
+use std::{
+    ops::{Deref, Range},
+    path::Path,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tx::Tx;
 
 pub mod cursor;
 pub mod tx;
 
-const GIGABYTE: usize = 1024 * 1024 * 1024;
-const TERABYTE: usize = GIGABYTE * 1024;
+/// 1 KB in bytes
+pub const KILOBYTE: usize = 1024;
+/// 1 MB in bytes
+pub const MEGABYTE: usize = KILOBYTE * 1024;
+/// 1 GB in bytes
+pub const GIGABYTE: usize = MEGABYTE * 1024;
+/// 1 TB in bytes
+pub const TERABYTE: usize = GIGABYTE * 1024;
 
 /// MDBX allows up to 32767 readers (`MDBX_READERS_LIMIT`), but we limit it to slightly below that
 const DEFAULT_MAX_READERS: u64 = 32_000;
 
+/// Space that a read-only transaction can occupy until the warning is emitted.
+/// See [`reth_libmdbx::EnvironmentBuilder::set_handle_slow_readers`] for more information.
+const MAX_SAFE_READER_SPACE: usize = 10 * GIGABYTE;
+
 /// Environment used when opening a MDBX environment. RO/RW.
-#[derive(Debug)]
-pub enum EnvKind {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DatabaseEnvKind {
     /// Read-only MDBX environment.
     RO,
     /// Read-write MDBX environment.
     RW,
 }
 
-/// Wrapper for the libmdbx environment.
+impl DatabaseEnvKind {
+    /// Returns `true` if the environment is read-write.
+    pub const fn is_rw(&self) -> bool {
+        matches!(self, Self::RW)
+    }
+}
+
+/// Arguments for database initialization.
+#[derive(Clone, Debug)]
+pub struct DatabaseArguments {
+    /// Client version that accesses the database.
+    client_version: ClientVersion,
+    /// Database geometry settings.
+    geometry: Geometry<Range<usize>>,
+    /// Database log level. If [None], the default value is used.
+    log_level: Option<LogLevel>,
+    /// Maximum duration of a read transaction. If [None], the default value is used.
+    max_read_transaction_duration: Option<MaxReadTransactionDuration>,
+    /// Open environment in exclusive/monopolistic mode. If [None], the default value is used.
+    ///
+    /// This can be used as a replacement for `MDB_NOLOCK`, which don't supported by MDBX. In this
+    /// way, you can get the minimal overhead, but with the correct multi-process and multi-thread
+    /// locking.
+    ///
+    /// If `true` = open environment in exclusive/monopolistic mode or return `MDBX_BUSY` if
+    /// environment already used by other process. The main feature of the exclusive mode is the
+    /// ability to open the environment placed on a network share.
+    ///
+    /// If `false` = open environment in cooperative mode, i.e. for multi-process
+    /// access/interaction/cooperation. The main requirements of the cooperative mode are:
+    /// - Data files MUST be placed in the LOCAL file system, but NOT on a network share.
+    /// - Environment MUST be opened only by LOCAL processes, but NOT over a network.
+    /// - OS kernel (i.e. file system and memory mapping implementation) and all processes that
+    ///   open the given environment MUST be running in the physically single RAM with
+    ///   cache-coherency. The only exception for cache-consistency requirement is Linux on MIPS
+    ///   architecture, but this case has not been tested for a long time).
+    ///
+    /// This flag affects only at environment opening but can't be changed after.
+    exclusive: Option<bool>,
+}
+
+impl Default for DatabaseArguments {
+    fn default() -> Self {
+        Self::new(ClientVersion::default())
+    }
+}
+
+impl DatabaseArguments {
+    /// Create new database arguments with given client version.
+    pub fn new(client_version: ClientVersion) -> Self {
+        Self {
+            client_version,
+            geometry: Geometry {
+                size: Some(0..(4 * TERABYTE)),
+                growth_step: Some(4 * GIGABYTE as isize),
+                shrink_threshold: Some(0),
+                page_size: Some(PageSize::Set(default_page_size())),
+            },
+            log_level: None,
+            max_read_transaction_duration: None,
+            exclusive: None,
+        }
+    }
+
+    /// Sets the upper size limit of the db environment, the maximum database size in bytes.
+    pub const fn with_geometry_max_size(mut self, max_size: Option<usize>) -> Self {
+        if let Some(max_size) = max_size {
+            self.geometry.size = Some(0..max_size);
+        }
+        self
+    }
+
+    /// Configures the database growth step in bytes.
+    pub const fn with_growth_step(mut self, growth_step: Option<usize>) -> Self {
+        if let Some(growth_step) = growth_step {
+            self.geometry.growth_step = Some(growth_step as isize);
+        }
+        self
+    }
+
+    /// Set the log level.
+    pub const fn with_log_level(mut self, log_level: Option<LogLevel>) -> Self {
+        self.log_level = log_level;
+        self
+    }
+
+    /// Set the maximum duration of a read transaction.
+    pub const fn with_max_read_transaction_duration(
+        mut self,
+        max_read_transaction_duration: Option<MaxReadTransactionDuration>,
+    ) -> Self {
+        self.max_read_transaction_duration = max_read_transaction_duration;
+        self
+    }
+
+    /// Set the mdbx exclusive flag.
+    pub const fn with_exclusive(mut self, exclusive: Option<bool>) -> Self {
+        self.exclusive = exclusive;
+        self
+    }
+
+    /// Returns the client version if any.
+    pub const fn client_version(&self) -> &ClientVersion {
+        &self.client_version
+    }
+}
+
+/// Wrapper for the libmdbx environment: [Environment]
 #[derive(Debug)]
-pub struct Env<E: EnvironmentKind> {
+pub struct DatabaseEnv {
     /// Libmdbx-sys environment.
-    pub inner: Environment<E>,
-    /// Whether to record metrics or not.
-    with_metrics: bool,
+    inner: Environment,
+    /// Cache for metric handles. If `None`, metrics are not recorded.
+    metrics: Option<Arc<DatabaseEnvMetrics>>,
+    /// Write lock for when dealing with a read-write environment.
+    _lock_file: Option<StorageLock>,
 }
 
-impl<'a, E: EnvironmentKind> DatabaseGAT<'a> for Env<E> {
-    type TX = tx::Tx<'a, RO, E>;
-    type TXMut = tx::Tx<'a, RW, E>;
-}
+impl Database for DatabaseEnv {
+    type TX = tx::Tx<RO>;
+    type TXMut = tx::Tx<RW>;
 
-impl<E: EnvironmentKind> Database for Env<E> {
-    fn tx(&self) -> Result<<Self as DatabaseGAT<'_>>::TX, DatabaseError> {
-        Ok(Tx::new_with_metrics(
+    fn tx(&self) -> Result<Self::TX, DatabaseError> {
+        Tx::new_with_metrics(
             self.inner.begin_ro_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
-            self.with_metrics,
-        ))
+            self.metrics.clone(),
+        )
+        .map_err(|e| DatabaseError::InitTx(e.into()))
     }
 
-    fn tx_mut(&self) -> Result<<Self as DatabaseGAT<'_>>::TXMut, DatabaseError> {
-        Ok(Tx::new_with_metrics(
+    fn tx_mut(&self) -> Result<Self::TXMut, DatabaseError> {
+        Tx::new_with_metrics(
             self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
-            self.with_metrics,
-        ))
+            self.metrics.clone(),
+        )
+        .map_err(|e| DatabaseError::InitTx(e.into()))
     }
 }
 
-impl<E: EnvironmentKind> Env<E> {
+impl DatabaseMetrics for DatabaseEnv {
+    fn report_metrics(&self) {
+        for (name, value, labels) in self.gauge_metrics() {
+            gauge!(name, labels).set(value);
+        }
+    }
+
+    fn gauge_metrics(&self) -> Vec<(&'static str, f64, Vec<Label>)> {
+        let mut metrics = Vec::new();
+
+        let _ = self
+            .view(|tx| {
+                for table in Tables::ALL.iter().map(Tables::name) {
+                    let table_db = tx.inner.open_db(Some(table)).wrap_err("Could not open db.")?;
+
+                    let stats = tx
+                        .inner
+                        .db_stat(&table_db)
+                        .wrap_err(format!("Could not find table: {table}"))?;
+
+                    let page_size = stats.page_size() as usize;
+                    let leaf_pages = stats.leaf_pages();
+                    let branch_pages = stats.branch_pages();
+                    let overflow_pages = stats.overflow_pages();
+                    let num_pages = leaf_pages + branch_pages + overflow_pages;
+                    let table_size = page_size * num_pages;
+                    let entries = stats.entries();
+
+                    metrics.push((
+                        "db.table_size",
+                        table_size as f64,
+                        vec![Label::new("table", table)],
+                    ));
+                    metrics.push((
+                        "db.table_pages",
+                        leaf_pages as f64,
+                        vec![Label::new("table", table), Label::new("type", "leaf")],
+                    ));
+                    metrics.push((
+                        "db.table_pages",
+                        branch_pages as f64,
+                        vec![Label::new("table", table), Label::new("type", "branch")],
+                    ));
+                    metrics.push((
+                        "db.table_pages",
+                        overflow_pages as f64,
+                        vec![Label::new("table", table), Label::new("type", "overflow")],
+                    ));
+                    metrics.push((
+                        "db.table_entries",
+                        entries as f64,
+                        vec![Label::new("table", table)],
+                    ));
+                }
+
+                Ok::<(), eyre::Report>(())
+            })
+            .map_err(|error| error!(%error, "Failed to read db table stats"));
+
+        if let Ok(freelist) =
+            self.freelist().map_err(|error| error!(%error, "Failed to read db.freelist"))
+        {
+            metrics.push(("db.freelist", freelist as f64, vec![]));
+        }
+
+        if let Ok(stat) = self.stat().map_err(|error| error!(%error, "Failed to read db.stat")) {
+            metrics.push(("db.page_size", stat.page_size() as f64, vec![]));
+        }
+
+        metrics.push((
+            "db.timed_out_not_aborted_transactions",
+            self.timed_out_not_aborted_transactions() as f64,
+            vec![],
+        ));
+
+        metrics
+    }
+}
+
+impl DatabaseEnv {
     /// Opens the database at the specified path with the given `EnvKind`.
     ///
-    /// It does not create the tables, for that call [`Env::create_tables`].
+    /// It does not create the tables, for that call [`DatabaseEnv::create_tables`].
     pub fn open(
         path: &Path,
-        kind: EnvKind,
-        log_level: Option<LogLevel>,
-    ) -> Result<Env<E>, DatabaseError> {
-        let mode = match kind {
-            EnvKind::RO => Mode::ReadOnly,
-            EnvKind::RW => Mode::ReadWrite { sync_mode: SyncMode::Durable },
+        kind: DatabaseEnvKind,
+        args: DatabaseArguments,
+    ) -> Result<Self, DatabaseError> {
+        let _lock_file = if kind.is_rw() {
+            StorageLock::try_acquire(path)
+                .map_err(|err| DatabaseError::Other(err.to_string()))?
+                .into()
+        } else {
+            None
         };
 
-        let mut inner_env = Environment::new();
-        inner_env.set_max_dbs(Tables::ALL.len());
-        inner_env.set_geometry(Geometry {
-            // Maximum database size of 4 terabytes
-            size: Some(0..(4 * TERABYTE)),
-            // We grow the database in increments of 4 gigabytes
-            growth_step: Some(4 * GIGABYTE as isize),
-            // The database never shrinks
-            shrink_threshold: None,
-            page_size: Some(PageSize::Set(default_page_size())),
-        });
+        let mut inner_env = Environment::builder();
+
+        let mode = match kind {
+            DatabaseEnvKind::RO => Mode::ReadOnly,
+            DatabaseEnvKind::RW => {
+                // enable writemap mode in RW mode
+                inner_env.write_map();
+                Mode::ReadWrite { sync_mode: SyncMode::Durable }
+            }
+        };
+
+        // Note: We set max dbs to 256 here to allow for custom tables. This needs to be set on
+        // environment creation.
+        debug_assert!(Tables::ALL.len() <= 256, "number of tables exceed max dbs");
+        inner_env.set_max_dbs(256);
+        inner_env.set_geometry(args.geometry);
+
+        fn is_current_process(id: u32) -> bool {
+            #[cfg(unix)]
+            {
+                id == std::os::unix::process::parent_id() || id == std::process::id()
+            }
+
+            #[cfg(not(unix))]
+            {
+                id == std::process::id()
+            }
+        }
+
+        extern "C" fn handle_slow_readers(
+            _env: *const ffi::MDBX_env,
+            _txn: *const ffi::MDBX_txn,
+            process_id: ffi::mdbx_pid_t,
+            thread_id: ffi::mdbx_tid_t,
+            read_txn_id: u64,
+            gap: std::ffi::c_uint,
+            space: usize,
+            retry: std::ffi::c_int,
+        ) -> HandleSlowReadersReturnCode {
+            if space > MAX_SAFE_READER_SPACE {
+                let message = if is_current_process(process_id as u32) {
+                    "Current process has a long-lived database transaction that grows the database file."
+                } else {
+                    "External process has a long-lived database transaction that grows the database file. \
+                     Use shorter-lived read transactions or shut down the node."
+                };
+                reth_tracing::tracing::warn!(
+                    target: "storage::db::mdbx",
+                    ?process_id,
+                    ?thread_id,
+                    ?read_txn_id,
+                    ?gap,
+                    ?space,
+                    ?retry,
+                    "{message}"
+                )
+            }
+
+            reth_libmdbx::HandleSlowReadersReturnCode::ProceedWithoutKillingReader
+        }
+        inner_env.set_handle_slow_readers(handle_slow_readers);
+
         inner_env.set_flags(EnvironmentFlags {
             mode,
             // We disable readahead because it improves performance for linear scans, but
             // worsens it for random access (which is our access pattern outside of sync)
             no_rdahead: true,
             coalesce: true,
+            exclusive: args.exclusive.unwrap_or_default(),
             ..Default::default()
         });
-        // configure more readers
+        // Configure more readers
         inner_env.set_max_readers(DEFAULT_MAX_READERS);
+        // This parameter sets the maximum size of the "reclaimed list", and the unit of measurement
+        // is "pages". Reclaimed list is the list of freed pages that's populated during the
+        // lifetime of DB transaction, and through which MDBX searches when it needs to insert new
+        // record with overflow pages. The flow is roughly the following:
+        // 0. We need to insert a record that requires N number of overflow pages (in consecutive
+        //    sequence inside the DB file).
+        // 1. Get some pages from the freelist, put them into the reclaimed list.
+        // 2. Search through the reclaimed list for the sequence of size N.
+        // 3. a. If found, return the sequence.
+        // 3. b. If not found, repeat steps 1-3. If the reclaimed list size is larger than
+        //    the `rp augment limit`, stop the search and allocate new pages at the end of the file:
+        //    https://github.com/paradigmxyz/reth/blob/2a4c78759178f66e30c8976ec5d243b53102fc9a/crates/storage/libmdbx-rs/mdbx-sys/libmdbx/mdbx.c#L11479-L11480.
+        //
+        // Basically, this parameter controls for how long do we search through the freelist before
+        // trying to allocate new pages. Smaller value will make MDBX to fallback to
+        // allocation faster, higher value will force MDBX to search through the freelist
+        // longer until the sequence of pages is found.
+        //
+        // The default value of this parameter is set depending on the DB size. The bigger the
+        // database, the larger is `rp augment limit`.
+        // https://github.com/paradigmxyz/reth/blob/2a4c78759178f66e30c8976ec5d243b53102fc9a/crates/storage/libmdbx-rs/mdbx-sys/libmdbx/mdbx.c#L10018-L10024.
+        //
+        // Previously, MDBX set this value as `256 * 1024` constant. Let's fallback to this,
+        // because we want to prioritize freelist lookup speed over database growth.
+        // https://github.com/paradigmxyz/reth/blob/fa2b9b685ed9787636d962f4366caf34a9186e66/crates/storage/libmdbx-rs/mdbx-sys/libmdbx/mdbx.c#L16017.
+        inner_env.set_rp_augment_limit(256 * 1024);
 
-        if let Some(log_level) = log_level {
+        if let Some(log_level) = args.log_level {
             // Levels higher than [LogLevel::Notice] require libmdbx built with `MDBX_DEBUG` option.
             let is_log_level_available = if cfg!(debug_assertions) {
                 true
@@ -124,9 +419,14 @@ impl<E: EnvironmentKind> Env<E> {
             }
         }
 
-        let env = Env {
+        if let Some(max_read_transaction_duration) = args.max_read_transaction_duration {
+            inner_env.set_max_read_transaction_duration(max_read_transaction_duration);
+        }
+
+        let env = Self {
             inner: inner_env.open(path).map_err(|e| DatabaseError::Open(e.into()))?,
-            with_metrics: false,
+            metrics: None,
+            _lock_file,
         };
 
         Ok(env)
@@ -134,19 +434,22 @@ impl<E: EnvironmentKind> Env<E> {
 
     /// Enables metrics on the database.
     pub fn with_metrics(mut self) -> Self {
-        self.with_metrics = true;
+        self.metrics = Some(DatabaseEnvMetrics::new().into());
         self
     }
 
-    /// Creates all the defined tables, if necessary.
+    /// Creates all the tables defined in [`Tables`], if necessary.
     pub fn create_tables(&self) -> Result<(), DatabaseError> {
+        self.create_tables_for::<Tables>()
+    }
+
+    /// Creates all the tables defined in the given [`TableSet`], if necessary.
+    pub fn create_tables_for<TS: TableSet>(&self) -> Result<(), DatabaseError> {
         let tx = self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTx(e.into()))?;
 
-        for table in Tables::ALL {
-            let flags = match table.table_type() {
-                TableType::Table => DatabaseFlags::default(),
-                TableType::DupSort => DatabaseFlags::DUP_SORT,
-            };
+        for table in TS::tables() {
+            let flags =
+                if table.is_dupsort() { DatabaseFlags::DUP_SORT } else { DatabaseFlags::default() };
 
             tx.create_db(Some(table.name()), flags)
                 .map_err(|e| DatabaseError::CreateTable(e.into()))?;
@@ -156,10 +459,31 @@ impl<E: EnvironmentKind> Env<E> {
 
         Ok(())
     }
+
+    /// Records version that accesses the database with write privileges.
+    pub fn record_client_version(&self, version: ClientVersion) -> Result<(), DatabaseError> {
+        if version.is_empty() {
+            return Ok(())
+        }
+
+        let tx = self.tx_mut()?;
+        let mut version_cursor = tx.cursor_write::<tables::VersionHistory>()?;
+
+        let last_version = version_cursor.last()?.map(|(_, v)| v);
+        if Some(&version) != last_version.as_ref() {
+            version_cursor.upsert(
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+                &version,
+            )?;
+            tx.commit()?;
+        }
+
+        Ok(())
+    }
 }
 
-impl<E: EnvironmentKind> Deref for Env<E> {
-    type Target = Environment<E>;
+impl Deref for DatabaseEnv {
+    type Target = Environment;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -170,23 +494,27 @@ impl<E: EnvironmentKind> Deref for Env<E> {
 mod tests {
     use super::*;
     use crate::{
-        abstraction::table::{Encode, Table},
-        cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW, ReverseWalker, Walker},
-        database::Database,
-        models::{AccountBeforeTx, ShardedKey},
-        tables::{AccountHistory, CanonicalHeaders, Headers, PlainAccountState, PlainStorageState},
+        tables::{
+            AccountsHistory, CanonicalHeaders, Headers, PlainAccountState, PlainStorageState,
+        },
         test_utils::*,
-        transaction::{DbTx, DbTxMut},
-        AccountChangeSet,
+        AccountChangeSets,
     };
-    use reth_interfaces::db::{DatabaseWriteError, DatabaseWriteOperation};
-    use reth_libmdbx::{NoWriteMap, WriteMap};
-    use reth_primitives::{Account, Address, Header, IntegerList, StorageEntry, B256, U256};
-    use std::{path::Path, str::FromStr, sync::Arc};
+    use alloy_consensus::Header;
+    use alloy_primitives::{Address, B256, U256};
+    use reth_db_api::{
+        cursor::{DbDupCursorRO, DbDupCursorRW, ReverseWalker, Walker},
+        models::{AccountBeforeTx, IntegerList, ShardedKey},
+        table::{Encode, Table},
+    };
+    use reth_libmdbx::Error;
+    use reth_primitives_traits::{Account, StorageEntry};
+    use reth_storage_errors::db::{DatabaseWriteError, DatabaseWriteOperation};
+    use std::str::FromStr;
     use tempfile::TempDir;
 
     /// Create database for testing
-    fn create_test_db<E: EnvironmentKind>(kind: EnvKind) -> Arc<Env<E>> {
+    fn create_test_db(kind: DatabaseEnvKind) -> Arc<DatabaseEnv> {
         Arc::new(create_test_db_with_path(
             kind,
             &tempfile::TempDir::new().expect(ERROR_TEMPDIR).into_path(),
@@ -194,8 +522,9 @@ mod tests {
     }
 
     /// Create database for testing with specified path
-    fn create_test_db_with_path<E: EnvironmentKind>(kind: EnvKind, path: &Path) -> Env<E> {
-        let env = Env::<E>::open(path, kind, None).expect(ERROR_DB_CREATION);
+    fn create_test_db_with_path(kind: DatabaseEnvKind, path: &Path) -> DatabaseEnv {
+        let env = DatabaseEnv::open(path, kind, DatabaseArguments::new(ClientVersion::default()))
+            .expect(ERROR_DB_CREATION);
         env.create_tables().expect(ERROR_TABLE_CREATION);
         env
     }
@@ -205,6 +534,7 @@ mod tests {
     const ERROR_APPEND: &str = "Not able to append the value to the table.";
     const ERROR_UPSERT: &str = "Not able to upsert the value to the table.";
     const ERROR_GET: &str = "Not able to get value from table.";
+    const ERROR_DEL: &str = "Not able to delete from table.";
     const ERROR_COMMIT: &str = "Not able to commit transaction.";
     const ERROR_RETURN_VALUE: &str = "Mismatching result.";
     const ERROR_INIT_TX: &str = "Failed to create a MDBX transaction.";
@@ -212,12 +542,12 @@ mod tests {
 
     #[test]
     fn db_creation() {
-        create_test_db::<NoWriteMap>(EnvKind::RW);
+        create_test_db(DatabaseEnvKind::RW);
     }
 
     #[test]
     fn db_manual_put_get() {
-        let env = create_test_db::<NoWriteMap>(EnvKind::RW);
+        let env = create_test_db(DatabaseEnvKind::RW);
 
         let value = Header::default();
         let key = 1u64;
@@ -230,13 +560,52 @@ mod tests {
         // GET
         let tx = env.tx().expect(ERROR_INIT_TX);
         let result = tx.get::<Headers>(key).expect(ERROR_GET);
-        assert!(result.expect(ERROR_RETURN_VALUE) == value);
+        assert_eq!(result.expect(ERROR_RETURN_VALUE), value);
         tx.commit().expect(ERROR_COMMIT);
     }
 
     #[test]
+    fn db_dup_cursor_delete_first() {
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
+        let tx = db.tx_mut().expect(ERROR_INIT_TX);
+
+        let mut dup_cursor = tx.cursor_dup_write::<PlainStorageState>().unwrap();
+
+        let entry_0 = StorageEntry { key: B256::with_last_byte(1), value: U256::from(0) };
+        let entry_1 = StorageEntry { key: B256::with_last_byte(1), value: U256::from(1) };
+
+        dup_cursor.upsert(Address::with_last_byte(1), &entry_0).expect(ERROR_UPSERT);
+        dup_cursor.upsert(Address::with_last_byte(1), &entry_1).expect(ERROR_UPSERT);
+
+        assert_eq!(
+            dup_cursor.walk(None).unwrap().collect::<Result<Vec<_>, _>>(),
+            Ok(vec![(Address::with_last_byte(1), entry_0), (Address::with_last_byte(1), entry_1),])
+        );
+
+        let mut walker = dup_cursor.walk(None).unwrap();
+        walker.delete_current().expect(ERROR_DEL);
+
+        assert_eq!(walker.next(), Some(Ok((Address::with_last_byte(1), entry_1))));
+
+        // Check the tx view - it correctly holds entry_1
+        assert_eq!(
+            tx.cursor_dup_read::<PlainStorageState>()
+                .unwrap()
+                .walk(None)
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>(),
+            Ok(vec![
+                (Address::with_last_byte(1), entry_1), // This is ok - we removed entry_0
+            ])
+        );
+
+        // Check the remainder of walker
+        assert_eq!(walker.next(), None);
+    }
+
+    #[test]
     fn db_cursor_walk() {
-        let env = create_test_db::<NoWriteMap>(EnvKind::RW);
+        let env = create_test_db(DatabaseEnvKind::RW);
 
         let value = Header::default();
         let key = 1u64;
@@ -261,7 +630,7 @@ mod tests {
 
     #[test]
     fn db_cursor_walk_range() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         // PUT (0, 0), (1, 0), (2, 0), (3, 0)
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -325,31 +694,31 @@ mod tests {
 
     #[test]
     fn db_cursor_walk_range_on_dup_table() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         let address0 = Address::ZERO;
         let address1 = Address::with_last_byte(1);
         let address2 = Address::with_last_byte(2);
 
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
-        tx.put::<AccountChangeSet>(0, AccountBeforeTx { address: address0, info: None })
+        tx.put::<AccountChangeSets>(0, AccountBeforeTx { address: address0, info: None })
             .expect(ERROR_PUT);
-        tx.put::<AccountChangeSet>(0, AccountBeforeTx { address: address1, info: None })
+        tx.put::<AccountChangeSets>(0, AccountBeforeTx { address: address1, info: None })
             .expect(ERROR_PUT);
-        tx.put::<AccountChangeSet>(0, AccountBeforeTx { address: address2, info: None })
+        tx.put::<AccountChangeSets>(0, AccountBeforeTx { address: address2, info: None })
             .expect(ERROR_PUT);
-        tx.put::<AccountChangeSet>(1, AccountBeforeTx { address: address0, info: None })
+        tx.put::<AccountChangeSets>(1, AccountBeforeTx { address: address0, info: None })
             .expect(ERROR_PUT);
-        tx.put::<AccountChangeSet>(1, AccountBeforeTx { address: address1, info: None })
+        tx.put::<AccountChangeSets>(1, AccountBeforeTx { address: address1, info: None })
             .expect(ERROR_PUT);
-        tx.put::<AccountChangeSet>(1, AccountBeforeTx { address: address2, info: None })
+        tx.put::<AccountChangeSets>(1, AccountBeforeTx { address: address2, info: None })
             .expect(ERROR_PUT);
-        tx.put::<AccountChangeSet>(2, AccountBeforeTx { address: address0, info: None }) // <- should not be returned by the walker
+        tx.put::<AccountChangeSets>(2, AccountBeforeTx { address: address0, info: None }) // <- should not be returned by the walker
             .expect(ERROR_PUT);
         tx.commit().expect(ERROR_COMMIT);
 
         let tx = db.tx().expect(ERROR_INIT_TX);
-        let mut cursor = tx.cursor_read::<AccountChangeSet>().unwrap();
+        let mut cursor = tx.cursor_read::<AccountChangeSets>().unwrap();
 
         let entries = cursor.walk_range(..).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
         assert_eq!(entries.len(), 7);
@@ -367,7 +736,7 @@ mod tests {
     #[allow(clippy::reversed_empty_ranges)]
     #[test]
     fn db_cursor_walk_range_invalid() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         // PUT (0, 0), (1, 0), (2, 0), (3, 0)
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -395,7 +764,7 @@ mod tests {
 
     #[test]
     fn db_walker() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         // PUT (0, 0), (1, 0), (3, 0)
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -425,7 +794,7 @@ mod tests {
 
     #[test]
     fn db_reverse_walker() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         // PUT (0, 0), (1, 0), (3, 0)
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -455,7 +824,7 @@ mod tests {
 
     #[test]
     fn db_walk_back() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         // PUT (0, 0), (1, 0), (3, 0)
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -494,7 +863,7 @@ mod tests {
 
     #[test]
     fn db_cursor_seek_exact_or_previous_key() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         // PUT
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -520,7 +889,7 @@ mod tests {
 
     #[test]
     fn db_cursor_insert() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         // PUT
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -535,14 +904,14 @@ mod tests {
         let mut cursor = tx.cursor_write::<CanonicalHeaders>().unwrap();
 
         // INSERT
-        assert_eq!(cursor.insert(key_to_insert, B256::ZERO), Ok(()));
+        assert_eq!(cursor.insert(key_to_insert, &B256::ZERO), Ok(()));
         assert_eq!(cursor.current(), Ok(Some((key_to_insert, B256::ZERO))));
 
         // INSERT (failure)
         assert_eq!(
-            cursor.insert(key_to_insert, B256::ZERO),
+            cursor.insert(key_to_insert, &B256::ZERO),
             Err(DatabaseWriteError {
-                code: -30799,
+                info: Error::KeyExist.into(),
                 operation: DatabaseWriteOperation::CursorInsert,
                 table_name: CanonicalHeaders::NAME,
                 key: key_to_insert.encode().into(),
@@ -563,7 +932,7 @@ mod tests {
 
     #[test]
     fn db_cursor_insert_dup() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
 
         let mut dup_cursor = tx.cursor_dup_write::<PlainStorageState>().unwrap();
@@ -572,16 +941,16 @@ mod tests {
         let subkey2 = B256::random();
 
         let entry1 = StorageEntry { key: subkey1, value: U256::ZERO };
-        assert!(dup_cursor.insert(key, entry1).is_ok());
+        assert!(dup_cursor.insert(key, &entry1).is_ok());
 
         // Can't insert
         let entry2 = StorageEntry { key: subkey2, value: U256::ZERO };
-        assert!(dup_cursor.insert(key, entry2).is_err());
+        assert!(dup_cursor.insert(key, &entry2).is_err());
     }
 
     #[test]
     fn db_cursor_delete_current_non_existent() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
 
         let key1 = Address::with_last_byte(1);
@@ -589,9 +958,9 @@ mod tests {
         let key3 = Address::with_last_byte(3);
         let mut cursor = tx.cursor_write::<PlainAccountState>().unwrap();
 
-        assert!(cursor.insert(key1, Account::default()).is_ok());
-        assert!(cursor.insert(key2, Account::default()).is_ok());
-        assert!(cursor.insert(key3, Account::default()).is_ok());
+        assert!(cursor.insert(key1, &Account::default()).is_ok());
+        assert!(cursor.insert(key2, &Account::default()).is_ok());
+        assert!(cursor.insert(key3, &Account::default()).is_ok());
 
         // Seek & delete key2
         cursor.seek_exact(key2).unwrap();
@@ -609,7 +978,7 @@ mod tests {
 
     #[test]
     fn db_cursor_insert_wherever_cursor_is() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
 
         // PUT
@@ -627,7 +996,7 @@ mod tests {
         assert_eq!(cursor.current(), Ok(Some((9, B256::ZERO))));
 
         for pos in (2..=8).step_by(2) {
-            assert_eq!(cursor.insert(pos, B256::ZERO), Ok(()));
+            assert_eq!(cursor.insert(pos, &B256::ZERO), Ok(()));
             assert_eq!(cursor.current(), Ok(Some((pos, B256::ZERO))));
         }
         tx.commit().expect(ERROR_COMMIT);
@@ -642,7 +1011,7 @@ mod tests {
 
     #[test]
     fn db_cursor_append() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         // PUT
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -656,7 +1025,7 @@ mod tests {
         let key_to_append = 5;
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_write::<CanonicalHeaders>().unwrap();
-        assert_eq!(cursor.append(key_to_append, B256::ZERO), Ok(()));
+        assert_eq!(cursor.append(key_to_append, &B256::ZERO), Ok(()));
         tx.commit().expect(ERROR_COMMIT);
 
         // Confirm the result
@@ -669,7 +1038,7 @@ mod tests {
 
     #[test]
     fn db_cursor_append_failure() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         // PUT
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -684,9 +1053,9 @@ mod tests {
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_write::<CanonicalHeaders>().unwrap();
         assert_eq!(
-            cursor.append(key_to_append, B256::ZERO),
+            cursor.append(key_to_append, &B256::ZERO),
             Err(DatabaseWriteError {
-                code: -30418,
+                info: Error::KeyMismatch.into(),
                 operation: DatabaseWriteOperation::CursorAppend,
                 table_name: CanonicalHeaders::NAME,
                 key: key_to_append.encode().into(),
@@ -706,22 +1075,22 @@ mod tests {
 
     #[test]
     fn db_cursor_upsert() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
 
         let mut cursor = tx.cursor_write::<PlainAccountState>().unwrap();
         let key = Address::random();
 
         let account = Account::default();
-        cursor.upsert(key, account).expect(ERROR_UPSERT);
+        cursor.upsert(key, &account).expect(ERROR_UPSERT);
         assert_eq!(cursor.seek_exact(key), Ok(Some((key, account))));
 
         let account = Account { nonce: 1, ..Default::default() };
-        cursor.upsert(key, account).expect(ERROR_UPSERT);
+        cursor.upsert(key, &account).expect(ERROR_UPSERT);
         assert_eq!(cursor.seek_exact(key), Ok(Some((key, account))));
 
         let account = Account { nonce: 2, ..Default::default() };
-        cursor.upsert(key, account).expect(ERROR_UPSERT);
+        cursor.upsert(key, &account).expect(ERROR_UPSERT);
         assert_eq!(cursor.seek_exact(key), Ok(Some((key, account))));
 
         let mut dup_cursor = tx.cursor_dup_write::<PlainStorageState>().unwrap();
@@ -729,30 +1098,30 @@ mod tests {
 
         let value = U256::from(1);
         let entry1 = StorageEntry { key: subkey, value };
-        dup_cursor.upsert(key, entry1).expect(ERROR_UPSERT);
+        dup_cursor.upsert(key, &entry1).expect(ERROR_UPSERT);
         assert_eq!(dup_cursor.seek_by_key_subkey(key, subkey), Ok(Some(entry1)));
 
         let value = U256::from(2);
         let entry2 = StorageEntry { key: subkey, value };
-        dup_cursor.upsert(key, entry2).expect(ERROR_UPSERT);
+        dup_cursor.upsert(key, &entry2).expect(ERROR_UPSERT);
         assert_eq!(dup_cursor.seek_by_key_subkey(key, subkey), Ok(Some(entry1)));
         assert_eq!(dup_cursor.next_dup_val(), Ok(Some(entry2)));
     }
 
     #[test]
     fn db_cursor_dupsort_append() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
 
         let transition_id = 2;
 
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
-        let mut cursor = tx.cursor_write::<AccountChangeSet>().unwrap();
+        let mut cursor = tx.cursor_write::<AccountChangeSets>().unwrap();
         vec![0, 1, 3, 4, 5]
             .into_iter()
             .try_for_each(|val| {
                 cursor.append(
                     transition_id,
-                    AccountBeforeTx { address: Address::with_last_byte(val), info: None },
+                    &AccountBeforeTx { address: Address::with_last_byte(val), info: None },
                 )
             })
             .expect(ERROR_APPEND);
@@ -761,16 +1130,16 @@ mod tests {
         // APPEND DUP & APPEND
         let subkey_to_append = 2;
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
-        let mut cursor = tx.cursor_write::<AccountChangeSet>().unwrap();
+        let mut cursor = tx.cursor_write::<AccountChangeSets>().unwrap();
         assert_eq!(
             cursor.append_dup(
                 transition_id,
                 AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
             ),
             Err(DatabaseWriteError {
-                code: -30418,
+                info: Error::KeyMismatch.into(),
                 operation: DatabaseWriteOperation::CursorAppendDup,
-                table_name: AccountChangeSet::NAME,
+                table_name: AccountChangeSets::NAME,
                 key: transition_id.encode().into(),
             }
             .into())
@@ -778,12 +1147,12 @@ mod tests {
         assert_eq!(
             cursor.append(
                 transition_id - 1,
-                AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
+                &AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
             ),
             Err(DatabaseWriteError {
-                code: -30418,
+                info: Error::KeyMismatch.into(),
                 operation: DatabaseWriteOperation::CursorAppend,
-                table_name: AccountChangeSet::NAME,
+                table_name: AccountChangeSets::NAME,
                 key: (transition_id - 1).encode().into(),
             }
             .into())
@@ -791,7 +1160,7 @@ mod tests {
         assert_eq!(
             cursor.append(
                 transition_id,
-                AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
+                &AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
             ),
             Ok(())
         );
@@ -810,28 +1179,33 @@ mod tests {
             .expect(ERROR_ETH_ADDRESS);
 
         {
-            let env = create_test_db_with_path::<WriteMap>(EnvKind::RW, &path);
+            let env = create_test_db_with_path(DatabaseEnvKind::RW, &path);
 
             // PUT
             let result = env.update(|tx| {
                 tx.put::<PlainAccountState>(key, value).expect(ERROR_PUT);
                 200
             });
-            assert!(result.expect(ERROR_RETURN_VALUE) == 200);
+            assert_eq!(result.expect(ERROR_RETURN_VALUE), 200);
         }
 
-        let env = Env::<WriteMap>::open(&path, EnvKind::RO, None).expect(ERROR_DB_CREATION);
+        let env = DatabaseEnv::open(
+            &path,
+            DatabaseEnvKind::RO,
+            DatabaseArguments::new(ClientVersion::default()),
+        )
+        .expect(ERROR_DB_CREATION);
 
         // GET
         let result =
             env.view(|tx| tx.get::<PlainAccountState>(key).expect(ERROR_GET)).expect(ERROR_GET);
 
-        assert!(result == Some(value))
+        assert_eq!(result, Some(value))
     }
 
     #[test]
     fn db_dup_sort() {
-        let env = create_test_db::<NoWriteMap>(EnvKind::RW);
+        let env = create_test_db(DatabaseEnvKind::RW);
         let key = Address::from_str("0xa2c122be93b0074270ebee7f6b7292c7deb45047")
             .expect(ERROR_ETH_ADDRESS);
 
@@ -853,9 +1227,9 @@ mod tests {
             let mut cursor = tx.cursor_dup_read::<PlainStorageState>().unwrap();
 
             // Notice that value11 and value22 have been ordered in the DB.
-            assert!(Some(value00) == cursor.next_dup_val().unwrap());
-            assert!(Some(value11) == cursor.next_dup_val().unwrap());
-            assert!(Some(value22) == cursor.next_dup_val().unwrap());
+            assert_eq!(Some(value00), cursor.next_dup_val().unwrap());
+            assert_eq!(Some(value11), cursor.next_dup_val().unwrap());
+            assert_eq!(Some(value22), cursor.next_dup_val().unwrap());
         }
 
         // Seek value with exact subkey
@@ -875,7 +1249,7 @@ mod tests {
 
     #[test]
     fn db_iterate_over_all_dup_values() {
-        let env = create_test_db::<NoWriteMap>(EnvKind::RW);
+        let env = create_test_db(DatabaseEnvKind::RW);
         let key1 = Address::from_str("0x1111111111111111111111111111111111111111")
             .expect(ERROR_ETH_ADDRESS);
         let key2 = Address::from_str("0x2222222222222222222222222222222222222222")
@@ -921,7 +1295,7 @@ mod tests {
 
     #[test]
     fn dup_value_with_same_subkey() {
-        let env = create_test_db::<NoWriteMap>(EnvKind::RW);
+        let env = create_test_db(DatabaseEnvKind::RW);
         let key1 = Address::new([0x11; 20]);
         let key2 = Address::new([0x22; 20]);
 
@@ -964,20 +1338,21 @@ mod tests {
 
     #[test]
     fn db_sharded_key() {
-        let db: Arc<Env<WriteMap>> = create_test_db(EnvKind::RW);
+        let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
         let real_key = Address::from_str("0xa2c122be93b0074270ebee7f6b7292c7deb45047").unwrap();
 
         for i in 1..5 {
             let key = ShardedKey::new(real_key, i * 100);
-            let list: IntegerList = vec![i * 100u64].into();
+            let list = IntegerList::new_pre_sorted([i * 100u64]);
 
-            db.update(|tx| tx.put::<AccountHistory>(key.clone(), list.clone()).expect("")).unwrap();
+            db.update(|tx| tx.put::<AccountsHistory>(key.clone(), list.clone()).expect(""))
+                .unwrap();
         }
 
         // Seek value with non existing key.
         {
             let tx = db.tx().expect(ERROR_INIT_TX);
-            let mut cursor = tx.cursor_read::<AccountHistory>().unwrap();
+            let mut cursor = tx.cursor_read::<AccountsHistory>().unwrap();
 
             // It will seek the one greater or equal to the query. Since we have `Address | 100`,
             // `Address | 200` in the database and we're querying `Address | 150` it will return us
@@ -989,13 +1364,13 @@ mod tests {
                 .expect("should be able to retrieve it.");
 
             assert_eq!(ShardedKey::new(real_key, 200), key);
-            let list200: IntegerList = vec![200u64].into();
+            let list200 = IntegerList::new_pre_sorted([200u64]);
             assert_eq!(list200, list);
         }
         // Seek greatest index
         {
             let tx = db.tx().expect(ERROR_INIT_TX);
-            let mut cursor = tx.cursor_read::<AccountHistory>().unwrap();
+            let mut cursor = tx.cursor_read::<AccountsHistory>().unwrap();
 
             // It will seek the MAX value of transition index and try to use prev to get first
             // biggers.
@@ -1006,7 +1381,7 @@ mod tests {
                 .expect("should be able to retrieve it.");
 
             assert_eq!(ShardedKey::new(real_key, 400), key);
-            let list400: IntegerList = vec![400u64].into();
+            let list400 = IntegerList::new_pre_sorted([400u64]);
             assert_eq!(list400, list);
         }
     }

@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 use reth_libmdbx::*;
 use std::{
     borrow::Cow,
@@ -7,12 +8,10 @@ use std::{
 };
 use tempfile::tempdir;
 
-type Environment = reth_libmdbx::Environment<NoWriteMap>;
-
 #[test]
 fn test_put_get_del() {
     let dir = tempdir().unwrap();
-    let env = Environment::new().open(dir.path()).unwrap();
+    let env = Environment::builder().open(dir.path()).unwrap();
 
     let txn = env.begin_rw_txn().unwrap();
     let db = txn.open_db(None).unwrap();
@@ -35,7 +34,7 @@ fn test_put_get_del() {
 #[test]
 fn test_put_get_del_multi() {
     let dir = tempdir().unwrap();
-    let env = Environment::new().open(dir.path()).unwrap();
+    let env = Environment::builder().open(dir.path()).unwrap();
 
     let txn = env.begin_rw_txn().unwrap();
     let db = txn.create_db(None, DatabaseFlags::DUP_SORT).unwrap();
@@ -83,7 +82,7 @@ fn test_put_get_del_multi() {
 #[test]
 fn test_put_get_del_empty_key() {
     let dir = tempdir().unwrap();
-    let env = Environment::new().open(dir.path()).unwrap();
+    let env = Environment::builder().open(dir.path()).unwrap();
 
     let txn = env.begin_rw_txn().unwrap();
     let db = txn.create_db(None, Default::default()).unwrap();
@@ -101,7 +100,7 @@ fn test_put_get_del_empty_key() {
 #[test]
 fn test_reserve() {
     let dir = tempdir().unwrap();
-    let env = Environment::new().open(dir.path()).unwrap();
+    let env = Environment::builder().open(dir.path()).unwrap();
 
     let txn = env.begin_rw_txn().unwrap();
     let db = txn.open_db(None).unwrap();
@@ -123,7 +122,7 @@ fn test_reserve() {
 #[test]
 fn test_nested_txn() {
     let dir = tempdir().unwrap();
-    let env = Environment::new().open(dir.path()).unwrap();
+    let env = Environment::builder().open(dir.path()).unwrap();
 
     let mut txn = env.begin_rw_txn().unwrap();
     txn.put(txn.open_db(None).unwrap().dbi(), b"key1", b"val1", WriteFlags::empty()).unwrap();
@@ -144,18 +143,18 @@ fn test_nested_txn() {
 #[test]
 fn test_clear_db() {
     let dir = tempdir().unwrap();
-    let env = Environment::new().open(dir.path()).unwrap();
+    let env = Environment::builder().open(dir.path()).unwrap();
 
     {
         let txn = env.begin_rw_txn().unwrap();
         txn.put(txn.open_db(None).unwrap().dbi(), b"key", b"val", WriteFlags::empty()).unwrap();
-        assert!(!txn.commit().unwrap());
+        assert!(!txn.commit().unwrap().0);
     }
 
     {
         let txn = env.begin_rw_txn().unwrap();
         txn.clear_db(txn.open_db(None).unwrap().dbi()).unwrap();
-        assert!(!txn.commit().unwrap());
+        assert!(!txn.commit().unwrap().0);
     }
 
     let txn = env.begin_ro_txn().unwrap();
@@ -166,7 +165,7 @@ fn test_clear_db() {
 fn test_drop_db() {
     let dir = tempdir().unwrap();
     {
-        let env = Environment::new().set_max_dbs(2).open(dir.path()).unwrap();
+        let env = Environment::builder().set_max_dbs(2).open(dir.path()).unwrap();
 
         {
             let txn = env.begin_rw_txn().unwrap();
@@ -179,7 +178,7 @@ fn test_drop_db() {
             .unwrap();
             // Workaround for MDBX dbi drop issue
             txn.create_db(Some("canary"), DatabaseFlags::empty()).unwrap();
-            assert!(!txn.commit().unwrap());
+            assert!(!txn.commit().unwrap().0);
         }
         {
             let txn = env.begin_rw_txn().unwrap();
@@ -188,11 +187,11 @@ fn test_drop_db() {
                 txn.drop_db(db).unwrap();
             }
             assert!(matches!(txn.open_db(Some("test")).unwrap_err(), Error::NotFound));
-            assert!(!txn.commit().unwrap());
+            assert!(!txn.commit().unwrap().0);
         }
     }
 
-    let env = Environment::new().set_max_dbs(2).open(dir.path()).unwrap();
+    let env = Environment::builder().set_max_dbs(2).open(dir.path()).unwrap();
 
     let txn = env.begin_ro_txn().unwrap();
     txn.open_db(Some("canary")).unwrap();
@@ -202,7 +201,7 @@ fn test_drop_db() {
 #[test]
 fn test_concurrent_readers_single_writer() {
     let dir = tempdir().unwrap();
-    let env: Arc<Environment> = Arc::new(Environment::new().open(dir.path()).unwrap());
+    let env: Arc<Environment> = Arc::new(Environment::builder().open(dir.path()).unwrap());
 
     let n = 10usize; // Number of concurrent readers
     let barrier = Arc::new(Barrier::new(n + 1));
@@ -246,7 +245,7 @@ fn test_concurrent_readers_single_writer() {
 #[test]
 fn test_concurrent_writers() {
     let dir = tempdir().unwrap();
-    let env = Arc::new(Environment::new().open(dir.path()).unwrap());
+    let env = Arc::new(Environment::builder().open(dir.path()).unwrap());
 
     let n = 10usize; // Number of concurrent writers
     let mut threads: Vec<JoinHandle<bool>> = Vec::with_capacity(n);
@@ -281,7 +280,7 @@ fn test_concurrent_writers() {
 #[test]
 fn test_stat() {
     let dir = tempdir().unwrap();
-    let env = Environment::new().open(dir.path()).unwrap();
+    let env = Environment::builder().open(dir.path()).unwrap();
 
     let txn = env.begin_rw_txn().unwrap();
     let db = txn.create_db(None, DatabaseFlags::empty()).unwrap();
@@ -328,7 +327,7 @@ fn test_stat() {
 #[test]
 fn test_stat_dupsort() {
     let dir = tempdir().unwrap();
-    let env = Environment::new().open(dir.path()).unwrap();
+    let env = Environment::builder().open(dir.path()).unwrap();
 
     let txn = env.begin_rw_txn().unwrap();
     let db = txn.create_db(None, DatabaseFlags::DUP_SORT).unwrap();
