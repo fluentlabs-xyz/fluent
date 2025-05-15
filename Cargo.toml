@@ -426,13 +426,15 @@ reth-trie-sparse = { path = "crates/trie/sparse" }
 reth-zstd-compressors = { path = "crates/storage/zstd-compressors", default-features = false }
 
 # revm
-revm = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.1.0-dev", features = [
+revm = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", features = [
     "std",
 ], default-features = false }
-revm-primitives = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.1.0-dev", default-features = false }
-revm-interpreter = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.1.0-dev", default-features = false }
+
+revm-primitives = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
+revm-interpreter = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
 revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "devel" }
-fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.1.0-dev", default-features = false }
+
+fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
 
 #revm = { path = "../fluentbase/revm/crates/revm", features = [
 #    "std",
