@@ -132,7 +132,10 @@ pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 pub static DEVELOPER_PREVIEW: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     ChainSpec {
         chain: Chain::from(0x5201),
-        genesis: fluentbase_genesis::devnet_genesis_v0_1_0_dev10_from_file(),
+        genesis: {
+            let json_file = include_str!("../res/genesis/genesis-devnet-v0.1.0-dev.13.json");
+            serde_json::from_str::<Genesis>(json_file).expect("failed to parse genesis json file")
+        },
         // genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json"))
         //             .expect("Can't deserialize Dev testnet genesis json"),
         // genesis_hash: once_cell_set(DEV_GENESIS_HASH),

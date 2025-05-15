@@ -3,6 +3,17 @@
 version = 3
 
 [[package]]
+name = "addchain"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b2e69442aa5628ea6951fa33e24efe8313f4321a91bd729fc2f75bdfc858570"
+dependencies = [
+ "num-bigint 0.3.3",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -170,7 +181,7 @@ dependencies = [
  "alloy-transport",
  "futures",
  "futures-util",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -203,7 +214,7 @@ dependencies = [
  "crc",
  "rand 0.8.5",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -293,7 +304,7 @@ dependencies = [
  "alloy-sol-types",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tracing",
 ]
 
@@ -319,7 +330,7 @@ dependencies = [
  "futures-utils-wasm",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -350,7 +361,7 @@ dependencies = [
  "rand 0.8.5",
  "serde_json",
  "tempfile",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tracing",
  "url",
 ]
@@ -421,7 +432,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
  "url",
@@ -556,7 +567,7 @@ dependencies = [
  "ethereum_ssz_derive",
  "serde",
  "serde_with",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -609,7 +620,7 @@ dependencies = [
  "jsonrpsee-types",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -637,7 +648,7 @@ dependencies = [
  "alloy-serde",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -676,7 +687,7 @@ dependencies = [
  "either",
  "elliptic-curve",
  "k256",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -694,7 +705,7 @@ dependencies = [
  "coins-bip39",
  "k256",
  "rand 0.8.5",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -704,7 +715,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2708e27f58d747423ae21d31b7a6625159bd8d867470ddd0256f396a68efa11"
 dependencies = [
  "alloy-sol-macro-expander",
- "alloy-sol-macro-input",
+ "alloy-sol-macro-input 0.8.21",
  "proc-macro-error2",
  "proc-macro2",
  "quote",
@@ -717,7 +728,7 @@ version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6b7984d7e085dec382d2c5ef022b533fcdb1fe6129200af30ebf5afddb6a361"
 dependencies = [
- "alloy-sol-macro-input",
+ "alloy-sol-macro-input 0.8.21",
  "const-hex",
  "heck",
  "indexmap 2.7.1",
@@ -742,6 +753,22 @@ dependencies = [
  "quote",
  "syn 2.0.98",
  "syn-solidity 0.8.21",
+]
+
+[[package]]
+name = "alloy-sol-macro-input"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3de663412dadf9b64f4f92f507f78deebcc92339d12cf15f88ded65d41c7935"
+dependencies = [
+ "const-hex",
+ "dunce",
+ "heck",
+ "macro-string",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+ "syn-solidity 1.1.0",
 ]
 
 [[package]]
@@ -778,7 +805,7 @@ dependencies = [
  "futures-utils-wasm",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tower 0.5.2",
  "tracing",
@@ -970,7 +997,7 @@ dependencies = [
  "ark-serialize 0.3.0",
  "ark-std 0.3.0",
  "derivative",
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-traits",
  "paste",
  "rustc_version 0.3.3",
@@ -990,7 +1017,7 @@ dependencies = [
  "derivative",
  "digest 0.10.7",
  "itertools 0.10.5",
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-traits",
  "paste",
  "rustc_version 0.4.1",
@@ -1023,7 +1050,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db2fd794a08ccb318058009eefdf15bcaaaaf6f8161eb3345f907222bac38b20"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-traits",
  "quote",
  "syn 1.0.109",
@@ -1035,7 +1062,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7abe79b0e4288889c4574159ab790824d0033b9fdcb2a112a3182fac2e514565"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-traits",
  "proc-macro2",
  "quote",
@@ -1060,7 +1087,7 @@ checksum = "adb7b85a02b83d2f22f89bd5cac66c9c89474240cb6207cb1efc16d098e822a5"
 dependencies = [
  "ark-std 0.4.0",
  "digest 0.10.7",
- "num-bigint",
+ "num-bigint 0.4.6",
 ]
 
 [[package]]
@@ -1322,6 +1349,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36eaf5d7b090263e8150820482d5d93cd964a81e4019913c972f4edcc6edb740"
+dependencies = [
+ "bincode_derive",
+ "serde",
+ "unty",
+]
+
+[[package]]
+name = "bincode_derive"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf95709a440f45e986983918d0e8a1f30a9b1df04918fc828670606804ac3c09"
+dependencies = [
+ "virtue",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1393,17 +1440,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blake2b_simd"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06e903a20b159e944f91ec8499fe1e55651480c541ea0a584f5d967c49ad9d99"
-dependencies = [
- "arrayref",
- "arrayvec",
- "constant_time_eq",
-]
-
-[[package]]
 name = "blake3"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1467,7 +1503,7 @@ dependencies = [
  "boa_macros",
  "boa_string",
  "indexmap 2.7.1",
- "num-bigint",
+ "num-bigint 0.4.6",
  "rustc-hash 2.1.1",
 ]
 
@@ -1495,7 +1531,7 @@ dependencies = [
  "indexmap 2.7.1",
  "intrusive-collections",
  "itertools 0.13.0",
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-integer",
  "num-traits",
  "num_enum",
@@ -1512,7 +1548,7 @@ dependencies = [
  "static_assertions",
  "tap",
  "thin-vec",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "time",
 ]
 
@@ -1570,7 +1606,7 @@ dependencies = [
  "boa_profiler",
  "fast-float2",
  "icu_properties",
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-traits",
  "regress",
  "rustc-hash 2.1.1",
@@ -1692,9 +1728,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.10.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f61dac84819c6588b558454b194026eb1f09c293b9036ae9b159e74e73ab6cf9"
+checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 dependencies = [
  "serde",
 ]
@@ -1770,16 +1806,7 @@ dependencies = [
  "semver 1.0.25",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
-]
-
-[[package]]
-name = "casey"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e779867f62d81627d1438e0d3fb6ed7d7c9d64293ca6d87a1e88781b94ece1c"
-dependencies = [
- "syn 2.0.98",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -2043,7 +2070,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -2166,6 +2193,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "convert_case"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2198,6 +2234,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b49ba7ef1ad6107f8824dbe97de947cbaac53c44e7f9756a1fba0d37c1eec505"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "coset"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4c8cc80f631f8307b887faca24dcc3abc427cd0367f6eb6188f6e8f5b7ad8fb"
+dependencies = [
+ "ciborium",
+ "ciborium-io",
 ]
 
 [[package]]
@@ -2662,8 +2708,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f55bf8e7b65898637379c1b74eb1551107c8294ed26d855ceb9fd1a09cfc9bc0"
 dependencies = [
  "const-oid",
+ "der_derive",
+ "flagset",
  "pem-rfc7468",
  "zeroize",
+]
+
+[[package]]
+name = "der_derive"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8034092389675178f570469e6c3b0465d3d30b4505c294a6550db47f3c17ad18"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -2713,7 +2772,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
- "convert_case",
+ "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "syn 2.0.98",
@@ -2846,6 +2905,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
+name = "downcast-rs"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea8a8b81cacc08888170eef4d13b775126db426d0b348bee9d18c2c1eaf123cf"
+
+[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2918,7 +2983,7 @@ dependencies = [
  "revm",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "walkdir",
 ]
 
@@ -3031,7 +3096,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3041,47 +3106,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d2f06b9cac1506ece98fe3231e3cc9c4410ec3d5b1f24ae1c8946f0742cdefc"
 dependencies = [
  "version_check",
-]
-
-[[package]]
-name = "eth_trie"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec3aeb0284b473041df2419a28e3cdf0c64a78d2b9511af4b6e40bad3964b172"
-dependencies = [
- "ethereum-types",
- "hashbrown 0.14.5",
- "keccak-hash 0.10.0",
- "log",
- "parking_lot",
- "rlp",
-]
-
-[[package]]
-name = "ethbloom"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c22d4b5885b6aa2fe5e8b9329fb8d232bf739e434e6b87347c63bdd00c120f60"
-dependencies = [
- "crunchy",
- "fixed-hash",
- "impl-rlp",
- "impl-serde",
- "tiny-keccak",
-]
-
-[[package]]
-name = "ethereum-types"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02d215cbf040552efcbe99a38372fe80ab9d00268e20012b79fcd0f073edd8ee"
-dependencies = [
- "ethbloom",
- "fixed-hash",
- "impl-rlp",
- "impl-serde",
- "primitive-types 0.12.2",
- "uint 0.9.5",
 ]
 
 [[package]]
@@ -3145,7 +3169,7 @@ dependencies = [
  "reth-node-ethereum",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -3234,7 +3258,7 @@ dependencies = [
  "reth-tracing",
  "reth-trie-db",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
 ]
 
@@ -3537,9 +3561,25 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ded41244b729663b1e574f1b4fb731469f69f79c17667b5d776b16cda0479449"
 dependencies = [
- "bitvec",
+ "byteorder",
+ "ff_derive",
  "rand_core 0.6.4",
  "subtle",
+]
+
+[[package]]
+name = "ff_derive"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f10d12652036b0e99197587c6ba87a8fc3031986499973c030d8b44fcc151b60"
+dependencies = [
+ "addchain",
+ "num-bigint 0.3.3",
+ "num-integer",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3585,6 +3625,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "flagset"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
+
+[[package]]
 name = "flate2"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3597,7 +3643,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-build"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "cargo_metadata 0.19.1",
 ]
@@ -3605,24 +3651,22 @@ dependencies = [
 [[package]]
 name = "fluentbase-codec"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "alloy-primitives",
  "byteorder",
  "bytes",
- "casey",
  "fluentbase-codec-derive",
  "hashbrown 0.15.2",
- "paste",
  "serde",
 ]
 
 [[package]]
 name = "fluentbase-codec-derive"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
- "convert_case",
+ "convert_case 0.6.0",
  "crypto-hashes",
  "proc-macro2",
  "quote",
@@ -3631,94 +3675,232 @@ dependencies = [
 ]
 
 [[package]]
-name = "fluentbase-contracts-fairblock"
+name = "fluentbase-contracts-blake2f"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
 ]
 
 [[package]]
-name = "fluentbase-contracts-multicall"
+name = "fluentbase-contracts-bls12381"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
+]
+
+[[package]]
+name = "fluentbase-contracts-bn256"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
+]
+
+[[package]]
+name = "fluentbase-contracts-ecrecover"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
+]
+
+[[package]]
+name = "fluentbase-contracts-erc20"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
 ]
 
 [[package]]
-name = "fluentbase-examples-greeting"
+name = "fluentbase-contracts-evm"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "fluentbase-build",
+ "fluentbase-evm",
+ "fluentbase-sdk",
+]
+
+[[package]]
+name = "fluentbase-contracts-identity"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
+]
+
+[[package]]
+name = "fluentbase-contracts-kzg"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
+]
+
+[[package]]
+name = "fluentbase-contracts-modexp"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
+]
+
+[[package]]
+name = "fluentbase-contracts-multicall"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+]
+
+[[package]]
+name = "fluentbase-contracts-nitro"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "ciborium",
+ "coset",
+ "der",
+ "ecdsa",
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "hex",
+ "p384",
+ "x509-cert",
+]
+
+[[package]]
+name = "fluentbase-contracts-oauth2"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+]
+
+[[package]]
+name = "fluentbase-contracts-ripemd160"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
+]
+
+[[package]]
+name = "fluentbase-contracts-secp256r1"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
+]
+
+[[package]]
+name = "fluentbase-contracts-sha256"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "revm-precompile",
+]
+
+[[package]]
+name = "fluentbase-contracts-webauthn"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "base64 0.22.1",
+ "fluentbase-build",
+ "fluentbase-sdk",
+ "hex",
+ "revm-precompile",
+ "sha2 0.10.8",
+]
+
+[[package]]
+name = "fluentbase-evm"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
+dependencies = [
+ "bincode 2.0.1",
+ "bitvec",
  "fluentbase-sdk",
 ]
 
 [[package]]
 name = "fluentbase-genesis"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "alloy-genesis",
- "fluentbase-contracts-fairblock",
+ "fluentbase-contracts-blake2f",
+ "fluentbase-contracts-bls12381",
+ "fluentbase-contracts-bn256",
+ "fluentbase-contracts-ecrecover",
+ "fluentbase-contracts-erc20",
+ "fluentbase-contracts-evm",
+ "fluentbase-contracts-identity",
+ "fluentbase-contracts-kzg",
+ "fluentbase-contracts-modexp",
  "fluentbase-contracts-multicall",
- "fluentbase-examples-greeting",
+ "fluentbase-contracts-nitro",
+ "fluentbase-contracts-oauth2",
+ "fluentbase-contracts-ripemd160",
+ "fluentbase-contracts-secp256r1",
+ "fluentbase-contracts-sha256",
+ "fluentbase-contracts-webauthn",
  "fluentbase-types",
+ "lazy_static",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "fluentbase-poseidon"
-version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
-dependencies = [
- "bitvec",
- "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
- "lazy_static",
- "poseidon",
- "revm-primitives",
-]
-
-[[package]]
 name = "fluentbase-runtime"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
- "eth_trie",
  "fluentbase-codec",
- "fluentbase-poseidon",
- "fluentbase-rwasm",
  "fluentbase-types",
- "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
  "hashbrown 0.15.2",
  "k256",
- "keccak-hash 0.11.0",
  "num",
+ "rwasm",
+ "secp256k1",
  "sp1-curves",
  "sp1-primitives",
  "tiny-keccak",
 ]
 
 [[package]]
-name = "fluentbase-rwasm"
-version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
-dependencies = [
- "hashbrown 0.15.2",
- "rwasm",
- "tiny-keccak",
-]
-
-[[package]]
 name = "fluentbase-sdk"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "fluentbase-codec",
- "fluentbase-runtime",
  "fluentbase-sdk-derive",
  "fluentbase-types",
  "hashbrown 0.15.2",
@@ -3727,11 +3909,13 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk-derive"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
+ "alloy-sol-macro-input 1.1.0",
  "crypto-hashes",
  "fluentbase-sdk-derive-core",
  "proc-macro-error",
+ "proc-macro2",
  "quote",
  "syn 2.0.98",
 ]
@@ -3739,35 +3923,42 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk-derive-core"
 version = "0.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
- "convert_case",
+ "alloy-sol-macro-input 1.1.0",
+ "anyhow",
+ "convert_case 0.8.0",
  "crypto-hashes",
  "darling",
  "fluentbase-codec",
  "hex",
+ "proc-macro-error",
  "proc-macro2",
  "quote",
+ "serde",
+ "serde_json",
  "syn 2.0.98",
- "syn-solidity 0.7.7",
- "thiserror 1.0.69",
+ "syn-solidity 1.1.0",
+ "thiserror 2.0.12",
  "tracing",
 ]
 
 [[package]]
 name = "fluentbase-types"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "auto_impl",
+ "bincode 2.0.1",
  "byteorder",
  "fluentbase-codec",
  "hashbrown 0.15.2",
  "revm-primitives",
  "rwasm",
- "strum_macros 0.26.4",
+ "serde",
+ "strum_macros 0.27.1",
 ]
 
 [[package]]
@@ -4130,49 +4321,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "halo2curves"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db81d01d0bbfec9f624d7590fc6929ee2537a64ec1e080d8f8c9e2d2da291405"
-dependencies = [
- "blake2b_simd",
- "ff",
- "group",
- "lazy_static",
- "num-bigint",
- "num-traits",
- "pairing",
- "pasta_curves",
- "paste",
- "rand 0.8.5",
- "rand_core 0.6.4",
- "rayon",
- "static_assertions",
- "subtle",
-]
-
-[[package]]
-name = "halo2curves"
-version = "0.6.1"
-source = "git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1#3c43d3c0c3b697c411cfd07f026798998f55073a"
-dependencies = [
- "blake2b_simd",
- "ff",
- "group",
- "lazy_static",
- "num-bigint",
- "num-traits",
- "pairing",
- "pasta_curves",
- "paste",
- "rand 0.8.5",
- "rand_core 0.6.4",
- "rayon",
- "static_assertions",
- "subtle",
-]
-
-[[package]]
 name = "hash-db"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4210,6 +4358,7 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash",
+ "rustc-std-workspace-alloc",
  "serde",
 ]
 
@@ -4278,7 +4427,7 @@ dependencies = [
  "once_cell",
  "rand 0.9.0",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tinyvec",
  "tokio",
  "tracing",
@@ -4302,7 +4451,7 @@ dependencies = [
  "resolv-conf",
  "serde",
  "smallvec",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -4699,24 +4848,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "impl-rlp"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f28220f89297a075ddc7245cd538076ee98b01f2a9c23a53a4f1105d5a322808"
-dependencies = [
- "rlp",
-]
-
-[[package]]
-name = "impl-serde"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebc88fc67028ae3db0c853baa36269d398d5f45b6982f95549ff5def78c935cd"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "impl-trait-for-tuples"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4923,7 +5054,7 @@ checksum = "e19b23d53f35ce9f56aebc7d1bb4e6ac1e9c0db7ac85c8d1760c04379edced37"
 dependencies = [
  "hermit-abi 0.4.0",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5234,26 +5365,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keccak-hash"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b286e6b663fb926e1eeb68528e69cb70ed46c6d65871a21b2215ae8154c6d3c"
-dependencies = [
- "primitive-types 0.12.2",
- "tiny-keccak",
-]
-
-[[package]]
-name = "keccak-hash"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e1b8590eb6148af2ea2d75f38e7d29f5ca970d5a4df456b3ef19b8b415d0264"
-dependencies = [
- "primitive-types 0.13.1",
- "tiny-keccak",
-]
-
-[[package]]
 name = "kqueue"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5271,6 +5382,20 @@ checksum = "ed9625ffda8729b85e45cf04090035ac368927b8cebc34898e7c120f52e4838b"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
+]
+
+[[package]]
+name = "kzg-rs"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffd8d5f2e17b33192c9e9d748a2b00200896727882b6410fc5ed1efd4667ce20"
+dependencies = [
+ "ff",
+ "hex",
+ "serde_arrays",
+ "sha2 0.10.8",
+ "sp1_bls12_381",
+ "spin",
 ]
 
 [[package]]
@@ -5295,7 +5420,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -5482,6 +5607,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b955cdeb2a02b9117f121ce63aa52d08ade45de53e48fe6a38b39c10f6f709"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "macro-string"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b27834086c65ec3f9387b096d66e99f221cf081c2b738042aa252bcd41204e3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -5862,11 +5998,22 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35bd024e8b2ff75562e5f34e7f4905839deb4b22955ef5e73d2fea1b9813cb23"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-complex",
  "num-integer",
  "num-iter",
  "num-rational",
+ "num-traits",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f6f7833f2cbf2360a6cfd58cd41a53aa7a90bd4c202f5b1c7dd2ed73c57b2c3"
+dependencies = [
+ "autocfg",
+ "num-integer",
  "num-traits",
 ]
 
@@ -5895,6 +6042,17 @@ name = "num-conv"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
+
+[[package]]
+name = "num-derive"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
 
 [[package]]
 name = "num-format"
@@ -5947,7 +6105,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f83d14da390562dca69fc84082e73e548e1ad308d24accdedd2720017cb37824"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-integer",
  "num-traits",
 ]
@@ -6056,7 +6214,7 @@ dependencies = [
  "derive_more",
  "serde",
  "serde_with",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -6124,7 +6282,7 @@ dependencies = [
  "op-alloy-consensus",
  "serde",
  "snap",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -6206,7 +6364,7 @@ version = "0.2.0-succinct"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "080896e9d09e9761982febafe3b3da5cbf320e32f0c89b6e2e01e875129f4c2d"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.6",
  "p3-field",
  "p3-mds",
  "p3-poseidon2",
@@ -6263,7 +6421,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f91d8e5f9ede1171adafdb0b6a0df1827fbd4eb6a6217bfa36374e5d86248757"
 dependencies = [
  "itertools 0.12.1",
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-traits",
  "p3-util",
  "rand 0.8.5",
@@ -6410,6 +6568,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "p384"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe42f1670a52a47d448f14b6a5c61dd78fce51856e68edaa38f7ae3a46b8d6b6"
+dependencies = [
+ "ecdsa",
+ "elliptic-curve",
+ "primeorder",
+ "sha2 0.10.8",
+]
+
+[[package]]
 name = "page_size"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6488,21 +6658,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pasta_curves"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3e57598f73cc7e1b2ac63c79c517b31a0877cd7c402cdcaa311b5208de7a095"
-dependencies = [
- "blake2b_simd",
- "ff",
- "group",
- "lazy_static",
- "rand 0.8.5",
- "static_assertions",
- "subtle",
-]
-
-[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6550,7 +6705,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b7cafe60d6cf8e62e1b9b2ea516a089c008945bb5a275416789e7db0bc199dc"
 dependencies = [
  "memchr",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "ucd-trie",
 ]
 
@@ -6716,15 +6871,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "350e9b48cbc6b0e028b0473b114454c6316e57336ee184ceab6e53f72c178b3e"
 
 [[package]]
-name = "poseidon"
-version = "0.2.0"
-source = "git+https://github.com/privacy-scaling-explorations/poseidon?tag=v2024_01_31#d29f35d9744e0c58b63679a15730ff2fab470ef2"
-dependencies = [
- "halo2curves 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "subtle",
-]
-
-[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6799,19 +6945,7 @@ checksum = "0b34d9fd68ae0b74a41b21c03c2f62847aa0ffea044eee893b4c140b37e244e2"
 dependencies = [
  "fixed-hash",
  "impl-codec",
- "impl-rlp",
- "impl-serde",
  "uint 0.9.5",
-]
-
-[[package]]
-name = "primitive-types"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d15600a7d856470b7d278b3fe0e311fe28c2526348549f8ef2ff7db3299c87f5"
-dependencies = [
- "fixed-hash",
- "uint 0.10.0",
 ]
 
 [[package]]
@@ -7029,7 +7163,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "rustls",
  "socket2",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -7048,7 +7182,7 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "slab",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tinyvec",
  "tracing",
  "web-time",
@@ -7065,7 +7199,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7532,7 +7666,7 @@ dependencies = [
  "reth-primitives-traits",
  "reth-tracing",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tower 0.4.13",
  "tracing",
@@ -7691,7 +7825,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "snmalloc-rs",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tikv-jemallocator",
  "tracy-client",
 ]
@@ -7723,7 +7857,7 @@ dependencies = [
 name = "reth-codecs-derive"
 version = "1.2.0"
 dependencies = [
- "convert_case",
+ "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "similar-asserts",
@@ -7831,7 +7965,7 @@ dependencies = [
  "sysinfo 0.32.1",
  "tempfile",
  "test-fuzz",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -7889,7 +8023,7 @@ dependencies = [
  "reth-trie-db",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tracing",
 ]
 
@@ -7931,7 +8065,7 @@ dependencies = [
  "schnellru",
  "secp256k1",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -7956,7 +8090,7 @@ dependencies = [
  "reth-network-peers",
  "reth-tracing",
  "secp256k1",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -7983,7 +8117,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_with",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -8021,7 +8155,7 @@ dependencies = [
  "reth-testing-utils",
  "reth-tracing",
  "tempfile",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -8097,7 +8231,7 @@ dependencies = [
  "secp256k1",
  "sha2 0.10.8",
  "sha3",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -8154,7 +8288,7 @@ dependencies = [
  "reth-primitives-traits",
  "reth-trie",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
 ]
 
@@ -8181,7 +8315,7 @@ dependencies = [
  "reth-prune",
  "reth-stages-api",
  "reth-tasks",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
 ]
@@ -8239,7 +8373,7 @@ dependencies = [
  "reth-trie-sparse",
  "revm-primitives",
  "schnellru",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -8286,7 +8420,7 @@ dependencies = [
  "reth-execution-errors",
  "reth-fs-util",
  "reth-storage-errors",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -8319,7 +8453,7 @@ dependencies = [
  "serde",
  "snap",
  "test-fuzz",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -8348,7 +8482,7 @@ dependencies = [
  "reth-ethereum-primitives",
  "reth-primitives-traits",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -8474,7 +8608,7 @@ dependencies = [
  "alloy-rpc-types-eth",
  "alloy-serde",
  "arbitrary",
- "bincode",
+ "bincode 1.3.3",
  "derive_more",
  "modular-bitfield",
  "proptest",
@@ -8562,7 +8696,7 @@ dependencies = [
  "alloy-rlp",
  "nybbles",
  "reth-storage-errors",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -8573,7 +8707,7 @@ dependencies = [
  "alloy-eips",
  "alloy-primitives",
  "arbitrary",
- "bincode",
+ "bincode 1.3.3",
  "rand 0.8.5",
  "reth-ethereum-primitives",
  "reth-execution-errors",
@@ -8623,7 +8757,7 @@ dependencies = [
  "rmp-serde",
  "secp256k1",
  "tempfile",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-util",
  "tracing",
@@ -8659,7 +8793,7 @@ dependencies = [
  "reth-transaction-pool",
  "reth-trie-db",
  "tempfile",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
 ]
 
@@ -8670,7 +8804,7 @@ dependencies = [
  "alloy-eips",
  "alloy-primitives",
  "arbitrary",
- "bincode",
+ "bincode 1.3.3",
  "rand 0.8.5",
  "reth-chain-state",
  "reth-execution-types",
@@ -8686,7 +8820,7 @@ version = "1.2.0"
 dependencies = [
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -8729,7 +8863,7 @@ dependencies = [
  "rand 0.8.5",
  "reth-tracing",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -8754,7 +8888,7 @@ dependencies = [
  "reth-mdbx-sys",
  "smallvec",
  "tempfile",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tracing",
 ]
 
@@ -8793,7 +8927,7 @@ dependencies = [
  "reqwest",
  "reth-tracing",
  "serde_with",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -8853,7 +8987,7 @@ dependencies = [
  "serial_test",
  "smallvec",
  "tempfile",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -8878,7 +9012,7 @@ dependencies = [
  "reth-network-types",
  "reth-tokio-util",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
 ]
@@ -8916,7 +9050,7 @@ dependencies = [
  "secp256k1",
  "serde_json",
  "serde_with",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "url",
 ]
@@ -8939,7 +9073,7 @@ name = "reth-nippy-jar"
 version = "1.2.0"
 dependencies = [
  "anyhow",
- "bincode",
+ "bincode 1.3.3",
  "derive_more",
  "lz4_flex",
  "memmap2",
@@ -8947,7 +9081,7 @@ dependencies = [
  "reth-fs-util",
  "serde",
  "tempfile",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tracing",
  "zstd",
 ]
@@ -9081,7 +9215,7 @@ dependencies = [
  "serde",
  "shellexpand",
  "strum 0.26.3",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "toml",
  "tracing",
@@ -9242,7 +9376,7 @@ dependencies = [
  "reth-optimism-forks",
  "reth-primitives-traits",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -9338,7 +9472,7 @@ dependencies = [
  "reth-revm",
  "revm",
  "revm-primitives",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tracing",
 ]
 
@@ -9441,7 +9575,7 @@ dependencies = [
  "reth-transaction-pool",
  "revm",
  "sha2 0.10.8",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tracing",
 ]
 
@@ -9520,7 +9654,7 @@ dependencies = [
  "reth-transaction-pool",
  "revm",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -9609,7 +9743,7 @@ dependencies = [
  "reth-errors",
  "reth-primitives",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
 ]
 
@@ -9669,7 +9803,7 @@ dependencies = [
  "alloy-trie",
  "arbitrary",
  "auto_impl",
- "bincode",
+ "bincode 1.3.3",
  "byteorder",
  "bytes",
  "derive_more",
@@ -9689,7 +9823,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "test-fuzz",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -9768,7 +9902,7 @@ dependencies = [
  "reth-tokio-util",
  "reth-tracing",
  "rustc-hash 2.1.1",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -9788,7 +9922,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-fuzz",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "toml",
 ]
 
@@ -9871,7 +10005,7 @@ dependencies = [
  "revm-primitives",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tower 0.4.13",
@@ -9967,7 +10101,7 @@ dependencies = [
  "reth-transaction-pool",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-util",
  "tower 0.4.13",
@@ -10005,7 +10139,7 @@ dependencies = [
  "reth-testing-utils",
  "reth-transaction-pool",
  "serde",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -10090,7 +10224,7 @@ dependencies = [
  "schnellru",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -10150,7 +10284,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "assert_matches",
- "bincode",
+ "bincode 1.3.3",
  "blake3",
  "codspeed-criterion-compat",
  "futures-util",
@@ -10193,7 +10327,7 @@ dependencies = [
  "reth-trie-db",
  "serde",
  "tempfile",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -10221,7 +10355,7 @@ dependencies = [
  "reth-static-file-types",
  "reth-testing-utils",
  "reth-tokio-util",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -10315,7 +10449,7 @@ dependencies = [
  "reth-primitives-traits",
  "reth-prune-types",
  "reth-static-file-types",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -10329,7 +10463,7 @@ dependencies = [
  "pin-project",
  "rayon",
  "reth-metrics",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
  "tracing-futures",
@@ -10413,7 +10547,7 @@ dependencies = [
  "serde_json",
  "smallvec",
  "tempfile",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -10460,7 +10594,7 @@ dependencies = [
  "alloy-serde",
  "alloy-trie",
  "arbitrary",
- "bincode",
+ "bincode 1.3.3",
  "bytes",
  "codspeed-criterion-compat",
  "derive_more",
@@ -10530,7 +10664,7 @@ dependencies = [
  "reth-trie",
  "reth-trie-common",
  "reth-trie-db",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "tracing",
 ]
 
@@ -10558,7 +10692,7 @@ dependencies = [
  "reth-trie-common",
  "reth-trie-db",
  "smallvec",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -10571,11 +10705,12 @@ dependencies = [
 [[package]]
 name = "revm"
 version = "19.3.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "auto_impl",
  "cfg-if",
  "dyn-clone",
+ "fluentbase-genesis",
  "fluentbase-runtime",
  "fluentbase-sdk",
  "once_cell",
@@ -10588,7 +10723,7 @@ dependencies = [
 [[package]]
 name = "revm-inspectors"
 version = "0.15.0"
-source = "git+https://github.com/fluentlabs-xyz/revm-inspectors.git?branch=devel#71c0a2990ada4e17897b61666d43d781dbca3b70"
+source = "git+https://github.com/fluentlabs-xyz/revm-inspectors.git?branch=devel#eadea50fc15619dfb7170dc2b3a7590b45c6ee9f"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -10601,14 +10736,17 @@ dependencies = [
  "revm",
  "serde",
  "serde_json",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
 name = "revm-interpreter"
 version = "15.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
+ "fluentbase-types",
+ "num-derive",
+ "num-traits",
  "revm-primitives",
  "serde",
 ]
@@ -10616,13 +10754,14 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "16.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "aurora-engine-modexp",
  "blst",
  "c-kzg",
  "cfg-if",
  "k256",
+ "kzg-rs",
  "once_cell",
  "p256",
  "revm-primitives",
@@ -10635,7 +10774,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "15.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?branch=devel#7667f8ab21a62ae128bcdcdebd4b1b8cf96c486e"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.1.0-dev#acbf4f6a26c2a441b101c6d50e6cc096b1e7e4c7"
 dependencies = [
  "alloy-eip2930",
  "alloy-eip7702",
@@ -10648,6 +10787,7 @@ dependencies = [
  "dyn-clone",
  "enumn",
  "hex",
+ "kzg-rs",
  "serde",
 ]
 
@@ -10808,11 +10948,11 @@ dependencies = [
  "bytes",
  "fastrlp 0.3.1",
  "fastrlp 0.4.0",
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-integer",
  "num-traits",
  "parity-scale-codec",
- "primitive-types 0.12.2",
+ "primitive-types",
  "proptest",
  "rand 0.8.5",
  "rlp",
@@ -10856,6 +10996,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e75f6a532d0fd9f7f13144f392b6ad56a32696bfcd9c78f797f16bbb6f072d6"
 
 [[package]]
+name = "rustc-std-workspace-alloc"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9d441c3b2ebf55cebf796bfdc265d67fa09db17b7bb6bd4be75c509e1e8fec3"
+
+[[package]]
 name = "rustc_version"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10883,7 +11029,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -11002,19 +11148,38 @@ dependencies = [
 
 [[package]]
 name = "rwasm"
+version = "0.0.0"
+source = "git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.1.0-dev#33cf108c282f7f8636635b37fc1663fd265f0083"
+dependencies = [
+ "bincode 2.0.1",
+ "bitvec",
+ "bytes",
+ "downcast-rs 2.0.1",
+ "hashbrown 0.15.2",
+ "libm",
+ "num-traits",
+ "num_enum",
+ "paste",
+ "rwasm-legacy",
+ "tiny-keccak",
+ "wasmparser-nostd",
+]
+
+[[package]]
+name = "rwasm-legacy"
 version = "0.30.0"
-source = "git+https://github.com/fluentlabs-xyz/rwasm?branch=devel#028b1bfc73afa0dbd709c488f471d698828062d5"
+source = "git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.1.0-dev#33cf108c282f7f8636635b37fc1663fd265f0083"
 dependencies = [
  "byteorder",
- "downcast-rs",
- "hashbrown 0.14.5",
+ "downcast-rs 1.2.1",
+ "hashbrown 0.15.2",
  "libm",
  "num-traits",
  "paste",
  "smallvec",
  "spin",
- "strum 0.26.3",
- "strum_macros 0.26.4",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "wasmparser-nostd",
 ]
 
@@ -11155,7 +11320,7 @@ dependencies = [
  "core-foundation 0.9.4",
  "core-foundation-sys",
  "libc",
- "num-bigint",
+ "num-bigint 0.4.6",
  "security-framework-sys",
 ]
 
@@ -11228,6 +11393,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8dfc9d19bdbf6d17e22319da49161d5d0108e4188e8b680aef6299eed22df60"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde_arrays"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94a16b99c5ea4fe3daccd14853ad260ec00ea043b2708d1fd1da3106dcd8d9df"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -11506,9 +11680,9 @@ version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "297f631f50729c8c99b84667867963997ec0b50f32b2a7dbcab828ef0541e8bb"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-traits",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "time",
 ]
 
@@ -11652,15 +11826,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp1-lib"
+version = "4.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fab1b5989a446f294724cebab0e759ffd7034ba93d2aa7b97045303f7c50bf74"
+dependencies = [
+ "bincode 1.3.3",
+ "serde",
+ "sp1-primitives",
+]
+
+[[package]]
 name = "sp1-primitives"
 version = "4.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1cf66c2781c36037c94a5905b6e05e7396fd4d12df09cd7f05cf96e3f0889f49"
 dependencies = [
- "bincode",
+ "bincode 1.3.3",
  "hex",
  "lazy_static",
- "num-bigint",
+ "num-bigint 0.4.6",
  "p3-baby-bear",
  "p3-field",
  "p3-poseidon2",
@@ -11678,7 +11863,7 @@ dependencies = [
  "arrayref",
  "hashbrown 0.14.5",
  "itertools 0.13.0",
- "num-bigint",
+ "num-bigint 0.4.6",
  "num-traits",
  "p3-air",
  "p3-baby-bear",
@@ -11702,6 +11887,21 @@ dependencies = [
  "strum_macros 0.26.4",
  "sysinfo 0.30.13",
  "tracing",
+]
+
+[[package]]
+name = "sp1_bls12_381"
+version = "0.8.0-sp1-4.0.0-v2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0800e0491c38cc686233518fce535d01ba0a0707781766fec38aee9c1b33890"
+dependencies = [
+ "cfg-if",
+ "ff",
+ "group",
+ "pairing",
+ "rand_core 0.6.4",
+ "sp1-lib",
+ "subtle",
 ]
 
 [[package]]
@@ -11869,9 +12069,9 @@ dependencies = [
 
 [[package]]
 name = "syn-solidity"
-version = "0.7.7"
+version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c837dc8852cb7074e46b444afb81783140dab12c58867b49fb3898fbafedf7ea"
+checksum = "9c2de690018098e367beeb793991c7d4dc7270f42c9d2ac4ccc876c1368ca430"
 dependencies = [
  "paste",
  "proc-macro2",
@@ -11881,9 +12081,9 @@ dependencies = [
 
 [[package]]
 name = "syn-solidity"
-version = "0.8.21"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c2de690018098e367beeb793991c7d4dc7270f42c9d2ac4ccc876c1368ca430"
+checksum = "3d0f0d4760f4c2a0823063b2c70e97aa2ad185f57be195172ccc0e23c4b787c4"
 dependencies = [
  "paste",
  "proc-macro2",
@@ -11962,7 +12162,7 @@ dependencies = [
  "getrandom 0.3.1",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -11983,7 +12183,7 @@ version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0bef5dd380747bd7b6e636a8032a24aa34fcecaf843e59fc97d299681922e86"
 dependencies = [
- "bincode",
+ "bincode 1.3.3",
  "cargo_metadata 0.18.1",
  "serde",
 ]
@@ -12034,11 +12234,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.11"
+version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d452f284b73e6d76dd36758a0c8684b1d5be31f92b89d07fd5822175732206fc"
+checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
 dependencies = [
- "thiserror-impl 2.0.11",
+ "thiserror-impl 2.0.12",
 ]
 
 [[package]]
@@ -12054,9 +12254,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.11"
+version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26afc1baea8a989337eeb52b6e72a039780ce45c3edfcc9c5b9d112feeb173c2"
+checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12525,7 +12725,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69fff37da548239c3bf9e64a12193d261e8b22b660991c6fd2df057c168f435f"
 dependencies = [
  "cc",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -12565,7 +12765,7 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "sha1",
- "thiserror 2.0.11",
+ "thiserror 2.0.12",
  "utf-8",
 ]
 
@@ -12681,6 +12881,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
+name = "unty"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
+
+[[package]]
 name = "url"
 version = "2.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12750,6 +12956,12 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "virtue"
+version = "0.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
 
 [[package]]
 name = "visibility"
@@ -12990,7 +13202,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -13366,6 +13578,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
 dependencies = [
  "tap",
+]
+
+[[package]]
+name = "x509-cert"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1301e935010a701ae5f8655edc0ad17c44bad3ac5ce8c39185f75453b720ae94"
+dependencies = [
+ "const-oid",
+ "der",
+ "spki",
 ]
 
 [[package]]
