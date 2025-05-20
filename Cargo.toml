@@ -428,6 +428,7 @@ reth-zstd-compressors = { path = "crates/storage/zstd-compressors", default-feat
 # revm
 revm = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", features = [
     "std",
+    "wasmtime"
 ], default-features = false }
 
 revm-primitives = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "devel", default-features = false }
@@ -438,6 +439,7 @@ fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", bra
 
 #revm = { path = "../fluentbase/revm/crates/revm", features = [
 #    "std",
+#    "wasmtime"
 #], default-features = false }
 #revm-primitives = { path = "../fluentbase/revm/crates/primitives", default-features = false }
 #revm-interpreter = { path = "../fluentbase/revm/crates/interpreter", default-features = false }
