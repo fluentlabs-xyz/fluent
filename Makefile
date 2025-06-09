@@ -519,7 +519,7 @@ fluent_clear_datadir:
 
 .PHONY: fluent_run
 fluent_run:
-	cargo run -p reth --bin reth $(FLUENT_NODE_BUILD_PROFILE) --features generate-genesis -- --color=never --chain=dev node --datadir=./$(FLUENT_DATADIR) --dev --http --port=30305 --engine.persistence-threshold 0 --engine.memory-block-buffer-target 0 --rpc.eth-proof-window 100
+	cargo run -p reth --bin reth $(FLUENT_NODE_BUILD_PROFILE) -- --color=never --chain=dev node --datadir=./$(FLUENT_DATADIR) --dev --http --port=30305 --engine.persistence-threshold 0 --engine.memory-block-buffer-target 0 --rpc.eth-proof-window 100
 
 .PHONY: fluent_run_clean
 fluent_run_clean:

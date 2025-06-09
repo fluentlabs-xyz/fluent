@@ -273,10 +273,10 @@ too_long_first_doc_paragraph = "allow"
 # Speed up compilation time for dev builds by reducing emitted debug info.
 # NOTE: Debuggers may provide less useful information with this setting.
 # Uncomment this section if you're using a debugger.
-[profile.dev]
+#[profile.dev]
 # https://davidlattimore.github.io/posts/2024/02/04/speeding-up-the-rust-edit-build-run-cycle.html
-debug = "line-tables-only"
-split-debuginfo = "unpacked"
+#debug = "line-tables-only"
+#split-debuginfo = "unpacked"
 
 # Speed up tests.
 [profile.dev.package]
@@ -462,14 +462,14 @@ revm-inspectors = "0.23.0"
 #revm-inspectors = { git = "https://github.com/fluentlabs-xyz/revm-inspectors.git", branch = "feat/merge-revm-v71" }
 
 # fluentbase
-fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/merge-revm-v71", default-features = false }
+fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/merge-revm-v71", default-features = false, features = ["generate-genesis"] }
 rwasm-revm = { package = "rwasm-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/merge-revm-v71", default-features = false }
 
 # eth
 alloy-chains = { version = "0.2.0", default-features = false }
 alloy-dyn-abi = "1.1.0"
 alloy-eip2124 = { version = "0.2.0", default-features = false }
-alloy-evm = { version = "0.10", default-features = false }
+alloy-evm = { version = "0.10", default-features = false, features = ["enforce-rwasm"] }
 alloy-primitives = { version = "1.1.0", default-features = false, features = ["map-foldhash"] }
 alloy-rlp = { version = "0.3.10", default-features = false, features = ["core-net"] }
 alloy-sol-macro = "1.1.0"
@@ -719,6 +719,7 @@ revm-context = { package = "revm-context", git = "https://github.com/fluentlabs-
 revm-context-interface = { package = "revm-context-interface", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/merge-revm-v71" }
 revm-database-interface = { package = "revm-database-interface", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/merge-revm-v71" }
 op-revm = { package = "op-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "feat/merge-revm-v71" }
+alloy-evm = { git = "https://github.com/fluentlabs-xyz/alloy-rwasm", branch = "feat/merge-revm-v71", features = ["enforce-rwasm"] }
 
 # alloy-consensus = { git = "https://github.com/alloy-rs/alloy", branch = "main" }
 # alloy-contract = { git = "https://github.com/alloy-rs/alloy", branch = "main" }

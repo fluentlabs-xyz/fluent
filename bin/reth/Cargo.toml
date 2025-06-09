@@ -127,8 +127,6 @@ min-trace-logs = [
     "reth-ethereum-cli/min-trace-logs",
 ]
 
-generate-genesis = ["reth-chainspec/generate-genesis"]
-
 [[bin]]
 name = "reth"
 path = "src/main.rs"
