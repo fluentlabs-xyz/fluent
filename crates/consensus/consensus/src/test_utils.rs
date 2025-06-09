@@ -1,6 +1,6 @@
-use crate::{Consensus, ConsensusError, FullConsensus, HeaderValidator, PostExecutionInput};
-use alloy_primitives::U256;
+use crate::{Consensus, ConsensusError, FullConsensus, HeaderValidator};
 use core::sync::atomic::{AtomicBool, Ordering};
+use reth_execution_types::BlockExecutionResult;
 use reth_primitives_traits::{Block, NodePrimitives, RecoveredBlock, SealedBlock, SealedHeader};
 
 /// Consensus engine implementation for testing
@@ -50,7 +50,7 @@ impl<N: NodePrimitives> FullConsensus<N> for TestConsensus {
     fn validate_block_post_execution(
         &self,
         _block: &RecoveredBlock<N::Block>,
-        _input: PostExecutionInput<'_, N::Receipt>,
+        _result: &BlockExecutionResult<N::Receipt>,
     ) -> Result<(), ConsensusError> {
         if self.fail_validation() {
             Err(ConsensusError::BaseFeeMissing)
@@ -97,18 +97,6 @@ impl<H> HeaderValidator<H> for TestConsensus {
         &self,
         _header: &SealedHeader<H>,
         _parent: &SealedHeader<H>,
-    ) -> Result<(), ConsensusError> {
-        if self.fail_validation() {
-            Err(ConsensusError::BaseFeeMissing)
-        } else {
-            Ok(())
-        }
-    }
-
-    fn validate_header_with_total_difficulty(
-        &self,
-        _header: &H,
-        _total_difficulty: U256,
     ) -> Result<(), ConsensusError> {
         if self.fail_validation() {
             Err(ConsensusError::BaseFeeMissing)

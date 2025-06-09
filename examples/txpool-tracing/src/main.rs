@@ -2,23 +2,24 @@
 //!
 //! Run with
 //!
-//! ```not_rust
+//! ```sh
 //! cargo run --release -p txpool-tracing -- node --http --ws --recipients 0x....,0x....
 //! ```
 //!
 //! If no recipients are specified, all transactions will be traced.
 
-#![cfg_attr(not(test), warn(unused_crate_dependencies))]
+#![warn(unused_crate_dependencies)]
 
 use alloy_primitives::Address;
 use alloy_rpc_types_trace::{parity::TraceType, tracerequest::TraceCallRequest};
 use clap::Parser;
 use futures_util::StreamExt;
-use reth::{
-    builder::NodeHandle, chainspec::EthereumChainSpecParser, cli::Cli,
-    rpc::types::TransactionRequest, transaction_pool::TransactionPool,
+use reth_ethereum::{
+    cli::{chainspec::EthereumChainSpecParser, interface::Cli},
+    node::{builder::NodeHandle, EthereumNode},
+    pool::TransactionPool,
+    rpc::eth::primitives::TransactionRequest,
 };
-use reth_node_ethereum::node::EthereumNode;
 
 fn main() {
     Cli::<EthereumChainSpecParser, RethCliTxpoolExt>::parse()

@@ -15,17 +15,26 @@ workspace = true
 reth-primitives-traits = { workspace = true, features = ["op"] }
 reth-chainspec.workspace = true
 reth-network = { workspace = true, optional = true }
+reth-network-api = { workspace = true, optional = true }
+reth-eth-wire = { workspace = true, optional = true }
 reth-provider = { workspace = true, optional = true }
 reth-db = { workspace = true, optional = true, features = ["mdbx", "op"] }
 reth-storage-api = { workspace = true, optional = true }
 reth-node-api = { workspace = true, optional = true }
+reth-node-core = { workspace = true, optional = true }
 reth-consensus = { workspace = true, optional = true }
 reth-consensus-common = { workspace = true, optional = true }
 reth-evm = { workspace = true, optional = true }
+reth-revm = { workspace = true, optional = true }
 reth-rpc = { workspace = true, optional = true }
 reth-rpc-api = { workspace = true, optional = true }
 reth-rpc-eth-types = { workspace = true, optional = true }
 reth-rpc-builder = { workspace = true, optional = true }
+reth-exex = { workspace = true, optional = true }
+reth-transaction-pool = { workspace = true, optional = true }
+reth-trie = { workspace = true, optional = true }
+reth-node-builder = { workspace = true, optional = true }
+reth-tasks = { workspace = true, optional = true }
 
 # reth-op
 reth-optimism-primitives.workspace = true
@@ -34,15 +43,22 @@ reth-optimism-consensus = { workspace = true, optional = true }
 reth-optimism-evm = { workspace = true, optional = true }
 reth-optimism-node = { workspace = true, optional = true }
 reth-optimism-rpc = { workspace = true, optional = true }
+reth-optimism-cli = { workspace = true, optional = true }
 
 [features]
 default = ["std"]
 std = [
     "reth-chainspec/std",
-    "reth-optimism-primitives/std",
-    "reth-primitives-traits/std",
     "reth-consensus?/std",
     "reth-consensus-common?/std",
+    "reth-optimism-chainspec/std",
+    "reth-optimism-consensus?/std",
+    "reth-optimism-evm?/std",
+    "reth-optimism-primitives/std",
+    "reth-primitives-traits/std",
+    "reth-storage-api?/std",
+    "reth-evm?/std",
+    "reth-revm?/std",
 ]
 arbitrary = [
     "std",
@@ -50,6 +66,8 @@ arbitrary = [
     "reth-optimism-primitives/arbitrary",
     "reth-primitives-traits/arbitrary",
     "reth-db?/arbitrary",
+    "reth-transaction-pool?/arbitrary",
+    "reth-eth-wire?/arbitrary",
 ]
 
 test-utils = [
@@ -57,29 +75,50 @@ test-utils = [
     "reth-consensus?/test-utils",
     "reth-db?/test-utils",
     "reth-evm?/test-utils",
+    "reth-revm?/test-utils",
     "reth-network?/test-utils",
     "reth-optimism-node?/test-utils",
     "reth-primitives-traits/test-utils",
     "reth-provider?/test-utils",
+    "reth-trie?/test-utils",
+    "reth-transaction-pool?/test-utils",
+    "reth-node-builder?/test-utils",
 ]
 
-full = ["consensus", "evm", "node", "provider", "rpc"]
+full = ["consensus", "evm", "node", "provider", "rpc", "trie", "pool", "network"]
 
-alloy-compat = []
-consensus = ["dep:reth-consensus", "dep:reth-consensus-common", "dep:reth-optimism-consensus"]
-evm = ["dep:reth-evm", "dep:reth-optimism-evm"]
-node-api = ["dep:reth-node-api"]
-node = ["provider", "consensus", "evm", "node-api", "dep:reth-optimism-node", "rpc"]
-rpc = ["dep:reth-rpc", "dep:reth-rpc-builder", "dep:reth-rpc-api", "dep:reth-rpc-eth-types", "dep:reth-optimism-rpc"]
+alloy-compat = ["reth-optimism-primitives/alloy-compat"]
+cli = ["dep:reth-optimism-cli"]
+consensus = [
+    "dep:reth-consensus",
+    "dep:reth-consensus-common",
+    "dep:reth-optimism-consensus",
+]
+evm = ["dep:reth-evm", "dep:reth-optimism-evm", "dep:reth-revm"]
+exex = ["provider", "dep:reth-exex"]
+node-api = ["dep:reth-node-api", "dep:reth-node-core"]
+node = [
+    "provider",
+    "consensus",
+    "evm",
+    "node-api",
+    "dep:reth-optimism-node",
+    "dep:reth-node-builder",
+    "rpc",
+    "trie",
+]
+rpc = [
+    "tasks",
+    "dep:reth-rpc",
+    "dep:reth-rpc-builder",
+    "dep:reth-rpc-api",
+    "dep:reth-rpc-eth-types",
+    "dep:reth-optimism-rpc",
+]
+tasks = ["dep:reth-tasks"]
 js-tracer = ["rpc", "reth-rpc/js-tracer"]
-network = ["dep:reth-network"]
-provider = ["storage-api", "dep:reth-provider", "dep:reth-db"]
+network = ["dep:reth-network", "tasks", "dep:reth-network-api", "dep:reth-eth-wire"]
+provider = ["storage-api", "tasks", "dep:reth-provider", "dep:reth-db"]
+pool = ["dep:reth-transaction-pool"]
 storage-api = ["dep:reth-storage-api"]
-optimism = [
-    "reth-db?/optimism",
-    "reth-optimism-consensus?/optimism",
-    "reth-optimism-evm?/optimism",
-    "reth-optimism-node?/optimism",
-    "reth-optimism-primitives/optimism",
-    "reth-optimism-rpc?/optimism",
-]
+trie = ["dep:reth-trie"]

@@ -12,11 +12,10 @@ workspace = true
 
 [dependencies]
 # reth
-reth-chainspec.workspace = true
-reth-primitives.workspace = true
+reth-ethereum-primitives.workspace = true
+reth-primitives-traits.workspace = true
 reth-engine-primitives.workspace = true
 reth-payload-primitives.workspace = true
-reth-payload-validator.workspace = true
 
 # alloy
 alloy-primitives.workspace = true
@@ -27,6 +26,7 @@ alloy-rlp.workspace = true
 # misc
 serde.workspace = true
 sha2.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
@@ -34,8 +34,7 @@ serde_json.workspace = true
 [features]
 default = ["std"]
 std = [
-    "reth-chainspec/std",
-    "reth-primitives/std",
+    "reth-ethereum-primitives/std",
     "alloy-primitives/std",
     "alloy-eips/std",
     "alloy-rpc-types-engine/std",
@@ -43,5 +42,7 @@ std = [
     "serde/std",
     "sha2/std",
     "serde_json/std",
+    "thiserror/std",
     "reth-engine-primitives/std",
+    "reth-primitives-traits/std",
 ]

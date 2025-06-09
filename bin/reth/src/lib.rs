@@ -28,7 +28,6 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 pub mod cli;
-pub mod commands;
 
 /// Re-exported utils.
 pub mod utils {
@@ -41,9 +40,9 @@ pub mod utils {
 
 /// Re-exported payload related types
 pub mod payload {
+    pub use reth_ethereum_payload_builder::EthereumExecutionPayloadValidator;
     pub use reth_payload_builder::*;
     pub use reth_payload_primitives::*;
-    pub use reth_payload_validator::ExecutionPayloadValidator;
 }
 
 /// Re-exported from `reth_node_api`.
@@ -182,9 +181,16 @@ pub mod rpc {
     }
 }
 
+/// Ress subprotocol installation.
+pub mod ress;
+
 // re-export for convenience
 #[doc(inline)]
 pub use reth_cli_runner::{tokio_runtime, CliContext, CliRunner};
 
 // for rendering diagrams
 use aquamarine as _;
+
+// used in main
+use clap as _;
+use reth_cli_util as _;

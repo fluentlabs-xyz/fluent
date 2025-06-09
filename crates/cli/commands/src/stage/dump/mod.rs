@@ -3,9 +3,9 @@ use crate::common::{AccessRights, CliNodeComponents, CliNodeTypes, Environment, 
 use clap::Parser;
 use reth_chainspec::{EthChainSpec, EthereumHardforks};
 use reth_cli::chainspec::ChainSpecParser;
-use reth_db::{init_db, mdbx::DatabaseArguments, tables, DatabaseEnv};
+use reth_db::{init_db, mdbx::DatabaseArguments, DatabaseEnv};
 use reth_db_api::{
-    cursor::DbCursorRO, database::Database, models::ClientVersion, table::TableImporter,
+    cursor::DbCursorRO, database::Database, models::ClientVersion, table::TableImporter, tables,
     transaction::DbTx,
 };
 use reth_db_common::DbTool;
@@ -97,20 +97,29 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks>> Command<C>
     {
         let Environment { provider_factory, .. } = self.env.init::<N>(AccessRights::RO)?;
         let tool = DbTool::new(provider_factory)?;
+        let components = components(tool.chain());
+        let evm_config = components.evm_config().clone();
+        let consensus = components.consensus().clone();
 
         match &self.command {
             Stages::Execution(cmd) => {
-                let components = components(tool.chain());
-                let executor = components.executor().clone();
-                let consensus = components.consensus().clone();
-                handle_stage!(dump_execution_stage, &tool, cmd, executor, consensus)
+                handle_stage!(dump_execution_stage, &tool, cmd, evm_config, consensus)
             }
             Stages::StorageHashing(cmd) => handle_stage!(dump_hashing_storage_stage, &tool, cmd),
             Stages::AccountHashing(cmd) => handle_stage!(dump_hashing_account_stage, &tool, cmd),
-            Stages::Merkle(cmd) => handle_stage!(dump_merkle_stage, &tool, cmd),
+            Stages::Merkle(cmd) => {
+                handle_stage!(dump_merkle_stage, &tool, cmd, evm_config, consensus)
+            }
         }
 
         Ok(())
+    }
+}
+
+impl<C: ChainSpecParser> Command<C> {
+    /// Returns the underlying chain being used to run this command
+    pub fn chain_spec(&self) -> Option<&Arc<C::ChainSpec>> {
+        Some(&self.env.chain)
     }
 }
 

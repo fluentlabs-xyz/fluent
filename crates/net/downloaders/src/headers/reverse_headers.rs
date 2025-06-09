@@ -20,7 +20,7 @@ use reth_network_p2p::{
     priority::Priority,
 };
 use reth_network_peers::PeerId;
-use reth_primitives::{GotExpected, SealedHeader};
+use reth_primitives_traits::{GotExpected, SealedHeader};
 use reth_tasks::{TaskSpawner, TokioTaskExecutor};
 use std::{
     cmp::{Ordering, Reverse},
@@ -304,9 +304,9 @@ where
 
             // If the header is valid on its own, but not against its parent, we return it as
             // detached head error.
-            // In stage sync this will trigger an unwind because this means that the the local head
+            // In stage sync this will trigger an unwind because this means that the local head
             // is not part of the chain the sync target is on. In other words, the downloader was
-            // unable to connect the the sync target with the local head because the sync target and
+            // unable to connect the sync target with the local head because the sync target and
             // the local head or on different chains.
             if let Err(error) = self.consensus.validate_header_against_parent(&*last_header, head) {
                 let local_head = head.clone();
@@ -954,7 +954,7 @@ struct HeadersRequestOutcome<H> {
 // === impl OrderedHeadersResponse ===
 
 impl<H> HeadersRequestOutcome<H> {
-    fn block_number(&self) -> u64 {
+    const fn block_number(&self) -> u64 {
         self.request.start.as_number().expect("is number")
     }
 }
@@ -970,7 +970,7 @@ struct OrderedHeadersResponse<H> {
 // === impl OrderedHeadersResponse ===
 
 impl<H> OrderedHeadersResponse<H> {
-    fn block_number(&self) -> u64 {
+    const fn block_number(&self) -> u64 {
         self.request.start.as_number().expect("is number")
     }
 }
@@ -1067,7 +1067,7 @@ impl SyncTargetBlock {
     ///
     /// If the target block is a hash, this be converted into a `HashAndNumber`, but return `None`.
     /// The semantics should be equivalent to that of `Option::replace`.
-    fn replace_number(&mut self, number: u64) -> Option<u64> {
+    const fn replace_number(&mut self, number: u64) -> Option<u64> {
         match self {
             Self::Hash(hash) => {
                 *self = Self::HashAndNumber { hash: *hash, number };

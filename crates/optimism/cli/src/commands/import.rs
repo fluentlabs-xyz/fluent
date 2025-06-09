@@ -7,8 +7,7 @@ use reth_cli_commands::{
     import::build_import_pipeline,
 };
 use reth_consensus::noop::NoopConsensus;
-use reth_db::tables;
-use reth_db_api::transaction::DbTx;
+use reth_db_api::{tables, transaction::DbTx};
 use reth_downloaders::file_client::{ChunkedFileReader, DEFAULT_BYTE_LEN_CHUNK_CHAIN_FILE};
 use reth_node_builder::BlockTy;
 use reth_node_core::version::SHORT_VERSION;
@@ -156,5 +155,12 @@ impl<C: ChainSpecParser<ChainSpec = OpChainSpec>> ImportOpCommand<C> {
         );
 
         Ok(())
+    }
+}
+
+impl<C: ChainSpecParser> ImportOpCommand<C> {
+    /// Returns the underlying chain being used to run this command
+    pub const fn chain_spec(&self) -> Option<&Arc<C::ChainSpec>> {
+        Some(&self.env.chain)
     }
 }

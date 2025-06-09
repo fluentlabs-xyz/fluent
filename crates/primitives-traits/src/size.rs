@@ -1,10 +1,10 @@
 use alloc::vec::Vec;
 use alloy_consensus::{
-    transaction::PooledTransaction, Header, TxEip1559, TxEip2930, TxEip4844, TxEip4844WithSidecar,
-    TxEip7702, TxLegacy, TxType,
+    transaction::TxEip4844Sidecar, EthereumTxEnvelope, Header, TxEip1559, TxEip2930, TxEip4844,
+    TxEip4844Variant, TxEip4844WithSidecar, TxEip7702, TxLegacy, TxType,
 };
 use alloy_eips::eip4895::Withdrawals;
-use alloy_primitives::{PrimitiveSignature as Signature, TxHash};
+use alloy_primitives::{Signature, TxHash, B256};
 use revm_primitives::Log;
 
 /// Trait for calculating a heuristic for the in-memory size of a struct.
@@ -16,7 +16,7 @@ pub trait InMemorySize {
 
 impl<T: InMemorySize> InMemorySize for alloy_consensus::Signed<T> {
     fn size(&self) -> usize {
-        T::size(self.tx()) + self.signature().size() + self.hash().size()
+        T::size(self.tx()) + self.signature().size() + core::mem::size_of::<B256>()
     }
 }
 
@@ -50,15 +50,21 @@ macro_rules! impl_in_mem_size {
     };
 }
 
-impl_in_mem_size!(
-    Header,
-    TxLegacy,
-    TxEip2930,
-    TxEip1559,
-    TxEip7702,
-    TxEip4844,
-    TxEip4844WithSidecar
-);
+impl_in_mem_size!(Header, TxLegacy, TxEip2930, TxEip1559, TxEip7702, TxEip4844);
+
+impl<T: TxEip4844Sidecar> InMemorySize for TxEip4844Variant<T> {
+    #[inline]
+    fn size(&self) -> usize {
+        Self::size(self)
+    }
+}
+
+impl<T: TxEip4844Sidecar> InMemorySize for TxEip4844WithSidecar<T> {
+    #[inline]
+    fn size(&self) -> usize {
+        Self::size(self)
+    }
+}
 
 #[cfg(feature = "op")]
 impl_in_mem_size_size_of!(op_alloy_consensus::OpTxType);
@@ -72,7 +78,7 @@ impl InMemorySize for alloy_consensus::Receipt {
     }
 }
 
-impl InMemorySize for PooledTransaction {
+impl<T: InMemorySize> InMemorySize for EthereumTxEnvelope<T> {
     fn size(&self) -> usize {
         match self {
             Self::Legacy(tx) => tx.size(),
@@ -112,6 +118,12 @@ impl<T: InMemorySize> InMemorySize for Vec<T> {
     }
 }
 
+impl InMemorySize for u64 {
+    fn size(&self) -> usize {
+        core::mem::size_of::<Self>()
+    }
+}
+
 /// Implementation for optimism types
 #[cfg(feature = "op")]
 mod op {
@@ -145,6 +157,18 @@ mod op {
                 Self::Eip2930(tx) => tx.size(),
                 Self::Eip1559(tx) => tx.size(),
                 Self::Eip7702(tx) => tx.size(),
+            }
+        }
+    }
+
+    impl InMemorySize for op_alloy_consensus::OpTxEnvelope {
+        fn size(&self) -> usize {
+            match self {
+                Self::Legacy(tx) => tx.size(),
+                Self::Eip2930(tx) => tx.size(),
+                Self::Eip1559(tx) => tx.size(),
+                Self::Eip7702(tx) => tx.size(),
+                Self::Deposit(tx) => tx.size(),
             }
         }
     }

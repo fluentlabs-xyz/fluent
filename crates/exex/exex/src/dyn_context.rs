@@ -3,9 +3,9 @@
 
 use alloy_eips::BlockNumHash;
 use reth_chainspec::EthChainSpec;
+use reth_ethereum_primitives::EthPrimitives;
 use reth_node_api::{FullNodeComponents, HeaderTy, NodePrimitives, NodeTypes, PrimitivesTy};
 use reth_node_core::node_config::NodeConfig;
-use reth_primitives::EthPrimitives;
 use reth_provider::BlockReader;
 use std::fmt::Debug;
 use tokio::sync::mpsc;
@@ -54,7 +54,6 @@ impl<Node> From<ExExContext<Node>> for ExExContextDyn<PrimitivesTy<Node::Types>>
 where
     Node: FullNodeComponents<Types: NodeTypes<Primitives: NodePrimitives>>,
     Node::Provider: Debug + BlockReader,
-    Node::Executor: Debug,
 {
     fn from(ctx: ExExContext<Node>) -> Self {
         let config = ctx.config.map_chainspec(|chainspec| {

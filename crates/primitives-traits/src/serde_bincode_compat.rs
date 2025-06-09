@@ -15,10 +15,13 @@ pub trait SerdeBincodeCompat: Sized + 'static {
     /// Serde representation of the type for bincode serialization.
     ///
     /// This type defines the bincode compatible serde format for the type.
-    type BincodeRepr<'a>: Debug + Serialize + DeserializeOwned + Into<Self>;
+    type BincodeRepr<'a>: Debug + Serialize + DeserializeOwned;
 
     /// Convert this type into its bincode representation
     fn as_repr(&self) -> Self::BincodeRepr<'_>;
+
+    /// Convert from the bincode representation
+    fn from_repr(repr: Self::BincodeRepr<'_>) -> Self;
 }
 
 impl SerdeBincodeCompat for alloy_consensus::Header {
@@ -26,6 +29,10 @@ impl SerdeBincodeCompat for alloy_consensus::Header {
 
     fn as_repr(&self) -> Self::BincodeRepr<'_> {
         self.into()
+    }
+
+    fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
+        repr.into()
     }
 }
 
@@ -35,6 +42,7 @@ pub type BincodeReprFor<'a, T> = <T as SerdeBincodeCompat>::BincodeRepr<'a>;
 mod block_bincode {
     use crate::serde_bincode_compat::SerdeBincodeCompat;
     use alloc::{borrow::Cow, vec::Vec};
+    use alloy_consensus::TxEip4844;
     use alloy_eips::eip4895::Withdrawals;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde_with::{DeserializeAs, SerializeAs};
@@ -75,7 +83,7 @@ mod block_bincode {
         for alloy_consensus::Block<T, H>
     {
         fn from(value: Block<'a, T, H>) -> Self {
-            Self { header: value.header.into(), body: value.body.into() }
+            Self { header: SerdeBincodeCompat::from_repr(value.header), body: value.body.into() }
         }
     }
 
@@ -111,6 +119,10 @@ mod block_bincode {
 
         fn as_repr(&self) -> Self::BincodeRepr<'_> {
             self.into()
+        }
+
+        fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
+            repr.into()
         }
     }
 
@@ -154,8 +166,12 @@ mod block_bincode {
     {
         fn from(value: BlockBody<'a, T, H>) -> Self {
             Self {
-                transactions: value.transactions.into_iter().map(Into::into).collect(),
-                ommers: value.ommers.into_iter().map(Into::into).collect(),
+                transactions: value
+                    .transactions
+                    .into_iter()
+                    .map(SerdeBincodeCompat::from_repr)
+                    .collect(),
+                ommers: value.ommers.into_iter().map(SerdeBincodeCompat::from_repr).collect(),
                 withdrawals: value.withdrawals.into_owned(),
             }
         }
@@ -193,6 +209,37 @@ mod block_bincode {
 
         fn as_repr(&self) -> Self::BincodeRepr<'_> {
             self.into()
+        }
+
+        fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
+            repr.into()
+        }
+    }
+
+    impl super::SerdeBincodeCompat for alloy_consensus::EthereumTxEnvelope<TxEip4844> {
+        type BincodeRepr<'a> =
+            alloy_consensus::serde_bincode_compat::transaction::EthereumTxEnvelope<'a>;
+
+        fn as_repr(&self) -> Self::BincodeRepr<'_> {
+            self.into()
+        }
+
+        fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
+            repr.into()
+        }
+    }
+
+    #[cfg(feature = "op")]
+    impl super::SerdeBincodeCompat for op_alloy_consensus::OpTxEnvelope {
+        type BincodeRepr<'a> =
+            op_alloy_consensus::serde_bincode_compat::transaction::OpTxEnvelope<'a>;
+
+        fn as_repr(&self) -> Self::BincodeRepr<'_> {
+            self.into()
+        }
+
+        fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
+            repr.into()
         }
     }
 }

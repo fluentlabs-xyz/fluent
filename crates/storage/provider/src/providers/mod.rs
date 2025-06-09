@@ -1,8 +1,8 @@
 //! Contains the main provider types and traits for interacting with the blockchain's storage.
 
 use reth_chainspec::EthereumHardforks;
-use reth_db::table::Value;
-use reth_node_types::{FullNodePrimitives, NodeTypes, NodeTypesWithDB, NodeTypesWithEngine};
+use reth_db_api::table::Value;
+use reth_node_types::{FullNodePrimitives, NodeTypes, NodeTypesWithDB};
 
 mod database;
 pub use database::*;
@@ -15,12 +15,9 @@ pub use static_file::{
 
 mod state;
 pub use state::{
-    historical::{HistoricalStateProvider, HistoricalStateProviderRef},
+    historical::{HistoricalStateProvider, HistoricalStateProviderRef, LowestAvailableBlocks},
     latest::{LatestStateProvider, LatestStateProviderRef},
 };
-
-mod bundle_state_provider;
-pub use bundle_state_provider::BundleStateProvider;
 
 mod consistent_view;
 pub use consistent_view::{ConsistentDbView, ConsistentViewError};
@@ -59,8 +56,3 @@ where
 {
 }
 impl<T> ProviderNodeTypes for T where T: NodeTypesForProvider + NodeTypesWithDB {}
-
-/// Helper trait expressing requirements for node types to be used in engine.
-pub trait EngineNodeTypes: ProviderNodeTypes + NodeTypesWithEngine {}
-
-impl<T> EngineNodeTypes for T where T: ProviderNodeTypes + NodeTypesWithEngine {}

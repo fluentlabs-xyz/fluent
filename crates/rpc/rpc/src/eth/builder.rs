@@ -4,11 +4,17 @@ use crate::{
     eth::{core::EthApiInner, EthTxBuilder},
     EthApi,
 };
-use reth_provider::{BlockReaderIdExt, StateProviderFactory};
-use reth_rpc_eth_types::{EthStateCache, FeeHistoryCache, GasCap, GasPriceOracle};
+use reth_chain_state::CanonStateSubscriptions;
+use reth_chainspec::ChainSpecProvider;
+use reth_node_api::NodePrimitives;
+use reth_rpc_eth_types::{
+    fee_history::fee_history_cache_new_blocks_task, EthStateCache, EthStateCacheConfig,
+    FeeHistoryCache, FeeHistoryCacheConfig, GasCap, GasPriceOracle, GasPriceOracleConfig,
+};
 use reth_rpc_server_types::constants::{
     DEFAULT_ETH_PROOF_WINDOW, DEFAULT_MAX_SIMULATE_BLOCKS, DEFAULT_PROOF_PERMITS,
 };
+use reth_storage_api::{BlockReaderIdExt, StateProviderFactory};
 use reth_tasks::{pool::BlockingTaskPool, TaskSpawner, TokioTaskExecutor};
 use std::sync::Arc;
 
@@ -28,9 +34,11 @@ where
     gas_cap: GasCap,
     max_simulate_blocks: u64,
     eth_proof_window: u64,
-    fee_history_cache: FeeHistoryCache,
+    fee_history_cache_config: FeeHistoryCacheConfig,
     proof_permits: usize,
+    eth_state_cache_config: EthStateCacheConfig,
     eth_cache: Option<EthStateCache<Provider::Block, Provider::Receipt>>,
+    gas_oracle_config: GasPriceOracleConfig,
     gas_oracle: Option<GasPriceOracle<Provider>>,
     blocking_task_pool: Option<BlockingTaskPool>,
     task_spawner: Box<dyn TaskSpawner + 'static>,
@@ -56,9 +64,11 @@ where
             max_simulate_blocks: DEFAULT_MAX_SIMULATE_BLOCKS,
             eth_proof_window: DEFAULT_ETH_PROOF_WINDOW,
             blocking_task_pool: None,
-            fee_history_cache: FeeHistoryCache::new(Default::default()),
+            fee_history_cache_config: FeeHistoryCacheConfig::default(),
             proof_permits: DEFAULT_PROOF_PERMITS,
             task_spawner: TokioTaskExecutor::default().boxed(),
+            gas_oracle_config: Default::default(),
+            eth_state_cache_config: Default::default(),
         }
     }
 
@@ -68,12 +78,29 @@ where
         self
     }
 
+    /// Sets `eth_cache` config for the cache that will be used if no [`EthStateCache`] is
+    /// configured.
+    pub const fn eth_state_cache_config(
+        mut self,
+        eth_state_cache_config: EthStateCacheConfig,
+    ) -> Self {
+        self.eth_state_cache_config = eth_state_cache_config;
+        self
+    }
+
     /// Sets `eth_cache` instance
     pub fn eth_cache(
         mut self,
         eth_cache: EthStateCache<Provider::Block, Provider::Receipt>,
     ) -> Self {
         self.eth_cache = Some(eth_cache);
+        self
+    }
+
+    /// Sets `gas_oracle` config for the gas oracle that will be used if no [`GasPriceOracle`] is
+    /// configured.
+    pub const fn gas_oracle_config(mut self, gas_oracle_config: GasPriceOracleConfig) -> Self {
+        self.gas_oracle_config = gas_oracle_config;
         self
     }
 
@@ -108,8 +135,11 @@ where
     }
 
     /// Sets the fee history cache.
-    pub fn fee_history_cache(mut self, fee_history_cache: FeeHistoryCache) -> Self {
-        self.fee_history_cache = fee_history_cache;
+    pub const fn fee_history_cache_config(
+        mut self,
+        fee_history_cache_config: FeeHistoryCacheConfig,
+    ) -> Self {
+        self.fee_history_cache_config = fee_history_cache_config;
         self
     }
 
@@ -129,29 +159,49 @@ where
     /// This will panic if called outside the context of a Tokio runtime.
     pub fn build_inner(self) -> EthApiInner<Provider, Pool, Network, EvmConfig>
     where
-        Provider: BlockReaderIdExt + StateProviderFactory + Clone + Unpin + 'static,
+        Provider: BlockReaderIdExt
+            + StateProviderFactory
+            + ChainSpecProvider
+            + CanonStateSubscriptions<
+                Primitives: NodePrimitives<Block = Provider::Block, Receipt = Provider::Receipt>,
+            > + Clone
+            + Unpin
+            + 'static,
     {
         let Self {
             provider,
             pool,
             network,
             evm_config,
+            eth_state_cache_config,
+            gas_oracle_config,
             eth_cache,
             gas_oracle,
             gas_cap,
             max_simulate_blocks,
             eth_proof_window,
             blocking_task_pool,
-            fee_history_cache,
+            fee_history_cache_config,
             proof_permits,
             task_spawner,
         } = self;
 
-        let eth_cache =
-            eth_cache.unwrap_or_else(|| EthStateCache::spawn(provider.clone(), Default::default()));
+        let eth_cache = eth_cache
+            .unwrap_or_else(|| EthStateCache::spawn(provider.clone(), eth_state_cache_config));
         let gas_oracle = gas_oracle.unwrap_or_else(|| {
-            GasPriceOracle::new(provider.clone(), Default::default(), eth_cache.clone())
+            GasPriceOracle::new(provider.clone(), gas_oracle_config, eth_cache.clone())
         });
+        let fee_history_cache = FeeHistoryCache::new(fee_history_cache_config);
+        let new_canonical_blocks = provider.canonical_state_stream();
+        let fhc = fee_history_cache.clone();
+        let cache = eth_cache.clone();
+        let prov = provider.clone();
+        task_spawner.spawn_critical(
+            "cache canonical blocks for fee history task",
+            Box::pin(async move {
+                fee_history_cache_new_blocks_task(fhc, new_canonical_blocks, prov, cache).await;
+            }),
+        );
 
         EthApiInner::new(
             provider,
@@ -182,7 +232,14 @@ where
     /// This will panic if called outside the context of a Tokio runtime.
     pub fn build(self) -> EthApi<Provider, Pool, Network, EvmConfig>
     where
-        Provider: BlockReaderIdExt + StateProviderFactory + Clone + Unpin + 'static,
+        Provider: BlockReaderIdExt
+            + StateProviderFactory
+            + CanonStateSubscriptions<
+                Primitives: NodePrimitives<Block = Provider::Block, Receipt = Provider::Receipt>,
+            > + ChainSpecProvider
+            + Clone
+            + Unpin
+            + 'static,
     {
         EthApi { inner: Arc::new(self.build_inner()), tx_resp_builder: EthTxBuilder }
     }

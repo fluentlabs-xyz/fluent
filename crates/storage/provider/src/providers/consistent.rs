@@ -4,33 +4,33 @@ use crate::{
     BlockReader, BlockReaderIdExt, BlockSource, ChainSpecProvider, ChangeSetReader, HeaderProvider,
     ProviderError, PruneCheckpointReader, ReceiptProvider, ReceiptProviderIdExt,
     StageCheckpointReader, StateReader, StaticFileProviderFactory, TransactionVariant,
-    TransactionsProvider, WithdrawalsProvider,
+    TransactionsProvider,
 };
 use alloy_consensus::{transaction::TransactionMeta, BlockHeader};
 use alloy_eips::{
-    eip2718::Encodable2718, eip4895::Withdrawals, BlockHashOrNumber, BlockId, BlockNumHash,
-    BlockNumberOrTag, HashOrNumber,
+    eip2718::Encodable2718, BlockHashOrNumber, BlockId, BlockNumHash, BlockNumberOrTag,
+    HashOrNumber,
 };
 use alloy_primitives::{
     map::{hash_map, HashMap},
     Address, BlockHash, BlockNumber, TxHash, TxNumber, B256, U256,
 };
 use reth_chain_state::{BlockState, CanonicalInMemoryState, MemoryOverlayStateProviderRef};
-use reth_chainspec::{ChainInfo, EthereumHardforks};
-use reth_db::models::BlockNumberAddress;
-use reth_db_api::models::{AccountBeforeTx, StoredBlockBodyIndices};
+use reth_chainspec::ChainInfo;
+use reth_db_api::models::{AccountBeforeTx, BlockNumberAddress, StoredBlockBodyIndices};
 use reth_execution_types::{BundleStateInit, ExecutionOutcome, RevertsInit};
 use reth_node_types::{BlockTy, HeaderTy, ReceiptTy, TxTy};
-use reth_primitives::{Account, RecoveredBlock, SealedBlock, SealedHeader, StorageEntry};
-use reth_primitives_traits::BlockBody;
+use reth_primitives_traits::{
+    Account, BlockBody, RecoveredBlock, SealedBlock, SealedHeader, StorageEntry,
+};
 use reth_prune_types::{PruneCheckpoint, PruneSegment};
 use reth_stages_types::{StageCheckpoint, StageId};
 use reth_storage_api::{
-    BlockBodyIndicesProvider, DatabaseProviderFactory, NodePrimitivesProvider, OmmersProvider,
-    StateProvider, StorageChangeSetReader,
+    BlockBodyIndicesProvider, DatabaseProviderFactory, NodePrimitivesProvider, StateProvider,
+    StorageChangeSetReader,
 };
 use reth_storage_errors::provider::ProviderResult;
-use revm::db::states::PlainStorageRevert;
+use revm_database::states::PlainStorageRevert;
 use std::{
     ops::{Add, Bound, RangeBounds, RangeInclusive, Sub},
     sync::Arc,
@@ -845,14 +845,14 @@ impl<N: ProviderNodeTypes> BlockReader for ConsistentProvider<N> {
     /// hashes, since they would need to be calculated on the spot, and we want fast querying.**
     ///
     /// Returns `None` if block is not found.
-    fn block_with_senders(
+    fn recovered_block(
         &self,
         id: BlockHashOrNumber,
         transaction_kind: TransactionVariant,
     ) -> ProviderResult<Option<RecoveredBlock<Self::Block>>> {
         self.get_in_memory_or_storage_by_block(
             id,
-            |db_provider| db_provider.block_with_senders(id, transaction_kind),
+            |db_provider| db_provider.recovered_block(id, transaction_kind),
             |block_state| Ok(Some(block_state.block().recovered_block().clone())),
         )
     }
@@ -890,13 +890,13 @@ impl<N: ProviderNodeTypes> BlockReader for ConsistentProvider<N> {
         )
     }
 
-    fn sealed_block_with_senders_range(
+    fn recovered_block_range(
         &self,
         range: RangeInclusive<BlockNumber>,
     ) -> ProviderResult<Vec<RecoveredBlock<Self::Block>>> {
         self.get_in_memory_or_storage_by_block_range_while(
             range,
-            |db_provider, range, _| db_provider.sealed_block_with_senders_range(range),
+            |db_provider, range, _| db_provider.recovered_block_range(range),
             |block_state, _| Some(block_state.block().recovered_block().clone()),
             |_| true,
         )
@@ -1103,6 +1103,13 @@ impl<N: ProviderNodeTypes> ReceiptProvider for ConsistentProvider<N> {
             },
         )
     }
+
+    fn receipts_by_block_range(
+        &self,
+        block_range: RangeInclusive<BlockNumber>,
+    ) -> ProviderResult<Vec<Vec<Self::Receipt>>> {
+        self.storage_provider.receipts_by_block_range(block_range)
+    }
 }
 
 impl<N: ProviderNodeTypes> ReceiptProviderIdExt for ConsistentProvider<N> {
@@ -1135,42 +1142,6 @@ impl<N: ProviderNodeTypes> ReceiptProviderIdExt for ConsistentProvider<N> {
                 }
             },
         }
-    }
-}
-
-impl<N: ProviderNodeTypes> WithdrawalsProvider for ConsistentProvider<N> {
-    fn withdrawals_by_block(
-        &self,
-        id: BlockHashOrNumber,
-        timestamp: u64,
-    ) -> ProviderResult<Option<Withdrawals>> {
-        if !self.chain_spec().is_shanghai_active_at_timestamp(timestamp) {
-            return Ok(None)
-        }
-
-        self.get_in_memory_or_storage_by_block(
-            id,
-            |db_provider| db_provider.withdrawals_by_block(id, timestamp),
-            |block_state| {
-                Ok(block_state.block_ref().recovered_block().body().withdrawals().cloned())
-            },
-        )
-    }
-}
-
-impl<N: ProviderNodeTypes> OmmersProvider for ConsistentProvider<N> {
-    fn ommers(&self, id: BlockHashOrNumber) -> ProviderResult<Option<Vec<HeaderTy<N>>>> {
-        self.get_in_memory_or_storage_by_block(
-            id,
-            |db_provider| db_provider.ommers(id),
-            |block_state| {
-                if self.chain_spec().final_paris_total_difficulty(block_state.number()).is_some() {
-                    return Ok(Some(Vec::new()))
-                }
-
-                Ok(block_state.block_ref().recovered_block().body().ommers().map(|o| o.to_vec()))
-            },
-        )
     }
 }
 
@@ -1328,17 +1299,6 @@ impl<N: ProviderNodeTypes> BlockReaderIdExt for ConsistentProvider<N> {
             BlockId::Hash(hash) => self.header(&hash.block_hash)?,
         })
     }
-
-    fn ommers_by_id(&self, id: BlockId) -> ProviderResult<Option<Vec<HeaderTy<N>>>> {
-        match id {
-            BlockId::Number(num) => self.ommers_by_number_or_tag(num),
-            BlockId::Hash(hash) => {
-                // TODO: EIP-1898 question, see above
-                // here it is not handled
-                self.ommers(BlockHashOrNumber::Hash(hash.block_hash))
-            }
-        }
-    }
 }
 
 impl<N: ProviderNodeTypes> StorageChangeSetReader for ConsistentProvider<N> {
@@ -1484,15 +1444,18 @@ mod tests {
     use alloy_primitives::B256;
     use itertools::Itertools;
     use rand::Rng;
-    use reth_chain_state::{ExecutedBlock, ExecutedBlockWithTrieUpdates, NewCanonicalChain};
-    use reth_db::models::AccountBeforeTx;
+    use reth_chain_state::{
+        ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates, NewCanonicalChain,
+    };
+    use reth_db_api::models::AccountBeforeTx;
+    use reth_ethereum_primitives::Block;
     use reth_execution_types::ExecutionOutcome;
-    use reth_primitives::{RecoveredBlock, SealedBlock};
+    use reth_primitives_traits::{RecoveredBlock, SealedBlock};
     use reth_storage_api::{BlockReader, BlockSource, ChangeSetReader};
     use reth_testing_utils::generators::{
         self, random_block_range, random_changeset_range, random_eoa_accounts, BlockRangeParams,
     };
-    use revm::db::BundleState;
+    use revm_database::BundleState;
     use std::{
         ops::{Bound, Range, RangeBounds},
         sync::Arc,
@@ -1507,7 +1470,7 @@ mod tests {
         requests_count: Option<Range<u8>>,
         withdrawals_count: Option<Range<u8>>,
         tx_count: impl RangeBounds<u8>,
-    ) -> (Vec<SealedBlock>, Vec<SealedBlock>) {
+    ) -> (Vec<SealedBlock<Block>>, Vec<SealedBlock<Block>>) {
         let block_range = (database_blocks + in_memory_blocks - 1) as u64;
 
         let tx_start = match tx_count.start_bound() {
@@ -1593,7 +1556,7 @@ mod tests {
                 )),
                 Default::default(),
                 Default::default(),
-                Default::default(),
+                ExecutedTrieUpdates::empty(),
             )],
         };
         consistent_provider.canonical_in_memory_state.update_chain(chain);
@@ -1637,7 +1600,7 @@ mod tests {
                 execution_output: Default::default(),
                 hashed_state: Default::default(),
             },
-            trie: Default::default(),
+            trie: ExecutedTrieUpdates::empty(),
         });
 
         // Now the last block should be found in memory
@@ -1703,7 +1666,7 @@ mod tests {
                 )),
                 Default::default(),
                 Default::default(),
-                Default::default(),
+                ExecutedTrieUpdates::empty(),
             )],
         };
         consistent_provider.canonical_in_memory_state.update_chain(chain);
@@ -1818,7 +1781,7 @@ mod tests {
                             ..Default::default()
                         }),
                         Default::default(),
-                        Default::default(),
+                        ExecutedTrieUpdates::empty(),
                     )
                 })
                 .unwrap()],

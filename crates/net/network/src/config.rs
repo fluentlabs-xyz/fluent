@@ -11,7 +11,9 @@ use reth_discv4::{Discv4Config, Discv4ConfigBuilder, NatResolver, DEFAULT_DISCOV
 use reth_discv5::NetworkStackId;
 use reth_dns_discovery::DnsDiscoveryConfig;
 use reth_eth_wire::{
-    EthNetworkPrimitives, HelloMessage, HelloMessageWithProtocols, NetworkPrimitives, Status,
+    handshake::{EthHandshake, EthRlpxHandshake},
+    EthNetworkPrimitives, HelloMessage, HelloMessageWithProtocols, NetworkPrimitives,
+    UnifiedStatus,
 };
 use reth_ethereum_forks::{ForkFilter, Head};
 use reth_network_peers::{mainnet_nodes, pk2id, sepolia_nodes, PeerId, TrustedPeer};
@@ -27,7 +29,7 @@ pub use secp256k1::SecretKey;
 
 /// Convenience function to create a new random [`SecretKey`]
 pub fn rng_secret_key() -> SecretKey {
-    SecretKey::new(&mut rand::thread_rng())
+    SecretKey::new(&mut rand_08::thread_rng())
 }
 
 /// All network related initialization settings.
@@ -36,7 +38,7 @@ pub struct NetworkConfig<C, N: NetworkPrimitives = EthNetworkPrimitives> {
     /// The client type that can interact with the chain.
     ///
     /// This type is used to fetch the block number after we established a session and received the
-    /// [Status] block hash.
+    /// [`UnifiedStatus`] block hash.
     pub client: C,
     /// The node's secret key, from which the node's identity is derived.
     pub secret_key: SecretKey,
@@ -66,13 +68,13 @@ pub struct NetworkConfig<C, N: NetworkPrimitives = EthNetworkPrimitives> {
     /// first hardfork, `Frontier` for mainnet.
     pub fork_filter: ForkFilter,
     /// The block importer type.
-    pub block_import: Box<dyn BlockImport<N::Block>>,
+    pub block_import: Box<dyn BlockImport<N::NewBlockPayload>>,
     /// The default mode of the network.
     pub network_mode: NetworkMode,
     /// The executor to use for spawning tasks.
     pub executor: Box<dyn TaskSpawner>,
     /// The `Status` message to send to peers at the beginning.
-    pub status: Status,
+    pub status: UnifiedStatus,
     /// Sets the hello message for the p2p handshake in `RLPx`
     pub hello_message: HelloMessageWithProtocols,
     /// Additional protocols to announce and handle in `RLPx`
@@ -83,6 +85,11 @@ pub struct NetworkConfig<C, N: NetworkPrimitives = EthNetworkPrimitives> {
     pub transactions_manager_config: TransactionsManagerConfig,
     /// The NAT resolver for external IP
     pub nat: Option<NatResolver>,
+    /// The Ethereum P2P handshake, see also:
+    /// <https://github.com/ethereum/devp2p/blob/master/rlpx.md#initial-handshake>.
+    /// This can be overridden to support custom handshake logic via the
+    /// [`NetworkConfigBuilder`].
+    pub handshake: Arc<dyn EthRlpxHandshake>,
 }
 
 // === impl NetworkConfig ===
@@ -202,11 +209,14 @@ pub struct NetworkConfigBuilder<N: NetworkPrimitives = EthNetworkPrimitives> {
     /// Whether tx gossip is disabled
     tx_gossip_disabled: bool,
     /// The block importer type
-    block_import: Option<Box<dyn BlockImport<N::Block>>>,
+    block_import: Option<Box<dyn BlockImport<N::NewBlockPayload>>>,
     /// How to instantiate transactions manager.
     transactions_manager_config: TransactionsManagerConfig,
     /// The NAT resolver for external IP
     nat: Option<NatResolver>,
+    /// The Ethereum P2P handshake, see also:
+    /// <https://github.com/ethereum/devp2p/blob/master/rlpx.md#initial-handshake>.
+    handshake: Arc<dyn EthRlpxHandshake>,
 }
 
 impl NetworkConfigBuilder<EthNetworkPrimitives> {
@@ -218,7 +228,7 @@ impl NetworkConfigBuilder<EthNetworkPrimitives> {
 
 // === impl NetworkConfigBuilder ===
 
-#[allow(missing_docs)]
+#[expect(missing_docs)]
 impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
     /// Create a new builder instance with a random secret key.
     pub fn with_rng_secret_key() -> Self {
@@ -246,6 +256,7 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
             block_import: None,
             transactions_manager_config: Default::default(),
             nat: None,
+            handshake: Arc::new(EthHandshake::default()),
         }
     }
 
@@ -286,7 +297,7 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
 
     /// Sets the highest synced block.
     ///
-    /// This is used to construct the appropriate [`ForkFilter`] and [`Status`] message.
+    /// This is used to construct the appropriate [`ForkFilter`] and [`UnifiedStatus`] message.
     ///
     /// If not set, this defaults to the genesis specified by the current chain specification.
     pub const fn set_head(mut self, head: Head) -> Self {
@@ -461,7 +472,7 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
 
     /// Disables all discovery.
     pub fn disable_discovery(self) -> Self {
-        self.disable_discv4_discovery().disable_dns_discovery().disable_nat()
+        self.disable_discv4_discovery().disable_discv5_discovery().disable_dns_discovery()
     }
 
     /// Disables all discovery if the given condition is true.
@@ -476,6 +487,12 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
     /// Disable the Discv4 discovery.
     pub fn disable_discv4_discovery(mut self) -> Self {
         self.discovery_v4_builder = None;
+        self
+    }
+
+    /// Disable the Discv5 discovery.
+    pub fn disable_discv5_discovery(mut self) -> Self {
+        self.discovery_v5_builder = None;
         self
     }
 
@@ -497,6 +514,15 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
         }
     }
 
+    /// Disable the Discv5 discovery if the given condition is true.
+    pub fn disable_discv5_discovery_if(self, disable: bool) -> Self {
+        if disable {
+            self.disable_discv5_discovery()
+        } else {
+            self
+        }
+    }
+
     /// Adds a new additional protocol to the `RLPx` sub-protocol list.
     pub fn add_rlpx_sub_protocol(mut self, protocol: impl IntoRlpxSubProtocol) -> Self {
         self.extra_protocols.push(protocol);
@@ -510,7 +536,7 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
     }
 
     /// Sets the block import type.
-    pub fn block_import(mut self, block_import: Box<dyn BlockImport<N::Block>>) -> Self {
+    pub fn block_import(mut self, block_import: Box<dyn BlockImport<N::NewBlockPayload>>) -> Self {
         self.block_import = Some(block_import);
         self
     }
@@ -530,6 +556,12 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
     /// Sets the NAT resolver for external IP.
     pub const fn add_nat(mut self, nat: Option<NatResolver>) -> Self {
         self.nat = nat;
+        self
+    }
+
+    /// Overrides the default Eth `RLPx` handshake.
+    pub fn eth_rlpx_handshake(mut self, handshake: Arc<dyn EthRlpxHandshake>) -> Self {
+        self.handshake = handshake;
         self
     }
 
@@ -564,11 +596,20 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
             block_import,
             transactions_manager_config,
             nat,
+            handshake,
         } = self;
+
+        let head = head.unwrap_or_else(|| Head {
+            hash: chain_spec.genesis_hash(),
+            number: 0,
+            timestamp: chain_spec.genesis().timestamp,
+            difficulty: chain_spec.genesis().difficulty,
+            total_difficulty: chain_spec.genesis().difficulty,
+        });
 
         discovery_v5_builder = discovery_v5_builder.map(|mut builder| {
             if let Some(network_stack_id) = NetworkStackId::id(&chain_spec) {
-                let fork_id = chain_spec.latest_fork_id();
+                let fork_id = chain_spec.fork_id(&head);
                 builder = builder.fork(network_stack_id, fork_id)
             }
 
@@ -581,16 +622,8 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
             hello_message.unwrap_or_else(|| HelloMessage::builder(peer_id).build());
         hello_message.port = listener_addr.port();
 
-        let head = head.unwrap_or_else(|| Head {
-            hash: chain_spec.genesis_hash(),
-            number: 0,
-            timestamp: chain_spec.genesis().timestamp,
-            difficulty: chain_spec.genesis().difficulty,
-            total_difficulty: chain_spec.genesis().difficulty,
-        });
-
         // set the status
-        let status = Status::spec_builder(&chain_spec, &head).build();
+        let status = UnifiedStatus::spec_builder(&chain_spec, &head);
 
         // set a fork filter based on the chain spec and head
         let fork_filter = chain_spec.fork_filter(head);
@@ -631,6 +664,7 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
             tx_gossip_disabled,
             transactions_manager_config,
             nat,
+            handshake,
         }
     }
 }
@@ -662,15 +696,19 @@ impl NetworkMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::thread_rng;
-    use reth_chainspec::{Chain, MAINNET};
+    use alloy_eips::eip2124::ForkHash;
+    use alloy_genesis::Genesis;
+    use alloy_primitives::U256;
+    use reth_chainspec::{
+        Chain, ChainSpecBuilder, EthereumHardfork, ForkCondition, ForkId, MAINNET,
+    };
+    use reth_discv5::build_local_enr;
     use reth_dns_discovery::tree::LinkEntry;
-    use reth_primitives::ForkHash;
     use reth_storage_api::noop::NoopProvider;
-    use std::sync::Arc;
+    use std::{net::Ipv4Addr, sync::Arc};
 
     fn builder() -> NetworkConfigBuilder {
-        let secret_key = SecretKey::new(&mut thread_rng());
+        let secret_key = SecretKey::new(&mut rand_08::thread_rng());
         NetworkConfigBuilder::new(secret_key)
     }
 
@@ -711,5 +749,63 @@ mod tests {
         // check status and fork_filter forkhash
         assert_eq!(status.forkid.hash, genesis_fork_hash);
         assert_eq!(fork_filter.current().hash, genesis_fork_hash);
+    }
+
+    #[test]
+    fn test_discv5_fork_id_default() {
+        const GENESIS_TIME: u64 = 151_515;
+
+        let genesis = Genesis::default().with_timestamp(GENESIS_TIME);
+
+        let active_fork = (EthereumHardfork::Shanghai, ForkCondition::Timestamp(GENESIS_TIME));
+        let future_fork = (EthereumHardfork::Cancun, ForkCondition::Timestamp(GENESIS_TIME + 1));
+
+        let chain_spec = ChainSpecBuilder::default()
+            .chain(Chain::dev())
+            .genesis(genesis)
+            .with_fork(active_fork.0, active_fork.1)
+            .with_fork(future_fork.0, future_fork.1)
+            .build();
+
+        // get the fork id to advertise on discv5
+        let genesis_fork_hash = ForkHash::from(chain_spec.genesis_hash());
+        let fork_id = ForkId { hash: genesis_fork_hash, next: GENESIS_TIME + 1 };
+        // check the fork id is set to active fork and _not_ yet future fork
+        assert_eq!(
+            fork_id,
+            chain_spec.fork_id(&Head {
+                hash: chain_spec.genesis_hash(),
+                number: 0,
+                timestamp: GENESIS_TIME,
+                difficulty: U256::ZERO,
+                total_difficulty: U256::ZERO,
+            })
+        );
+        assert_ne!(fork_id, chain_spec.latest_fork_id());
+
+        // enforce that the fork_id set in local enr
+        let fork_key = b"odyssey";
+        let config = builder()
+            .discovery_v5(
+                reth_discv5::Config::builder((Ipv4Addr::LOCALHOST, 30303).into())
+                    .fork(fork_key, fork_id),
+            )
+            .build_with_noop_provider(Arc::new(chain_spec));
+
+        let (local_enr, _, _, _) = build_local_enr(
+            &config.secret_key,
+            &config.discovery_v5_config.expect("should build config"),
+        );
+
+        // peers on the odyssey network will check discovered enrs for the 'odyssey' key and
+        // decide based on this if they attempt and rlpx connection to the peer or not
+        let advertised_fork_id = *local_enr
+            .get_decodable::<Vec<ForkId>>(fork_key)
+            .expect("should read 'odyssey'")
+            .expect("should decode fork id list")
+            .first()
+            .expect("should be non-empty");
+
+        assert_eq!(advertised_fork_id, fork_id);
     }
 }

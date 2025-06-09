@@ -3,13 +3,13 @@ use alloy_primitives::{BlockNumber, B256, U256};
 use alloy_rlp::Decodable;
 use reth_codecs::Compact;
 use reth_node_builder::NodePrimitives;
-use reth_primitives::{SealedBlock, SealedHeader, StaticFileSegment};
-use reth_primitives_traits::SealedHeaderFor;
+use reth_primitives_traits::{SealedBlock, SealedHeader, SealedHeaderFor};
 use reth_provider::{
-    providers::StaticFileProvider, BlockWriter, StageCheckpointWriter, StaticFileProviderFactory,
-    StaticFileWriter, StorageLocation,
+    providers::StaticFileProvider, BlockWriter, ProviderResult, StageCheckpointWriter,
+    StaticFileProviderFactory, StaticFileWriter, StorageLocation,
 };
 use reth_stages::{StageCheckpoint, StageId};
+use reth_static_file_types::StaticFileSegment;
 use std::{fs::File, io::Read, path::PathBuf};
 use tracing::info;
 
@@ -29,17 +29,20 @@ pub fn setup_without_evm<Provider>(
     provider_rw: &Provider,
     header: SealedHeader<<Provider::Primitives as NodePrimitives>::BlockHeader>,
     total_difficulty: U256,
-) -> Result<(), eyre::Error>
+) -> ProviderResult<()>
 where
     Provider: StaticFileProviderFactory<Primitives: NodePrimitives<BlockHeader = Header>>
         + StageCheckpointWriter
         + BlockWriter<Block = <Provider::Primitives as NodePrimitives>::Block>,
 {
-    info!(target: "reth::cli", "Setting up dummy EVM chain before importing state.");
+    info!(target: "reth::cli", new_tip = ?header.num_hash(), "Setting up dummy EVM chain before importing state.");
 
     let static_file_provider = provider_rw.static_file_provider();
     // Write EVM dummy data up to `header - 1` block
-    append_dummy_chain(&static_file_provider, header.number() - 1)?;
+    append_dummy_chain(&static_file_provider, header.number() - 1, |number| Header {
+        number,
+        ..Default::default()
+    })?;
 
     info!(target: "reth::cli", "Appending first valid block.");
 
@@ -62,7 +65,7 @@ fn append_first_block<Provider>(
     provider_rw: &Provider,
     header: &SealedHeaderFor<Provider::Primitives>,
     total_difficulty: U256,
-) -> Result<(), eyre::Error>
+) -> ProviderResult<()>
 where
     Provider: BlockWriter<Block = <Provider::Primitives as NodePrimitives>::Block>
         + StaticFileProviderFactory<Primitives: NodePrimitives<BlockHeader: Compact>>,
@@ -97,10 +100,15 @@ where
 /// * Headers: It will push an empty block.
 /// * Transactions: It will not push any tx, only increments the end block range.
 /// * Receipts: It will not push any receipt, only increments the end block range.
-fn append_dummy_chain<N: NodePrimitives<BlockHeader = Header>>(
+fn append_dummy_chain<N, F>(
     sf_provider: &StaticFileProvider<N>,
     target_height: BlockNumber,
-) -> Result<(), eyre::Error> {
+    header_factory: F,
+) -> ProviderResult<()>
+where
+    N: NodePrimitives,
+    F: Fn(BlockNumber) -> N::BlockHeader + Send + Sync + 'static,
+{
     let (tx, rx) = std::sync::mpsc::channel();
 
     // Spawn jobs for incrementing the block end range of transactions and receipts
@@ -122,12 +130,11 @@ fn append_dummy_chain<N: NodePrimitives<BlockHeader = Header>>(
     // Spawn job for appending empty headers
     let provider = sf_provider.clone();
     std::thread::spawn(move || {
-        let mut empty_header = Header::default();
         let result = provider.latest_writer(StaticFileSegment::Headers).and_then(|mut writer| {
             for block_num in 1..=target_height {
                 // TODO: should we fill with real parent_hash?
-                empty_header.number = block_num;
-                writer.append_header(&empty_header, U256::ZERO, &B256::ZERO)?;
+                let header = header_factory(block_num);
+                writer.append_header(&header, U256::ZERO, &B256::ZERO)?;
             }
             Ok(())
         });
@@ -136,8 +143,11 @@ fn append_dummy_chain<N: NodePrimitives<BlockHeader = Header>>(
     });
 
     // Catches any StaticFileWriter error.
-    while let Ok(r) = rx.recv() {
-        r?;
+    while let Ok(append_result) = rx.recv() {
+        if let Err(err) = append_result {
+            tracing::error!(target: "reth::cli", "Error appending dummy chain: {err}");
+            return Err(err)
+        }
     }
 
     // If, for any reason, rayon crashes this verifies if all segments are at the same

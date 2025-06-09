@@ -6,17 +6,16 @@ use crate::{
     RpcReceipt,
 };
 use alloy_eips::BlockId;
-use alloy_primitives::Sealable;
+use alloy_primitives::{Sealable, U256};
 use alloy_rlp::Encodable;
 use alloy_rpc_types_eth::{Block, BlockTransactions, Header, Index};
 use futures::Future;
+use reth_evm::ConfigureEvm;
 use reth_node_api::BlockBody;
-use reth_primitives::{RecoveredBlock, SealedBlock};
-use reth_provider::{
-    BlockIdReader, BlockReader, BlockReaderIdExt, ProviderHeader, ProviderReceipt,
-};
+use reth_primitives_traits::{NodePrimitives, RecoveredBlock, SealedBlock};
 use reth_rpc_types_compat::block::from_block;
-use revm_primitives::U256;
+use reth_storage_api::{BlockIdReader, BlockReader, ProviderHeader, ProviderReceipt, ProviderTx};
+use reth_transaction_pool::{PoolTransaction, TransactionPool};
 use std::sync::Arc;
 
 /// Result type of the fetched block receipts.
@@ -58,7 +57,7 @@ pub trait EthBlocks: LoadBlock {
         Self: FullEthApiTypes,
     {
         async move {
-            let Some(block) = self.block_with_senders(block_id).await? else { return Ok(None) };
+            let Some(block) = self.recovered_block(block_id).await? else { return Ok(None) };
 
             let block = from_block((*block).clone(), full.into(), self.tx_resp_builder())?;
             Ok(Some(block))
@@ -93,7 +92,7 @@ pub trait EthBlocks: LoadBlock {
 
             Ok(self
                 .cache()
-                .get_sealed_block_with_senders(block_hash)
+                .get_recovered_block(block_hash)
                 .await
                 .map_err(Self::Error::from_eth_err)?
                 .map(|b| b.body().transaction_count()))
@@ -103,7 +102,6 @@ pub trait EthBlocks: LoadBlock {
     /// Helper function for `eth_getBlockReceipts`.
     ///
     /// Returns all transaction receipts in block, or `None` if block wasn't found.
-    #[allow(clippy::type_complexity)]
     fn block_receipts(
         &self,
         block_id: BlockId,
@@ -111,14 +109,15 @@ pub trait EthBlocks: LoadBlock {
     where
         Self: LoadReceipt;
 
-    /// Helper method that loads a bock and all its receipts.
-    #[allow(clippy::type_complexity)]
+    /// Helper method that loads a block and all its receipts.
     fn load_block_and_receipts(
         &self,
         block_id: BlockId,
     ) -> impl Future<Output = BlockAndReceiptsResult<Self>> + Send
     where
         Self: LoadReceipt,
+        Self::Pool:
+            TransactionPool<Transaction: PoolTransaction<Consensus = ProviderTx<Self::Provider>>>,
     {
         async move {
             if block_id.is_pending() {
@@ -160,8 +159,15 @@ pub trait EthBlocks: LoadBlock {
     fn ommers(
         &self,
         block_id: BlockId,
-    ) -> Result<Option<Vec<ProviderHeader<Self::Provider>>>, Self::Error> {
-        self.provider().ommers_by_id(block_id).map_err(Self::Error::from_eth_err)
+    ) -> impl Future<Output = Result<Option<Vec<ProviderHeader<Self::Provider>>>, Self::Error>> + Send
+    {
+        async move {
+            if let Some(block) = self.recovered_block(block_id).await? {
+                Ok(block.body().ommers().map(|o| o.to_vec()))
+            } else {
+                Ok(None)
+            }
+        }
     }
 
     /// Returns uncle block at given index in given block.
@@ -181,7 +187,9 @@ pub trait EthBlocks: LoadBlock {
                     .map_err(Self::Error::from_eth_err)?
                     .and_then(|block| block.body().ommers().map(|o| o.to_vec()))
             } else {
-                self.provider().ommers_by_id(block_id).map_err(Self::Error::from_eth_err)?
+                self.recovered_block(block_id)
+                    .await?
+                    .map(|block| block.body().ommers().map(|o| o.to_vec()).unwrap_or_default())
             }
             .unwrap_or_default();
 
@@ -202,10 +210,18 @@ pub trait EthBlocks: LoadBlock {
 /// Loads a block from database.
 ///
 /// Behaviour shared by several `eth_` RPC methods, not exclusive to `eth_` blocks RPC methods.
-pub trait LoadBlock: LoadPendingBlock + SpawnBlocking + RpcNodeCoreExt {
+pub trait LoadBlock:
+    LoadPendingBlock
+    + SpawnBlocking
+    + RpcNodeCoreExt<
+        Pool: TransactionPool<Transaction: PoolTransaction<Consensus = ProviderTx<Self::Provider>>>,
+        Primitives: NodePrimitives<SignedTx = ProviderTx<Self::Provider>>,
+        Evm: ConfigureEvm<Primitives = <Self as RpcNodeCore>::Primitives>,
+    >
+{
     /// Returns the block object for the given block id.
     #[expect(clippy::type_complexity)]
-    fn block_with_senders(
+    fn recovered_block(
         &self,
         block_id: BlockId,
     ) -> impl Future<
@@ -241,10 +257,7 @@ pub trait LoadBlock: LoadPendingBlock + SpawnBlocking + RpcNodeCoreExt {
                 None => return Ok(None),
             };
 
-            self.cache()
-                .get_sealed_block_with_senders(block_hash)
-                .await
-                .map_err(Self::Error::from_eth_err)
+            self.cache().get_recovered_block(block_hash).await.map_err(Self::Error::from_eth_err)
         }
     }
 }

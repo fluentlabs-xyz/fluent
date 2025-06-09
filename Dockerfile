@@ -1,19 +1,21 @@
+# syntax=docker.io/docker/dockerfile:1.7-labs
+
 FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /app
 
-LABEL org.opencontainers.image.source=https://github.com/fluentlabs-xyz/fuent
+LABEL org.opencontainers.image.source=https://github.com/fluentlabs-xyz/reth
 LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
 
 # Install system dependencies
 RUN apt-get update && apt-get -y upgrade && apt-get install -y libclang-dev pkg-config
 
 # Builds a cargo-chef plan
-#FROM chef AS planner
-#COPY . .
-#RUN cargo chef prepare --recipe-path recipe.json
+FROM chef AS planner
+COPY --exclude=.git --exclude=dist . .
+RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
-#COPY --from=planner /app/recipe.json recipe.json
+COPY --from=planner /app/recipe.json recipe.json
 
 # Build profile, release by default
 ARG BUILD_PROFILE=release
@@ -28,10 +30,10 @@ ARG FEATURES=""
 ENV FEATURES=$FEATURES
 
 # Builds dependencies
-#RUN cargo chef cook --profile $BUILD_PROFILE --features "$FEATURES" --recipe-path recipe.json
+RUN cargo chef cook --profile $BUILD_PROFILE --features "$FEATURES" --recipe-path recipe.json
 
 # Build application
-COPY . .
+COPY --exclude=.git --exclude=dist . .
 # Make sure wasm32 target is installed
 RUN rustup target add wasm32-unknown-unknown
 RUN cargo build --profile $BUILD_PROFILE --features "$FEATURES" --locked --bin reth

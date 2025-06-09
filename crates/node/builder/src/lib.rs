@@ -10,6 +10,7 @@
 )]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![feature(trait_upcasting)]
 
 /// Node event hooks.
 pub mod hooks;
@@ -17,6 +18,10 @@ pub mod hooks;
 /// Support for configuring the higher level node types.
 pub mod node;
 pub use node::*;
+
+/// Support for accessing the EngineApi outside the RPC server context.
+mod engine_api_ext;
+pub use engine_api_ext::EngineApiExt;
 
 /// Support for configuring the components of a node.
 pub mod components;
@@ -26,10 +31,11 @@ mod builder;
 pub use builder::{add_ons::AddOns, *};
 
 mod launch;
-pub use launch::{engine::EngineNodeLauncher, *};
-
-/// Temporarily re-export engine tree config.
-pub use reth_engine_tree::tree::config as engine_tree_config;
+pub use launch::{
+    debug::{DebugNode, DebugNodeLauncher},
+    engine::EngineNodeLauncher,
+    *,
+};
 
 mod handle;
 pub use handle::NodeHandle;

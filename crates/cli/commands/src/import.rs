@@ -7,14 +7,13 @@ use reth_chainspec::{EthChainSpec, EthereumHardforks};
 use reth_cli::chainspec::ChainSpecParser;
 use reth_config::Config;
 use reth_consensus::{ConsensusError, FullConsensus};
-use reth_db::tables;
-use reth_db_api::transaction::DbTx;
+use reth_db_api::{tables, transaction::DbTx};
 use reth_downloaders::{
     bodies::bodies::BodiesDownloaderBuilder,
     file_client::{ChunkedFileReader, FileClient, DEFAULT_BYTE_LEN_CHUNK_CHAIN_FILE},
     headers::reverse_headers::ReverseHeadersDownloaderBuilder,
 };
-use reth_evm::execute::BlockExecutorProvider;
+use reth_evm::ConfigureEvm;
 use reth_network_p2p::{
     bodies::downloader::BodyDownloader,
     headers::downloader::{HeaderDownloader, SyncTarget},
@@ -77,7 +76,7 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks>> ImportComm
         let Environment { provider_factory, config, .. } = self.env.init::<N>(AccessRights::RW)?;
 
         let components = components(provider_factory.chain_spec());
-        let executor = components.executor().clone();
+        let executor = components.evm_config().clone();
         let consensus = Arc::new(components.consensus().clone());
         info!(target: "reth::cli", "Consensus engine initialized");
 
@@ -164,6 +163,13 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks>> ImportComm
     }
 }
 
+impl<C: ChainSpecParser> ImportCommand<C> {
+    /// Returns the underlying chain being used to run this command
+    pub fn chain_spec(&self) -> Option<&Arc<C::ChainSpec>> {
+        Some(&self.env.chain)
+    }
+}
+
 /// Builds import pipeline.
 ///
 /// If configured to execute, all stages will run. Otherwise, only stages that don't require state
@@ -175,12 +181,12 @@ pub fn build_import_pipeline<N, C, E>(
     file_client: Arc<FileClient<BlockTy<N>>>,
     static_file_producer: StaticFileProducer<ProviderFactory<N>>,
     disable_exec: bool,
-    executor: E,
+    evm_config: E,
 ) -> eyre::Result<(Pipeline<N>, impl Stream<Item = NodeEvent<N::Primitives>>)>
 where
-    N: ProviderNodeTypes + CliNodeTypes,
+    N: ProviderNodeTypes,
     C: FullConsensus<N::Primitives, Error = ConsensusError> + 'static,
-    E: BlockExecutorProvider<Primitives = N::Primitives>,
+    E: ConfigureEvm<Primitives = N::Primitives> + 'static,
 {
     if !file_client.has_canonical_blocks() {
         eyre::bail!("unable to import non canonical blocks");
@@ -225,7 +231,7 @@ where
                 consensus.clone(),
                 header_downloader,
                 body_downloader,
-                executor,
+                evm_config,
                 config.stages.clone(),
                 PruneModes::default(),
             )

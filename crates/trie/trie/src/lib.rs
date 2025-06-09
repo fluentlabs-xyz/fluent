@@ -29,10 +29,6 @@ pub mod walker;
 /// The iterators for traversing existing intermediate hashes and updated trie leaves.
 pub mod node_iter;
 
-/// Input for trie computation.
-mod input;
-pub use input::TrieInput;
-
 /// Merkle proof generation.
 pub mod proof;
 
@@ -41,7 +37,7 @@ pub mod witness;
 
 /// The implementation of the Merkle Patricia Trie.
 mod trie;
-pub use trie::{StateRoot, StorageRoot};
+pub use trie::{StateRoot, StorageRoot, TrieType};
 
 /// Utilities for state root checkpoint progress.
 mod progress;
@@ -60,3 +56,7 @@ pub mod metrics;
 /// Collection of trie-related test utilities.
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
+
+/// Collection of mock types for testing.
+#[cfg(test)]
+pub mod mock;

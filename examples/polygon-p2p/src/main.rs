@@ -2,19 +2,22 @@
 //!
 //! Run with
 //!
-//! ```not_rust
+//! ```sh
 //! cargo run -p polygon-p2p
 //! ```
 //!
-//! This launch the regular reth node overriding the engine api payload builder with our custom.
+//! This launches a regular reth node overriding the engine api payload builder with our custom.
 //!
-//! Credits to: <https://blog.merkle.io/blog/fastest-transaction-network-eth-polygon-bsc>
+//! Credits to: <https://merkle.io/blog/modifying-reth-to-build-the-fastest-transaction-network-on-bsc-and-polygon>
+
+#![warn(unused_crate_dependencies)]
+
 use chain_cfg::{boot_nodes, head, polygon_chain_spec};
 use reth_discv4::Discv4ConfigBuilder;
-use reth_network::{
-    config::NetworkMode, NetworkConfig, NetworkEvent, NetworkEventListenerProvider, NetworkManager,
+use reth_ethereum::network::{
+    api::events::SessionInfo, config::NetworkMode, NetworkConfig, NetworkEvent,
+    NetworkEventListenerProvider, NetworkManager,
 };
-use reth_network_api::events::SessionInfo;
 use reth_tracing::{
     tracing::info, tracing_subscriber::filter::LevelFilter, LayerInfo, LogFormat, RethTracer,
     Tracer,

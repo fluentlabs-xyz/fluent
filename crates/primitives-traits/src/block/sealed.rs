@@ -340,7 +340,7 @@ where
 #[cfg(any(test, feature = "test-utils"))]
 impl<B: crate::test_utils::TestBlock> SealedBlock<B> {
     /// Returns a mutable reference to the header.
-    pub fn header_mut(&mut self) -> &mut B::Header {
+    pub const fn header_mut(&mut self) -> &mut B::Header {
         self.header.header_mut()
     }
 
@@ -350,7 +350,7 @@ impl<B: crate::test_utils::TestBlock> SealedBlock<B> {
     }
 
     /// Returns a mutable reference to the header.
-    pub fn body_mut(&mut self) -> &mut B::Body {
+    pub const fn body_mut(&mut self) -> &mut B::Body {
         &mut self.body
     }
 
@@ -429,7 +429,7 @@ pub(super) mod serde_bincode_compat {
         From<SealedBlock<'a, T>> for super::SealedBlock<T>
     {
         fn from(value: SealedBlock<'a, T>) -> Self {
-            Self::from_sealed_parts(value.header.into(), value.body.into())
+            Self::from_sealed_parts(value.header.into(), SerdeBincodeCompat::from_repr(value.body))
         }
     }
 
@@ -462,6 +462,10 @@ pub(super) mod serde_bincode_compat {
 
         fn as_repr(&self) -> Self::BincodeRepr<'_> {
             self.into()
+        }
+
+        fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
+            repr.into()
         }
     }
 }
