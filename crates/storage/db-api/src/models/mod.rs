@@ -8,8 +8,8 @@ use alloy_consensus::Header;
 use alloy_genesis::GenesisAccount;
 use alloy_primitives::{Address, Bytes, Log, B256, U256};
 use reth_codecs::{add_arbitrary_tests, Compact};
-use reth_primitives::{Receipt, StorageEntry, TransactionSigned, TxType};
-use reth_primitives_traits::{Account, Bytecode};
+use reth_ethereum_primitives::{Receipt, TransactionSigned, TxType};
+use reth_primitives_traits::{Account, Bytecode, StorageEntry};
 use reth_prune_types::{PruneCheckpoint, PruneSegment};
 use reth_stages_types::StageCheckpoint;
 use reth_trie_common::{StoredNibbles, StoredNibblesSubKey, *};
@@ -25,7 +25,7 @@ pub use accounts::*;
 pub use blocks::*;
 pub use integer_list::IntegerList;
 pub use reth_db_models::{
-    blocks::StaticFileBlockWithdrawals, AccountBeforeTx, ClientVersion, StoredBlockBodyIndices,
+    AccountBeforeTx, ClientVersion, StaticFileBlockWithdrawals, StoredBlockBodyIndices,
     StoredBlockWithdrawals,
 };
 pub use sharded_key::ShardedKey;
@@ -278,7 +278,7 @@ impl_compression_fixed_compact!(B256, Address);
 macro_rules! add_wrapper_struct {
     ($(($name:tt, $wrapper:tt)),+) => {
         $(
-            /// Wrapper struct so it can use StructFlags from Compact, when used as pure table values.
+            /// Wrapper struct so it can use `StructFlags` from Compact, when used as pure table values.
             #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Compact)]
             #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
             #[add_arbitrary_tests(compact)]
@@ -319,12 +319,11 @@ mod tests {
     //
     // this check is to ensure we do not inadvertently add too many fields to a struct which would
     // expand the flags field and break backwards compatibility
-    #[cfg(not(feature = "optimism"))]
     #[test]
     fn test_ensure_backwards_compatibility() {
         use super::*;
         use reth_codecs::{test_utils::UnusedBits, validate_bitflag_backwards_compat};
-        use reth_primitives::{Account, Receipt};
+        use reth_primitives_traits::Account;
         use reth_prune_types::{PruneCheckpoint, PruneMode, PruneSegment};
         use reth_stages_types::{
             AccountHashingCheckpoint, CheckpointBlockRange, EntitiesCheckpoint,

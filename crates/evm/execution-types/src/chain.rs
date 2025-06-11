@@ -1,18 +1,17 @@
 //! Contains [Chain], a chain of blocks and their final state.
 
 use crate::ExecutionOutcome;
-use alloc::{borrow::Cow, boxed::Box, collections::BTreeMap, vec::Vec};
-use alloy_consensus::BlockHeader;
+use alloc::{borrow::Cow, collections::BTreeMap, vec::Vec};
+use alloy_consensus::{transaction::Recovered, BlockHeader};
 use alloy_eips::{eip1898::ForkBlock, eip2718::Encodable2718, BlockNumHash};
 use alloy_primitives::{Address, BlockHash, BlockNumber, TxHash};
 use core::{fmt, ops::RangeInclusive};
-use reth_execution_errors::{BlockExecutionError, InternalBlockExecutionError};
-use reth_primitives::{
-    transaction::SignedTransactionIntoRecoveredExt, Recovered, RecoveredBlock, SealedHeader,
+use reth_primitives_traits::{
+    transaction::signed::SignedTransaction, Block, BlockBody, NodePrimitives, RecoveredBlock,
+    SealedHeader,
 };
-use reth_primitives_traits::{Block, BlockBody, NodePrimitives, SignedTransaction};
-use reth_trie::updates::TrieUpdates;
-use revm::db::BundleState;
+use reth_trie_common::updates::TrieUpdates;
+use revm::database::BundleState;
 
 /// A chain of blocks and their final state.
 ///
@@ -26,7 +25,7 @@ use revm::db::BundleState;
 /// A chain of blocks should not be empty.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Chain<N: NodePrimitives = reth_primitives::EthPrimitives> {
+pub struct Chain<N: NodePrimitives = reth_ethereum_primitives::EthPrimitives> {
     /// All blocks in this chain.
     blocks: BTreeMap<BlockNumber, RecoveredBlock<N::Block>>,
     /// The outcome of block execution for this chain.
@@ -110,7 +109,7 @@ impl<N: NodePrimitives> Chain<N> {
     }
 
     /// Get mutable execution outcome of this chain
-    pub fn execution_outcome_mut(&mut self) -> &mut ExecutionOutcome<N::Receipt> {
+    pub const fn execution_outcome_mut(&mut self) -> &mut ExecutionOutcome<N::Receipt> {
         &mut self.execution_outcome
     }
 
@@ -131,7 +130,7 @@ impl<N: NodePrimitives> Chain<N> {
     }
 
     /// Returns the block with matching hash.
-    pub fn block_with_senders(&self, block_hash: BlockHash) -> Option<&RecoveredBlock<N::Block>> {
+    pub fn recovered_block(&self, block_hash: BlockHash) -> Option<&RecoveredBlock<N::Block>> {
         self.blocks.iter().find_map(|(_num, block)| (block.hash() == block_hash).then_some(block))
     }
 
@@ -187,7 +186,6 @@ impl<N: NodePrimitives> Chain<N> {
     }
 
     /// Get the block at which this chain forked.
-    #[track_caller]
     pub fn fork_block(&self) -> ForkBlock {
         let first = self.first();
         ForkBlock {
@@ -244,16 +242,25 @@ impl<N: NodePrimitives> Chain<N> {
         N::SignedTx: Encodable2718,
     {
         let mut receipt_attach = Vec::with_capacity(self.blocks().len());
-        for ((block_num, block), receipts) in
-            self.blocks().iter().zip(self.execution_outcome.receipts().iter())
-        {
-            let mut tx_receipts = Vec::with_capacity(receipts.len());
-            for (tx, receipt) in block.body().transactions().iter().zip(receipts.iter()) {
-                tx_receipts.push((tx.trie_hash(), receipt.clone()));
-            }
-            let block_num_hash = BlockNumHash::new(*block_num, block.hash());
-            receipt_attach.push(BlockReceipts { block: block_num_hash, tx_receipts });
-        }
+
+        self.blocks_and_receipts().for_each(|(block, receipts)| {
+            let block_num_hash = BlockNumHash::new(block.number(), block.hash());
+
+            let tx_receipts = block
+                .body()
+                .transactions()
+                .iter()
+                .zip(receipts)
+                .map(|(tx, receipt)| (tx.trie_hash(), receipt.clone()))
+                .collect();
+
+            receipt_attach.push(BlockReceipts {
+                block: block_num_hash,
+                tx_receipts,
+                timestamp: block.timestamp(),
+            });
+        });
+
         receipt_attach
     }
 
@@ -272,15 +279,14 @@ impl<N: NodePrimitives> Chain<N> {
     /// Merge two chains by appending the given chain into the current one.
     ///
     /// The state of accounts for this chain is set to the state of the newest chain.
-    pub fn append_chain(&mut self, other: Self) -> Result<(), BlockExecutionError> {
+    ///
+    /// Returns the passed `other` chain in [`Result::Err`] variant if the chains could not be
+    /// connected.
+    pub fn append_chain(&mut self, other: Self) -> Result<(), Self> {
         let chain_tip = self.tip();
         let other_fork_block = other.fork_block();
         if chain_tip.hash() != other_fork_block.hash {
-            return Err(InternalBlockExecutionError::AppendChainDoesntConnect {
-                chain_tip: Box::new(chain_tip.num_hash()),
-                other_chain_fork: Box::new(other_fork_block),
-            }
-            .into())
+            return Err(other)
         }
 
         // Insert blocks from other chain
@@ -289,77 +295,6 @@ impl<N: NodePrimitives> Chain<N> {
         self.trie_updates.take(); // reset
 
         Ok(())
-    }
-
-    /// Split this chain at the given block.
-    ///
-    /// The given block will be the last block in the first returned chain.
-    ///
-    /// If the given block is not found, [`ChainSplit::NoSplitPending`] is returned.
-    /// Split chain at the number or hash, block with given number will be included at first chain.
-    /// If any chain is empty (Does not have blocks) None will be returned.
-    ///
-    /// # Note
-    ///
-    /// The plain state is only found in the second chain, making it
-    /// impossible to perform any state reverts on the first chain.
-    ///
-    /// The second chain only contains the changes that were reverted on the first chain; however,
-    /// it retains the up to date state as if the chains were one, i.e. the second chain is an
-    /// extension of the first.
-    ///
-    /// # Panics
-    ///
-    /// If chain doesn't have any blocks.
-    #[track_caller]
-    pub fn split(mut self, split_at: ChainSplitTarget) -> ChainSplit<N> {
-        let chain_tip = *self.blocks.last_entry().expect("chain is never empty").key();
-        let block_number = match split_at {
-            ChainSplitTarget::Hash(block_hash) => {
-                let Some(block_number) = self.block_number(block_hash) else {
-                    return ChainSplit::NoSplitPending(self)
-                };
-                // If block number is same as tip whole chain is becoming canonical.
-                if block_number == chain_tip {
-                    return ChainSplit::NoSplitCanonical(self)
-                }
-                block_number
-            }
-            ChainSplitTarget::Number(block_number) => {
-                if block_number > chain_tip {
-                    return ChainSplit::NoSplitPending(self)
-                }
-                if block_number == chain_tip {
-                    return ChainSplit::NoSplitCanonical(self)
-                }
-                if block_number < *self.blocks.first_entry().expect("chain is never empty").key() {
-                    return ChainSplit::NoSplitPending(self)
-                }
-                block_number
-            }
-        };
-
-        let split_at = block_number + 1;
-        let higher_number_blocks = self.blocks.split_off(&split_at);
-
-        let execution_outcome = core::mem::take(&mut self.execution_outcome);
-        let (canonical_block_exec_outcome, pending_block_exec_outcome) =
-            execution_outcome.split_at(split_at);
-
-        // TODO: Currently, trie updates are reset on chain split.
-        // Add tests ensuring that it is valid to leave updates in the pending chain.
-        ChainSplit::Split {
-            canonical: Self {
-                execution_outcome: canonical_block_exec_outcome.expect("split in range"),
-                blocks: self.blocks,
-                trie_updates: None,
-            },
-            pending: Self {
-                execution_outcome: pending_block_exec_outcome,
-                blocks: higher_number_blocks,
-                trie_updates: None,
-            },
-        }
     }
 }
 
@@ -463,78 +398,35 @@ impl<B: Block> IntoIterator for ChainBlocks<'_, B> {
     type IntoIter = alloc::collections::btree_map::IntoIter<BlockNumber, RecoveredBlock<B>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        #[allow(clippy::unnecessary_to_owned)]
         self.blocks.into_owned().into_iter()
     }
 }
 
 /// Used to hold receipts and their attachment.
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
-pub struct BlockReceipts<T = reth_primitives::Receipt> {
+pub struct BlockReceipts<T = reth_ethereum_primitives::Receipt> {
     /// Block identifier
     pub block: BlockNumHash,
     /// Transaction identifier and receipt.
     pub tx_receipts: Vec<(TxHash, T)>,
-}
-
-/// The target block where the chain should be split.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ChainSplitTarget {
-    /// Split at block number.
-    Number(BlockNumber),
-    /// Split at block hash.
-    Hash(BlockHash),
-}
-
-impl From<BlockNumber> for ChainSplitTarget {
-    fn from(number: BlockNumber) -> Self {
-        Self::Number(number)
-    }
-}
-
-impl From<BlockHash> for ChainSplitTarget {
-    fn from(hash: BlockHash) -> Self {
-        Self::Hash(hash)
-    }
-}
-
-/// Result of a split chain.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ChainSplit<N: NodePrimitives = reth_primitives::EthPrimitives> {
-    /// Chain is not split. Pending chain is returned.
-    /// Given block split is higher than last block.
-    /// Or in case of split by hash when hash is unknown.
-    NoSplitPending(Chain<N>),
-    /// Chain is not split. Canonical chain is returned.
-    /// Given block split is lower than first block.
-    NoSplitCanonical(Chain<N>),
-    /// Chain is split into two: `[canonical]` and `[pending]`
-    /// The target of this chain split [`ChainSplitTarget`] belongs to the `canonical` chain.
-    Split {
-        /// Contains lower block numbers that are considered canonicalized. It ends with
-        /// the [`ChainSplitTarget`] block. The state of this chain is now empty and no longer
-        /// usable.
-        canonical: Chain<N>,
-        /// Right contains all subsequent blocks __after__ the [`ChainSplitTarget`] that are still
-        /// pending.
-        ///
-        /// The state of the original chain is moved here.
-        pending: Chain<N>,
-    },
+    /// Block timestamp
+    pub timestamp: u64,
 }
 
 /// Bincode-compatible [`Chain`] serde implementation.
 #[cfg(feature = "serde-bincode-compat")]
 pub(super) mod serde_bincode_compat {
-    use crate::ExecutionOutcome;
-    use alloc::borrow::Cow;
+    use crate::{serde_bincode_compat, ExecutionOutcome};
+    use alloc::{borrow::Cow, collections::BTreeMap};
     use alloy_primitives::BlockNumber;
-    use reth_primitives::{serde_bincode_compat::RecoveredBlock, EthPrimitives, NodePrimitives};
-    use reth_primitives_traits::{serde_bincode_compat::SerdeBincodeCompat, Block};
+    use reth_ethereum_primitives::EthPrimitives;
+    use reth_primitives_traits::{
+        serde_bincode_compat::{RecoveredBlock, SerdeBincodeCompat},
+        Block, NodePrimitives,
+    };
     use reth_trie_common::serde_bincode_compat::updates::TrieUpdates;
     use serde::{ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
     use serde_with::{DeserializeAs, SerializeAs};
-    use std::collections::BTreeMap;
 
     /// Bincode-compatible [`super::Chain`] serde implementation.
     ///
@@ -559,7 +451,7 @@ pub(super) mod serde_bincode_compat {
         >,
     {
         blocks: RecoveredBlocks<'a, N::Block>,
-        execution_outcome: Cow<'a, ExecutionOutcome<N::Receipt>>,
+        execution_outcome: serde_bincode_compat::ExecutionOutcome<'a, N::Receipt>,
         trie_updates: Option<TrieUpdates<'a>>,
     }
 
@@ -568,7 +460,7 @@ pub(super) mod serde_bincode_compat {
         'a,
         B: reth_primitives_traits::Block<Header: SerdeBincodeCompat, Body: SerdeBincodeCompat>
             + 'static,
-    >(Cow<'a, BTreeMap<BlockNumber, reth_primitives::RecoveredBlock<B>>>);
+    >(Cow<'a, BTreeMap<BlockNumber, reth_primitives_traits::RecoveredBlock<B>>>);
 
     impl<B> Serialize for RecoveredBlocks<'_, B>
     where
@@ -612,7 +504,7 @@ pub(super) mod serde_bincode_compat {
         fn from(value: &'a super::Chain<N>) -> Self {
             Self {
                 blocks: RecoveredBlocks(Cow::Borrowed(&value.blocks)),
-                execution_outcome: Cow::Borrowed(&value.execution_outcome),
+                execution_outcome: value.execution_outcome.as_repr(),
                 trie_updates: value.trie_updates.as_ref().map(Into::into),
             }
         }
@@ -627,7 +519,7 @@ pub(super) mod serde_bincode_compat {
         fn from(value: Chain<'a, N>) -> Self {
             Self {
                 blocks: value.blocks.0.into_owned(),
-                execution_outcome: value.execution_outcome.into_owned(),
+                execution_outcome: ExecutionOutcome::from_repr(value.execution_outcome),
                 trie_updates: value.trie_updates.map(Into::into),
             }
         }
@@ -666,7 +558,7 @@ pub(super) mod serde_bincode_compat {
         use super::super::{serde_bincode_compat, Chain};
         use arbitrary::Arbitrary;
         use rand::Rng;
-        use reth_primitives::RecoveredBlock;
+        use reth_primitives_traits::RecoveredBlock;
         use serde::{Deserialize, Serialize};
         use serde_with::serde_as;
 
@@ -680,7 +572,7 @@ pub(super) mod serde_bincode_compat {
             }
 
             let mut bytes = [0u8; 1024];
-            rand::thread_rng().fill(bytes.as_mut_slice());
+            rand::rng().fill(bytes.as_mut_slice());
             let data = Data {
                 chain: Chain::new(
                     vec![RecoveredBlock::arbitrary(&mut arbitrary::Unstructured::new(&bytes))
@@ -703,25 +595,11 @@ mod tests {
     use alloy_consensus::TxType;
     use alloy_primitives::{Address, B256};
     use reth_ethereum_primitives::Receipt;
-    use revm::primitives::{AccountInfo, HashMap};
-
-    // TODO: this is temporary, until we fully switch over to `reth_ethereum_primitives` for the
-    // `Receipt` type in `EthPrimitives`.
-    #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-    #[non_exhaustive]
-    struct TestPrimitives;
-
-    impl reth_primitives_traits::NodePrimitives for TestPrimitives {
-        type Block = reth_primitives::Block;
-        type BlockHeader = alloy_consensus::Header;
-        type BlockBody = reth_primitives::BlockBody;
-        type SignedTx = reth_primitives::TransactionSigned;
-        type Receipt = Receipt;
-    }
+    use revm::{primitives::HashMap, state::AccountInfo};
 
     #[test]
     fn chain_append() {
-        let block: RecoveredBlock<reth_primitives::Block> = Default::default();
+        let block: RecoveredBlock<reth_ethereum_primitives::Block> = Default::default();
         let block1_hash = B256::new([0x01; 32]);
         let block2_hash = B256::new([0x02; 32]);
         let block3_hash = B256::new([0x03; 32]);
@@ -785,13 +663,13 @@ mod tests {
             vec![],
         );
 
-        let mut block1: RecoveredBlock<reth_primitives::Block> = Default::default();
+        let mut block1: RecoveredBlock<reth_ethereum_primitives::Block> = Default::default();
         let block1_hash = B256::new([15; 32]);
         block1.set_block_number(1);
         block1.set_hash(block1_hash);
         block1.push_sender(Address::new([4; 20]));
 
-        let mut block2: RecoveredBlock<reth_primitives::Block> = Default::default();
+        let mut block2: RecoveredBlock<reth_ethereum_primitives::Block> = Default::default();
         let block2_hash = B256::new([16; 32]);
         block2.set_block_number(2);
         block2.set_hash(block2_hash);
@@ -803,56 +681,19 @@ mod tests {
         let chain: Chain =
             Chain::new(vec![block1.clone(), block2.clone()], block_state_extended, None);
 
-        let (split1_execution_outcome, split2_execution_outcome) =
-            chain.execution_outcome.clone().split_at(2);
-
-        let chain_split1 = Chain {
-            execution_outcome: split1_execution_outcome.unwrap(),
-            blocks: BTreeMap::from([(1, block1.clone())]),
-            trie_updates: None,
-        };
-
-        let chain_split2 = Chain {
-            execution_outcome: split2_execution_outcome,
-            blocks: BTreeMap::from([(2, block2.clone())]),
-            trie_updates: None,
-        };
-
         // return tip state
         assert_eq!(
             chain.execution_outcome_at_block(block2.number),
             Some(chain.execution_outcome.clone())
         );
-        assert_eq!(
-            chain.execution_outcome_at_block(block1.number),
-            Some(chain_split1.execution_outcome.clone())
-        );
         // state at unknown block
         assert_eq!(chain.execution_outcome_at_block(100), None);
-
-        // split in two
-        assert_eq!(
-            chain.clone().split(block1_hash.into()),
-            ChainSplit::Split { canonical: chain_split1, pending: chain_split2 }
-        );
-
-        // split at unknown block hash
-        assert_eq!(
-            chain.clone().split(B256::new([100; 32]).into()),
-            ChainSplit::NoSplitPending(chain.clone())
-        );
-
-        // split at higher number
-        assert_eq!(chain.clone().split(10u64.into()), ChainSplit::NoSplitPending(chain.clone()));
-
-        // split at lower number
-        assert_eq!(chain.clone().split(0u64.into()), ChainSplit::NoSplitPending(chain));
     }
 
     #[test]
     fn receipts_by_block_hash() {
         // Create a default RecoveredBlock object
-        let block: RecoveredBlock<reth_primitives::Block> = Default::default();
+        let block: RecoveredBlock<reth_ethereum_primitives::Block> = Default::default();
 
         // Define block hashes for block1 and block2
         let block1_hash = B256::new([0x01; 32]);
@@ -896,7 +737,7 @@ mod tests {
 
         // Create a Chain object with a BTreeMap of blocks mapped to their block numbers,
         // including block1_hash and block2_hash, and the execution_outcome
-        let chain: Chain<TestPrimitives> = Chain {
+        let chain: Chain = Chain {
             blocks: BTreeMap::from([(10, block1), (11, block2)]),
             execution_outcome: execution_outcome.clone(),
             ..Default::default()

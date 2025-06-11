@@ -20,7 +20,6 @@ pub mod lockfile;
 #[cfg(feature = "mdbx")]
 mod metrics;
 pub mod static_file;
-pub mod tables;
 #[cfg(feature = "mdbx")]
 mod utils;
 pub mod version;
@@ -29,7 +28,6 @@ pub mod version;
 pub mod mdbx;
 
 pub use reth_storage_errors::db::{DatabaseError, DatabaseWriteOperation};
-pub use tables::*;
 #[cfg(feature = "mdbx")]
 pub use utils::is_database_empty;
 
@@ -105,7 +103,7 @@ pub mod test_utils {
         }
 
         /// Returns the reference to inner db.
-        pub fn db(&self) -> &DB {
+        pub const fn db(&self) -> &DB {
             self.db.as_ref().unwrap()
         }
 
@@ -164,7 +162,7 @@ pub mod test_utils {
     /// Get a temporary directory path to use for the database
     pub fn tempdir_path() -> PathBuf {
         let builder = tempfile::Builder::new().prefix("reth-test-").rand_bytes(8).tempdir();
-        builder.expect(ERROR_TEMPDIR).into_path()
+        builder.expect(ERROR_TEMPDIR).keep()
     }
 
     /// Create read/write database for testing

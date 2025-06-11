@@ -7,8 +7,7 @@ use crate::{
     TransactionValidator,
 };
 use futures_util::{lock::Mutex, StreamExt};
-use reth_primitives::SealedBlock;
-use reth_primitives_traits::Block;
+use reth_primitives_traits::{Block, SealedBlock};
 use reth_tasks::TaskSpawner;
 use std::{future::Future, pin::Pin, sync::Arc};
 use tokio::{
@@ -34,7 +33,7 @@ pub struct ValidationTask {
 }
 
 impl ValidationTask {
-    /// Creates a new clonable task pair
+    /// Creates a new cloneable task pair
     pub fn new() -> (ValidationJobSender, Self) {
         let (tx, rx) = mpsc::channel(1);
         (ValidationJobSender { tx }, Self::with_receiver(rx))
@@ -78,7 +77,6 @@ impl ValidationJobSender {
 }
 
 /// A [`TransactionValidator`] implementation that validates ethereum transaction.
-///
 /// This validator is non-blocking, all validation work is done in a separate task.
 #[derive(Debug, Clone)]
 pub struct TransactionValidationTaskExecutor<V> {
@@ -173,20 +171,19 @@ where
         {
             let res = {
                 let to_validation_task = self.to_validation_task.clone();
-                let to_validation_task = to_validation_task.lock().await;
                 let validator = self.validator.clone();
-                to_validation_task
-                    .send(Box::pin(async move {
-                        let res = validator.validate_transaction(origin, transaction).await;
-                        let _ = tx.send(res);
-                    }))
-                    .await
+                let fut = Box::pin(async move {
+                    let res = validator.validate_transaction(origin, transaction).await;
+                    let _ = tx.send(res);
+                });
+                let to_validation_task = to_validation_task.lock().await;
+                to_validation_task.send(fut).await
             };
             if res.is_err() {
                 return TransactionValidationOutcome::Error(
                     hash,
                     Box::new(TransactionValidatorError::ValidationServiceUnreachable),
-                )
+                );
             }
         }
 
@@ -196,6 +193,49 @@ where
                 hash,
                 Box::new(TransactionValidatorError::ValidationServiceUnreachable),
             ),
+        }
+    }
+
+    async fn validate_transactions(
+        &self,
+        transactions: Vec<(TransactionOrigin, Self::Transaction)>,
+    ) -> Vec<TransactionValidationOutcome<Self::Transaction>> {
+        let hashes: Vec<_> = transactions.iter().map(|(_, tx)| *tx.hash()).collect();
+        let (tx, rx) = oneshot::channel();
+        {
+            let res = {
+                let to_validation_task = self.to_validation_task.clone();
+                let validator = self.validator.clone();
+                let fut = Box::pin(async move {
+                    let res = validator.validate_transactions(transactions).await;
+                    let _ = tx.send(res);
+                });
+                let to_validation_task = to_validation_task.lock().await;
+                to_validation_task.send(fut).await
+            };
+            if res.is_err() {
+                return hashes
+                    .into_iter()
+                    .map(|hash| {
+                        TransactionValidationOutcome::Error(
+                            hash,
+                            Box::new(TransactionValidatorError::ValidationServiceUnreachable),
+                        )
+                    })
+                    .collect();
+            }
+        }
+        match rx.await {
+            Ok(res) => res,
+            Err(_) => hashes
+                .into_iter()
+                .map(|hash| {
+                    TransactionValidationOutcome::Error(
+                        hash,
+                        Box::new(TransactionValidatorError::ValidationServiceUnreachable),
+                    )
+                })
+                .collect(),
         }
     }
 

@@ -55,7 +55,7 @@ pub enum DownloadOutcome<B: Block> {
 }
 
 /// Basic [`BlockDownloader`].
-#[allow(missing_debug_implementations)]
+#[expect(missing_debug_implementations)]
 pub struct BasicBlockDownloader<Client, B: Block>
 where
     Client: BlockClient + 'static,
@@ -133,6 +133,8 @@ where
                 target: request.start_hash(),
             });
             self.inflight_block_range_requests.push(request);
+
+            self.update_block_download_metrics();
         }
     }
 

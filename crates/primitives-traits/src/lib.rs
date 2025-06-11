@@ -86,10 +86,15 @@ pub mod receipt;
 pub use receipt::{FullReceipt, Receipt};
 
 pub mod transaction;
+pub use alloy_consensus::{
+    transaction::{Recovered, TransactionMeta},
+    ReceiptWithBloom,
+};
+
 pub use transaction::{
     execute::FillTxEnv,
     signed::{FullSignedTx, SignedTransaction},
-    FullTransaction, Transaction,
+    FullTransaction, SignerRecoverable, Transaction,
 };
 
 pub mod block;
@@ -99,9 +104,8 @@ pub use block::{
     Block, FullBlock, RecoveredBlock, SealedBlock,
 };
 
-mod encoded;
 mod withdrawal;
-pub use encoded::WithEncoded;
+pub use alloy_eips::eip2718::WithEncoded;
 
 pub mod crypto;
 
@@ -118,6 +122,8 @@ pub use storage::StorageEntry;
 
 pub mod sync;
 
+mod extended;
+pub use extended::Extended;
 /// Common header types
 pub mod header;
 pub use header::{Header, HeaderError, SealedHeader, SealedHeaderFor};
@@ -138,7 +144,7 @@ pub use size::InMemorySize;
 
 /// Node traits
 pub mod node;
-pub use node::{BodyTy, FullNodePrimitives, HeaderTy, NodePrimitives, ReceiptTy};
+pub use node::{BlockTy, BodyTy, FullNodePrimitives, HeaderTy, NodePrimitives, ReceiptTy, TxTy};
 
 /// Helper trait that requires de-/serialize implementation since `serde` feature is enabled.
 #[cfg(feature = "serde")]

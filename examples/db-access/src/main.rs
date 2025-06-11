@@ -1,15 +1,15 @@
+#![warn(unused_crate_dependencies)]
+
 use alloy_primitives::{Address, B256};
 use reth_ethereum::{
     chainspec::ChainSpecBuilder,
     node::EthereumNode,
-    primitives::{
-        transaction::signed::SignedTransaction, AlloyBlockHeader, SealedBlock, SealedHeader,
-    },
+    primitives::{AlloyBlockHeader, SealedBlock, SealedHeader},
     provider::{
         providers::ReadOnlyConfig, AccountReader, BlockReader, BlockSource, HeaderProvider,
         ReceiptProvider, StateProvider, TransactionsProvider,
     },
-    rpc::eth::primitives::{Filter, FilteredParams},
+    rpc::eth::primitives::Filter,
     TransactionSigned,
 };
 
@@ -20,13 +20,13 @@ use reth_ethereum::{
 // These abstractions do not include any caching and the user is responsible for doing that.
 // Other parts of the code which include caching are parts of the `EthApi` abstraction.
 fn main() -> eyre::Result<()> {
-    // Opens a RO handle to the database file.
-    let db_path = std::env::var("RETH_DB_PATH")?;
+    // The path to data directory, e.g. "~/.local/reth/share/mainnet"
+    let datadir = std::env::var("RETH_DATADIR")?;
 
-    // Instantiate a provider factory for Ethereum mainnet using the provided DB path.
+    // Instantiate a provider factory for Ethereum mainnet using the provided datadir path.
     let spec = ChainSpecBuilder::mainnet().build();
     let factory = EthereumNode::provider_factory_builder()
-        .open_read_only(spec.into(), ReadOnlyConfig::from_db_dir(db_path))?;
+        .open_read_only(spec.into(), ReadOnlyConfig::from_datadir(datadir))?;
 
     // This call opens a RO transaction on the database. To write to the DB you'd need to call
     // the `provider_rw` function and look for the `Writer` variants of the traits.
@@ -149,14 +149,6 @@ fn block_provider_example<T: BlockReader<Block = reth_ethereum::Block>>(
         .find_block_by_hash(sealed_block.hash(), BlockSource::Any)?
         .ok_or(eyre::eyre!("block hash not found"))?;
     assert_eq!(block, block_by_hash3);
-
-    // Can query the block's ommers/uncles
-    let _ommers = provider.ommers(number.into())?;
-
-    // Can query the block's withdrawals (via the `WithdrawalsProvider`)
-    let _withdrawals =
-        provider.withdrawals_by_block(sealed_block.hash().into(), sealed_block.timestamp)?;
-
     Ok(())
 }
 
@@ -201,21 +193,14 @@ fn receipts_provider_example<
     // TODO: Make it clearer how to choose between event_signature(topic0) (event name) and the
     // other 3 indexed topics. This API is a bit clunky and not obvious to use at the moment.
     let filter = Filter::new().address(addr).event_signature(topic);
-    let filter_params = FilteredParams::new(Some(filter));
-    let address_filter = FilteredParams::address_filter(&addr.into());
-    let topics_filter = FilteredParams::topics_filter(&[topic.into()]);
 
     // 3. If the address & topics filters match do something. We use the outer check against the
     // bloom filter stored in the header to avoid having to query the receipts table when there
     // is no instance of any event that matches the filter in the header.
-    if FilteredParams::matches_address(bloom, &address_filter) &&
-        FilteredParams::matches_topics(bloom, &topics_filter)
-    {
+    if filter.matches_bloom(bloom) {
         let receipts = provider.receipt(header_num)?.ok_or(eyre::eyre!("receipt not found"))?;
         for log in &receipts.logs {
-            if filter_params.filter_address(&log.address) &&
-                filter_params.filter_topics(log.topics())
-            {
+            if filter.matches(log) {
                 // Do something with the log e.g. decode it.
                 println!("Matching log found! {log:?}")
             }

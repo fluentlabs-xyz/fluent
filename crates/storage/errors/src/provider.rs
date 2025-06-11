@@ -1,6 +1,4 @@
-use crate::{
-    any::AnyError, db::DatabaseError, lockfile::StorageLockError, writer::UnifiedStorageWriterError,
-};
+use crate::{any::AnyError, db::DatabaseError, writer::UnifiedStorageWriterError};
 use alloc::{boxed::Box, string::String};
 use alloy_eips::{BlockHashOrNumber, HashOrNumber};
 use alloy_primitives::{Address, BlockHash, BlockNumber, TxNumber, B256};
@@ -8,6 +6,7 @@ use derive_more::Display;
 use reth_primitives_traits::{transaction::signed::RecoveryError, GotExpected};
 use reth_prune_types::PruneSegmentError;
 use reth_static_file_types::StaticFileSegment;
+use revm_database_interface::DBErrorMarker;
 
 /// Provider result type.
 pub type ProviderResult<Ok> = Result<Ok, ProviderError>;
@@ -24,9 +23,6 @@ pub enum ProviderError {
     /// RLP error.
     #[error("{_0}")]
     Rlp(alloy_rlp::Error),
-    /// Nippy jar error.
-    #[error("nippy jar error: {_0}")]
-    NippyJar(String),
     /// Trie witness error.
     #[error("trie witness error: {_0}")]
     TrieWitnessError(String),
@@ -41,7 +37,9 @@ pub enum ProviderError {
     BlockBodyIndicesNotFound(BlockNumber),
     /// The transition ID was found for the given address and storage key, but the changeset was
     /// not found.
-    #[error("storage change set for address {address} and key {storage_key} at block #{block_number} does not exist")]
+    #[error(
+        "storage change set for address {address} and key {storage_key} at block #{block_number} does not exist"
+    )]
     StorageChangesetNotFound {
         /// The block number found for the address and storage key.
         block_number: BlockNumber,
@@ -81,9 +79,6 @@ pub enum ProviderError {
     /// Unable to find the safe block.
     #[error("safe block does not exist")]
     SafeBlockNotFound,
-    /// Thrown when the cache service task dropped.
-    #[error("cache service task stopped")]
-    CacheServiceUnavailable,
     /// Thrown when we failed to lookup a block for the pending state.
     #[error("unknown block {_0}")]
     UnknownBlockHash(B256),
@@ -133,16 +128,16 @@ pub enum ProviderError {
     /// Consistent view error.
     #[error("failed to initialize consistent view: {_0}")]
     ConsistentView(Box<ConsistentViewError>),
-    /// Storage lock error.
-    #[error(transparent)]
-    StorageLockError(#[from] StorageLockError),
     /// Storage writer error.
     #[error(transparent)]
     UnifiedStorageWriterError(#[from] UnifiedStorageWriterError),
     /// Received invalid output from configured storage implementation.
     #[error("received invalid output from storage")]
     InvalidStorageOutput,
-    /// Any other error type wrapped into a clonable [`AnyError`].
+    /// Missing trie updates.
+    #[error("missing trie updates for block {0}")]
+    MissingTrieUpdates(B256),
+    /// Any other error type wrapped into a cloneable [`AnyError`].
     #[error(transparent)]
     Other(#[from] AnyError),
 }
@@ -180,6 +175,8 @@ impl ProviderError {
     }
 }
 
+impl DBErrorMarker for ProviderError {}
+
 impl From<alloy_rlp::Error> for ProviderError {
     fn from(error: alloy_rlp::Error) -> Self {
         Self::Rlp(error)
@@ -204,6 +201,20 @@ pub struct RootMismatch {
     pub block_hash: BlockHash,
 }
 
+/// A Static File Write Error.
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub struct StaticFileWriterError {
+    /// The error message.
+    pub message: String,
+}
+
+impl StaticFileWriterError {
+    /// Creates a new [`StaticFileWriterError`] with the given message.
+    pub fn new(message: impl Into<String>) -> Self {
+        Self { message: message.into() }
+    }
+}
 /// Consistent database view error.
 #[derive(Clone, Debug, PartialEq, Eq, Display)]
 pub enum ConsistentViewError {

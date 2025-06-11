@@ -174,7 +174,7 @@ impl StorageTrieUpdates {
     }
 
     /// Sets `deleted` flag on the storage trie.
-    pub fn set_deleted(&mut self, deleted: bool) {
+    pub const fn set_deleted(&mut self, deleted: bool) {
         self.is_deleted = deleted;
     }
 
@@ -357,8 +357,7 @@ pub struct TrieUpdatesSorted {
     pub account_nodes: Vec<(Nibbles, BranchNodeCompact)>,
     /// The set of removed state node keys.
     pub removed_nodes: HashSet<Nibbles>,
-    /// Storage tries storage stored by hashed address of the account
-    /// the trie belongs to.
+    /// Storage tries stored by hashed address of the account the trie belongs to.
     pub storage_tries: B256Map<StorageTrieUpdatesSorted>,
 }
 
