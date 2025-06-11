@@ -15,12 +15,12 @@ on:
         default: false
 
 env:
-  REPO_NAME: ${{ github.repository_owner }}/reth
-  IMAGE_NAME: ${{ github.repository_owner }}/reth
+  REPO_NAME: ${{ github.repository_owner }}/fluent
+  IMAGE_NAME: ${{ github.repository_owner }}/fluent
   OP_IMAGE_NAME: ${{ github.repository_owner }}/op-reth
   REPRODUCIBLE_IMAGE_NAME: ${{ github.repository_owner }}/reth-reproducible
   CARGO_TERM_COLOR: always
-  DOCKER_IMAGE_NAME_URL: ghcr.io/${{ github.repository_owner }}/reth
+  DOCKER_IMAGE_NAME_URL: ghcr.io/${{ github.repository_owner }}/fluent
   DOCKER_OP_IMAGE_NAME_URL: ghcr.io/${{ github.repository_owner }}/op-reth
 
 jobs:
@@ -84,8 +84,8 @@ jobs:
         build:
           - command: build
             binary: reth
-#          - command: op-build
-#            binary: op-reth
+    #          - command: op-build
+    #            binary: op-reth
     steps:
       - uses: actions/checkout@v4
       - uses: rui314/setup-mold@v1
@@ -145,7 +145,7 @@ jobs:
 
   draft-release:
     name: draft release
-    needs: [build, extract-version]
+    needs: [ build, extract-version ]
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.dry_run != 'true' }}
     env:
@@ -257,7 +257,7 @@ jobs:
 
   dry-run-summary:
     name: dry run summary
-    needs: [build, extract-version]
+    needs: [ build, extract-version ]
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.dry_run == 'true' }}
     env:
