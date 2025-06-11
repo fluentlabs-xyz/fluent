@@ -3,7 +3,7 @@
 use alloy_eips::eip2718::Encodable2718;
 use derive_more::{Deref, DerefMut};
 use reth_execution_types::{BlockReceipts, Chain};
-use reth_primitives::{NodePrimitives, RecoveredBlock, SealedHeader};
+use reth_primitives_traits::{NodePrimitives, RecoveredBlock, SealedHeader};
 use reth_storage_api::NodePrimitivesProvider;
 use std::{
     pin::Pin,
@@ -18,11 +18,11 @@ use tokio_stream::{
 use tracing::debug;
 
 /// Type alias for a receiver that receives [`CanonStateNotification`]
-pub type CanonStateNotifications<N = reth_primitives::EthPrimitives> =
+pub type CanonStateNotifications<N = reth_ethereum_primitives::EthPrimitives> =
     broadcast::Receiver<CanonStateNotification<N>>;
 
 /// Type alias for a sender that sends [`CanonStateNotification`]
-pub type CanonStateNotificationSender<N = reth_primitives::EthPrimitives> =
+pub type CanonStateNotificationSender<N = reth_ethereum_primitives::EthPrimitives> =
     broadcast::Sender<CanonStateNotification<N>>;
 
 /// A type that allows to register chain related event subscriptions.
@@ -53,7 +53,8 @@ impl<T: CanonStateSubscriptions> CanonStateSubscriptions for &T {
 /// A Stream of [`CanonStateNotification`].
 #[derive(Debug)]
 #[pin_project::pin_project]
-pub struct CanonStateNotificationStream<N: NodePrimitives = reth_primitives::EthPrimitives> {
+pub struct CanonStateNotificationStream<N: NodePrimitives = reth_ethereum_primitives::EthPrimitives>
+{
     #[pin]
     st: BroadcastStream<CanonStateNotification<N>>,
 }
@@ -80,7 +81,9 @@ impl<N: NodePrimitives> Stream for CanonStateNotificationStream<N> {
 /// The notification contains at least one [`Chain`] with the imported segment. If some blocks were
 /// reverted (e.g. during a reorg), the old chain is also returned.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CanonStateNotification<N: NodePrimitives = reth_primitives::EthPrimitives> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound = ""))]
+pub enum CanonStateNotification<N: NodePrimitives = reth_ethereum_primitives::EthPrimitives> {
     /// The canonical chain was extended.
     Commit {
         /// The newly added chain segment.
@@ -214,14 +217,15 @@ impl<T: Clone + Sync + Send + 'static> Stream for ForkChoiceStream<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_consensus::BlockBody;
-    use alloy_primitives::{b256, B256};
+    use alloy_consensus::{BlockBody, SignableTransaction, TxLegacy};
+    use alloy_primitives::{b256, Signature, B256};
+    use reth_ethereum_primitives::{Receipt, TransactionSigned, TxType};
     use reth_execution_types::ExecutionOutcome;
-    use reth_primitives::{Receipt, SealedBlock, TransactionSigned, TxType};
+    use reth_primitives_traits::SealedBlock;
 
     #[test]
     fn test_commit_notification() {
-        let block: RecoveredBlock<reth_primitives::Block> = Default::default();
+        let block: RecoveredBlock<reth_ethereum_primitives::Block> = Default::default();
         let block1_hash = B256::new([0x01; 32]);
         let block2_hash = B256::new([0x02; 32]);
 
@@ -254,7 +258,7 @@ mod tests {
 
     #[test]
     fn test_reorg_notification() {
-        let block: RecoveredBlock<reth_primitives::Block> = Default::default();
+        let block: RecoveredBlock<reth_ethereum_primitives::Block> = Default::default();
         let block1_hash = B256::new([0x01; 32]);
         let block2_hash = B256::new([0x02; 32]);
         let block3_hash = B256::new([0x03; 32]);
@@ -303,7 +307,7 @@ mod tests {
         let block2_hash = B256::new([0x02; 32]);
 
         // Create a default transaction to include in block1's transactions.
-        let tx = TransactionSigned::default();
+        let tx = TxLegacy::default().into_signed(Signature::test_signature()).into();
         body.transactions.push(tx);
 
         let block = SealedBlock::<alloy_consensus::Block<TransactionSigned>>::from_sealed_parts(
@@ -324,13 +328,11 @@ mod tests {
         block2.set_hash(block2_hash);
 
         // Create a receipt for the transaction in block1.
-        #[allow(clippy::needless_update)]
         let receipt1 = Receipt {
             tx_type: TxType::Legacy,
             cumulative_gas_used: 12345,
             logs: vec![],
             success: true,
-            ..Default::default()
         };
 
         // Wrap the receipt in a `Receipts` structure, as expected in the `ExecutionOutcome`.
@@ -357,9 +359,10 @@ mod tests {
             block_receipts[0].0,
             BlockReceipts {
                 block: block1.num_hash(),
+                timestamp: block1.timestamp,
                 tx_receipts: vec![(
                     // Transaction hash of a Transaction::default()
-                    b256!("20b5378c6fe992c118b557d2f8e8bbe0b7567f6fe5483a8f0f1c51e93a9d91ab"),
+                    b256!("0x20b5378c6fe992c118b557d2f8e8bbe0b7567f6fe5483a8f0f1c51e93a9d91ab"),
                     receipt1
                 )]
             }
@@ -373,7 +376,7 @@ mod tests {
     fn test_block_receipts_reorg() {
         // Define block1 for the old chain segment, which will be reverted.
         let mut body = BlockBody::<TransactionSigned>::default();
-        body.transactions.push(TransactionSigned::default());
+        body.transactions.push(TxLegacy::default().into_signed(Signature::test_signature()).into());
         let mut old_block1 =
             SealedBlock::<alloy_consensus::Block<TransactionSigned>>::from_sealed_parts(
                 SealedHeader::seal_slow(alloy_consensus::Header::default()),
@@ -385,13 +388,11 @@ mod tests {
         old_block1.set_hash(B256::new([0x01; 32]));
 
         // Create a receipt for a transaction in the reverted block.
-        #[allow(clippy::needless_update)]
         let old_receipt = Receipt {
             tx_type: TxType::Legacy,
             cumulative_gas_used: 54321,
             logs: vec![],
             success: false,
-            ..Default::default()
         };
         let old_receipts = vec![vec![old_receipt.clone()]];
 
@@ -404,7 +405,7 @@ mod tests {
 
         // Define block2 for the new chain segment, which will be committed.
         let mut body = BlockBody::<TransactionSigned>::default();
-        body.transactions.push(TransactionSigned::default());
+        body.transactions.push(TxLegacy::default().into_signed(Signature::test_signature()).into());
         let mut new_block1 =
             SealedBlock::<alloy_consensus::Block<TransactionSigned>>::from_sealed_parts(
                 SealedHeader::seal_slow(alloy_consensus::Header::default()),
@@ -416,13 +417,11 @@ mod tests {
         new_block1.set_hash(B256::new([0x02; 32]));
 
         // Create a receipt for a transaction in the new committed block.
-        #[allow(clippy::needless_update)]
         let new_receipt = Receipt {
             tx_type: TxType::Legacy,
             cumulative_gas_used: 12345,
             logs: vec![],
             success: true,
-            ..Default::default()
         };
         let new_receipts = vec![vec![new_receipt.clone()]];
 
@@ -446,9 +445,10 @@ mod tests {
             block_receipts[0].0,
             BlockReceipts {
                 block: old_block1.num_hash(),
+                timestamp: old_block1.timestamp,
                 tx_receipts: vec![(
                     // Transaction hash of a Transaction::default()
-                    b256!("20b5378c6fe992c118b557d2f8e8bbe0b7567f6fe5483a8f0f1c51e93a9d91ab"),
+                    b256!("0x20b5378c6fe992c118b557d2f8e8bbe0b7567f6fe5483a8f0f1c51e93a9d91ab"),
                     old_receipt
                 )]
             }
@@ -462,9 +462,10 @@ mod tests {
             block_receipts[1].0,
             BlockReceipts {
                 block: new_block1.num_hash(),
+                timestamp: new_block1.timestamp,
                 tx_receipts: vec![(
                     // Transaction hash of a Transaction::default()
-                    b256!("20b5378c6fe992c118b557d2f8e8bbe0b7567f6fe5483a8f0f1c51e93a9d91ab"),
+                    b256!("0x20b5378c6fe992c118b557d2f8e8bbe0b7567f6fe5483a8f0f1c51e93a9d91ab"),
                     new_receipt
                 )]
             }

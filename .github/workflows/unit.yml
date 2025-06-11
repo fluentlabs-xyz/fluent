@@ -35,11 +35,11 @@ jobs:
             partition: 2
             total_partitions: 2
           - type: optimism
-            args: --features "asm-keccak optimism" --locked --exclude reth --exclude reth-bench --exclude "example-*" --exclude "reth-ethereum-*" --exclude "*-ethereum"
+            args: --features "asm-keccak" --locked --exclude reth --exclude reth-bench --exclude "example-*" --exclude "reth-ethereum-*" --exclude "*-ethereum"
             partition: 1
             total_partitions: 2
           - type: optimism
-            args: --features "asm-keccak optimism" --locked --exclude reth --exclude reth-bench --exclude "example-*" --exclude "reth-ethereum-*" --exclude "*-ethereum"
+            args: --features "asm-keccak" --locked --exclude reth --exclude reth-bench --exclude "example-*" --exclude "reth-ethereum-*" --exclude "*-ethereum"
             partition: 2
             total_partitions: 2
           - type: book
@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ethereum/tests
-          ref: 59781f1c6cce3d6c161751ab3512d79fa75d5597
+          ref: 81862e4848585a438d64f911a19b3825f0f4cd95
           path: testing/ef-tests/ethereum-tests
           submodules: recursive
           fetch-depth: 1
@@ -94,15 +94,12 @@ jobs:
       - run: cargo nextest run --release -p ef-tests --features "asm-keccak ef-tests"
 
   doc:
-    name: doc tests (${{ matrix.network }})
+    name: doc tests
     runs-on:
       group: Reth
     env:
       RUST_BACKTRACE: 1
     timeout-minutes: 30
-    strategy:
-      matrix:
-        network: ["ethereum", "optimism"]
     steps:
       - uses: actions/checkout@v4
       - uses: rui314/setup-mold@v1
@@ -111,7 +108,7 @@ jobs:
         with:
           cache-on-failure: true
       - name: Run doctests
-        run: cargo test --doc --workspace --features "${{ matrix.network }}"
+        run: cargo test --doc --workspace --all-features
 
   unit-success:
     name: unit success

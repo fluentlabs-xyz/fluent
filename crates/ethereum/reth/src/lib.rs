@@ -23,6 +23,10 @@ pub mod primitives {
 #[cfg(feature = "cli")]
 pub use reth_ethereum_cli as cli;
 
+/// Re-exported pool types
+#[cfg(feature = "pool")]
+pub use reth_transaction_pool as pool;
+
 /// Re-exported consensus types
 #[cfg(feature = "consensus")]
 pub mod consensus {
@@ -46,17 +50,30 @@ pub mod evm {
 
     #[doc(inline)]
     pub use reth_evm as primitives;
+
+    #[doc(inline)]
+    pub use reth_revm as revm;
 }
 
 /// Re-exported exex types
 #[cfg(feature = "exex")]
 pub use reth_exex as exex;
 
+/// Re-exported from `tasks`.
+#[cfg(feature = "tasks")]
+pub mod tasks {
+    pub use reth_tasks::*;
+}
+
 /// Re-exported reth network types
 #[cfg(feature = "network")]
 pub mod network {
     #[doc(inline)]
+    pub use reth_eth_wire as eth_wire;
+    #[doc(inline)]
     pub use reth_network::*;
+    #[doc(inline)]
+    pub use reth_network_api as api;
 }
 
 /// Re-exported reth provider types
@@ -82,7 +99,18 @@ pub mod node {
     #[doc(inline)]
     pub use reth_node_api as api;
     #[cfg(feature = "node")]
+    pub use reth_node_builder as builder;
+    #[doc(inline)]
+    pub use reth_node_core as core;
+    #[cfg(feature = "node")]
     pub use reth_node_ethereum::*;
+}
+
+/// Re-exported reth trie types
+#[cfg(feature = "trie")]
+pub mod trie {
+    #[doc(inline)]
+    pub use reth_trie::*;
 }
 
 /// Re-exported rpc types
@@ -97,10 +125,19 @@ pub mod rpc {
     pub use reth_rpc_builder as builder;
 
     /// Re-exported eth types
+    #[allow(ambiguous_glob_reexports)]
     pub mod eth {
         #[doc(inline)]
         pub use alloy_rpc_types_eth as primitives;
         #[doc(inline)]
         pub use reth_rpc_eth_types::*;
+
+        pub use reth_rpc::eth::*;
+    }
+
+    /// Re-exported types
+    pub mod types {
+        #[doc(inline)]
+        pub use alloy_rpc_types_engine as engine;
     }
 }

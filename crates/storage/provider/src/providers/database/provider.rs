@@ -11,16 +11,18 @@ use crate::{
     },
     AccountReader, BlockBodyWriter, BlockExecutionWriter, BlockHashReader, BlockNumReader,
     BlockReader, BlockWriter, BundleStateInit, ChainStateBlockReader, ChainStateBlockWriter,
-    DBProvider, HashingWriter, HeaderProvider, HeaderSyncGap, HeaderSyncGapProvider,
-    HistoricalStateProvider, HistoricalStateProviderRef, HistoryWriter, LatestStateProvider,
-    LatestStateProviderRef, OriginalValuesKnown, ProviderError, PruneCheckpointReader,
-    PruneCheckpointWriter, RevertsInit, StageCheckpointReader, StateCommitmentProvider,
-    StateProviderBox, StateWriter, StaticFileProviderFactory, StatsReader, StorageLocation,
-    StorageReader, StorageTrieWriter, TransactionVariant, TransactionsProvider,
-    TransactionsProviderExt, TrieWriter, WithdrawalsProvider,
+    DBProvider, HashingWriter, HeaderProvider, HeaderSyncGapProvider, HistoricalStateProvider,
+    HistoricalStateProviderRef, HistoryWriter, LatestStateProvider, LatestStateProviderRef,
+    OriginalValuesKnown, ProviderError, PruneCheckpointReader, PruneCheckpointWriter, RevertsInit,
+    StageCheckpointReader, StateCommitmentProvider, StateProviderBox, StateWriter,
+    StaticFileProviderFactory, StatsReader, StorageLocation, StorageReader, StorageTrieWriter,
+    TransactionVariant, TransactionsProvider, TransactionsProviderExt, TrieWriter,
 };
-use alloy_consensus::{transaction::TransactionMeta, BlockHeader, Header, TxReceipt};
-use alloy_eips::{eip2718::Encodable2718, eip4895::Withdrawals, BlockHashOrNumber};
+use alloy_consensus::{
+    transaction::{SignerRecoverable, TransactionMeta},
+    BlockHeader, Header, TxReceipt,
+};
+use alloy_eips::{eip2718::Encodable2718, BlockHashOrNumber};
 use alloy_primitives::{
     keccak256,
     map::{hash_map, B256Map, HashMap, HashSet},
@@ -29,35 +31,32 @@ use alloy_primitives::{
 use itertools::Itertools;
 use rayon::slice::ParallelSliceMut;
 use reth_chainspec::{ChainInfo, ChainSpecProvider, EthChainSpec, EthereumHardforks};
-use reth_db::{
-    cursor::DbDupCursorRW, tables, BlockNumberList, PlainAccountState, PlainStorageState,
-};
 use reth_db_api::{
-    cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO},
+    cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
     database::Database,
     models::{
         sharded_key, storage_sharded_key::StorageShardedKey, AccountBeforeTx, BlockNumberAddress,
         ShardedKey, StoredBlockBodyIndices,
     },
     table::Table,
+    tables,
     transaction::{DbTx, DbTxMut},
-    DatabaseError,
+    BlockNumberList, DatabaseError, PlainAccountState, PlainStorageState,
 };
 use reth_execution_types::{Chain, ExecutionOutcome};
-use reth_network_p2p::headers::downloader::SyncTarget;
 use reth_node_types::{BlockTy, BodyTy, HeaderTy, NodeTypes, ReceiptTy, TxTy};
-use reth_primitives::{
-    Account, Bytecode, GotExpected, NodePrimitives, RecoveredBlock, SealedBlock, SealedHeader,
-    StaticFileSegment, StorageEntry,
+use reth_primitives_traits::{
+    Account, Block as _, BlockBody as _, Bytecode, GotExpected, NodePrimitives, RecoveredBlock,
+    SealedBlock, SealedHeader, SignedTransaction, StorageEntry,
 };
-use reth_primitives_traits::{Block as _, BlockBody as _, SignedTransaction};
 use reth_prune_types::{
     PruneCheckpoint, PruneMode, PruneModes, PruneSegment, MINIMUM_PRUNING_DISTANCE,
 };
 use reth_stages_types::{StageCheckpoint, StageId};
+use reth_static_file_types::StaticFileSegment;
 use reth_storage_api::{
-    BlockBodyIndicesProvider, BlockBodyReader, NodePrimitivesProvider, OmmersProvider,
-    StateProvider, StorageChangeSetReader, TryIntoHistoricalStateProvider,
+    BlockBodyIndicesProvider, BlockBodyReader, NodePrimitivesProvider, StateProvider,
+    StorageChangeSetReader, TryIntoHistoricalStateProvider,
 };
 use reth_storage_errors::provider::{ProviderResult, RootMismatch};
 use reth_trie::{
@@ -66,7 +65,7 @@ use reth_trie::{
     HashedPostStateSorted, Nibbles, StateRoot, StoredNibbles,
 };
 use reth_trie_db::{DatabaseStateRoot, DatabaseStorageTrieCursor};
-use revm::db::states::{
+use revm_database::states::{
     PlainStateReverts, PlainStorageChangeset, PlainStorageRevert, StateChangeset,
 };
 use std::{
@@ -76,7 +75,6 @@ use std::{
     ops::{Deref, DerefMut, Range, RangeBounds, RangeInclusive},
     sync::{mpsc, Arc},
 };
-use tokio::sync::watch;
 use tracing::{debug, trace};
 
 /// A [`DatabaseProvider`] that holds a read-only database transaction.
@@ -224,7 +222,7 @@ impl<TX, N: NodeTypes> StaticFileProviderFactory for DatabaseProvider<TX, N> {
     }
 }
 
-impl<TX: Send + Sync, N: NodeTypes<ChainSpec: EthChainSpec + 'static>> ChainSpecProvider
+impl<TX: Debug + Send + Sync, N: NodeTypes<ChainSpec: EthChainSpec + 'static>> ChainSpecProvider
     for DatabaseProvider<TX, N>
 {
     type ChainSpec = N::ChainSpec;
@@ -316,7 +314,7 @@ impl<TX: DbTx + DbTxMut + 'static, N: NodeTypesForProvider> DatabaseProvider<TX,
         let (new_state_root, trie_updates) = StateRoot::from_tx(&self.tx)
             .with_prefix_sets(prefix_sets)
             .root_with_updates()
-            .map_err(reth_db::DatabaseError::from)?;
+            .map_err(reth_db_api::DatabaseError::from)?;
 
         let parent_number = range.start().saturating_sub(1);
         let parent_state_root = self
@@ -375,9 +373,9 @@ impl<TX: DbTx + 'static, N: NodeTypes> TryIntoHistoricalStateProvider for Databa
         self,
         mut block_number: BlockNumber,
     ) -> ProviderResult<StateProviderBox> {
-        if block_number == self.best_block_number().unwrap_or_default() &&
-            block_number == self.last_block_number().unwrap_or_default()
-        {
+        // if the block number is the same as the currently best block number on disk we can use the
+        // latest state provider here
+        if block_number == self.best_block_number().unwrap_or_default() {
             return Ok(Box::new(LatestStateProvider::new(self)))
         }
 
@@ -519,7 +517,7 @@ impl<TX: DbTx + 'static, N: NodeTypesForProvider> DatabaseProvider<TX, N> {
     }
 
     /// Pass `DbTx` or `DbTxMut` mutable reference.
-    pub fn tx_mut(&mut self) -> &mut TX {
+    pub const fn tx_mut(&mut self) -> &mut TX {
         &mut self.tx
     }
 
@@ -552,7 +550,7 @@ impl<TX: DbTx + 'static, N: NodeTypesForProvider> DatabaseProvider<TX, N> {
         )
     }
 
-    fn block_with_senders<H, HF, B, BF>(
+    fn recovered_block<H, HF, B, BF>(
         &self,
         id: BlockHashOrNumber,
         _transaction_kind: TransactionVariant,
@@ -941,11 +939,10 @@ impl<TX: DbTx + 'static, N: NodeTypesForProvider> HeaderSyncGapProvider
 {
     type Header = HeaderTy<N>;
 
-    fn sync_gap(
+    fn local_tip_header(
         &self,
-        tip: watch::Receiver<B256>,
         highest_uninterrupted_block: BlockNumber,
-    ) -> ProviderResult<HeaderSyncGap<Self::Header>> {
+    ) -> ProviderResult<SealedHeader<Self::Header>> {
         let static_file_provider = self.static_file_provider();
 
         // Make sure Headers static file is at the same height. If it's further, this
@@ -978,9 +975,7 @@ impl<TX: DbTx + 'static, N: NodeTypesForProvider> HeaderSyncGapProvider
             .sealed_header(highest_uninterrupted_block)?
             .ok_or_else(|| ProviderError::HeaderNotFound(highest_uninterrupted_block.into()))?;
 
-        let target = SyncTarget::Tip(*tip.borrow());
-
-        Ok(HeaderSyncGap { local_head, target })
+        Ok(local_head)
     }
 }
 
@@ -1013,10 +1008,12 @@ impl<TX: DbTx + 'static, N: NodeTypesForProvider> HeaderProvider for DatabasePro
     }
 
     fn header_td_by_number(&self, number: BlockNumber) -> ProviderResult<Option<U256>> {
-        if let Some(td) = self.chain_spec.final_paris_total_difficulty(number) {
-            // if this block is higher than the final paris(merge) block, return the final paris
-            // difficulty
-            return Ok(Some(td))
+        if self.chain_spec.is_paris_active_at_block(number) {
+            if let Some(td) = self.chain_spec.final_paris_total_difficulty() {
+                // if this block is higher than the final paris(merge) block, return the final paris
+                // difficulty
+                return Ok(Some(td))
+            }
         }
 
         self.static_file_provider.get_with_static_file_or_database(
@@ -1125,6 +1122,8 @@ impl<TX: DbTx + 'static, N: NodeTypes> BlockNumReader for DatabaseProvider<TX, N
     }
 
     fn best_block_number(&self) -> ProviderResult<BlockNumber> {
+        // The best block number is tracked via the finished stage which gets updated in the same tx
+        // when new blocks committed
         Ok(self
             .get_stage_checkpoint(StageId::Finish)?
             .map(|checkpoint| checkpoint.block_number)
@@ -1215,12 +1214,12 @@ impl<TX: DbTx + 'static, N: NodeTypesForProvider> BlockReader for DatabaseProvid
     /// If the header for this block is not found, this returns `None`.
     /// If the header is found, but the transactions either do not exist, or are not indexed, this
     /// will return None.
-    fn block_with_senders(
+    fn recovered_block(
         &self,
         id: BlockHashOrNumber,
         transaction_kind: TransactionVariant,
     ) -> ProviderResult<Option<RecoveredBlock<Self::Block>>> {
-        self.block_with_senders(
+        self.recovered_block(
             id,
             transaction_kind,
             |block_number| self.header_by_number(block_number),
@@ -1241,7 +1240,7 @@ impl<TX: DbTx + 'static, N: NodeTypesForProvider> BlockReader for DatabaseProvid
         id: BlockHashOrNumber,
         transaction_kind: TransactionVariant,
     ) -> ProviderResult<Option<RecoveredBlock<Self::Block>>> {
-        self.block_with_senders(
+        self.recovered_block(
             id,
             transaction_kind,
             |block_number| self.sealed_header(block_number),
@@ -1280,7 +1279,7 @@ impl<TX: DbTx + 'static, N: NodeTypesForProvider> BlockReader for DatabaseProvid
         )
     }
 
-    fn sealed_block_with_senders_range(
+    fn recovered_block_range(
         &self,
         range: RangeInclusive<BlockNumber>,
     ) -> ProviderResult<Vec<RecoveredBlock<Self::Block>>> {
@@ -1562,61 +1561,60 @@ impl<TX: DbTx + 'static, N: NodeTypesForProvider> ReceiptProvider for DatabasePr
             |_| true,
         )
     }
-}
 
-impl<TX: DbTx + 'static, N: NodeTypes<ChainSpec: EthereumHardforks>> WithdrawalsProvider
-    for DatabaseProvider<TX, N>
-{
-    fn withdrawals_by_block(
+    fn receipts_by_block_range(
         &self,
-        id: BlockHashOrNumber,
-        timestamp: u64,
-    ) -> ProviderResult<Option<Withdrawals>> {
-        if self.chain_spec.is_shanghai_active_at_timestamp(timestamp) {
-            if let Some(number) = self.convert_hash_or_number(id)? {
-                return self.static_file_provider.get_with_static_file_or_database(
-                    StaticFileSegment::BlockMeta,
-                    number,
-                    |static_file| static_file.withdrawals_by_block(number.into(), timestamp),
-                    || {
-                        // If we are past shanghai, then all blocks should have a withdrawal list,
-                        // even if empty
-                        let withdrawals = self
-                            .tx
-                            .get::<tables::BlockWithdrawals>(number)
-                            .map(|w| w.map(|w| w.withdrawals))?
-                            .unwrap_or_default();
-                        Ok(Some(withdrawals))
-                    },
-                )
-            }
-        }
-        Ok(None)
-    }
-}
-
-impl<TX: DbTx + 'static, N: NodeTypesForProvider> OmmersProvider for DatabaseProvider<TX, N> {
-    /// Returns the ommers for the block with matching id from the database.
-    ///
-    /// If the block is not found, this returns `None`.
-    /// If the block exists, but doesn't contain ommers, this returns `None`.
-    fn ommers(&self, id: BlockHashOrNumber) -> ProviderResult<Option<Vec<Self::Header>>> {
-        if let Some(number) = self.convert_hash_or_number(id)? {
-            // If the Paris (Merge) hardfork block is known and block is after it, return empty
-            // ommers.
-            if self.chain_spec.final_paris_total_difficulty(number).is_some() {
-                return Ok(Some(Vec::new()))
-            }
-
-            return self.static_file_provider.get_with_static_file_or_database(
-                StaticFileSegment::BlockMeta,
-                number,
-                |static_file| static_file.ommers(id),
-                || Ok(self.tx.get::<tables::BlockOmmers<Self::Header>>(number)?.map(|o| o.ommers)),
-            )
+        block_range: RangeInclusive<BlockNumber>,
+    ) -> ProviderResult<Vec<Vec<Self::Receipt>>> {
+        if block_range.is_empty() {
+            return Ok(Vec::new());
         }
 
-        Ok(None)
+        // collect block body indices for each block in the range
+        let mut block_body_indices = Vec::new();
+        for block_num in block_range {
+            if let Some(indices) = self.block_body_indices(block_num)? {
+                block_body_indices.push(indices);
+            } else {
+                // use default indices for missing blocks (empty block)
+                block_body_indices.push(StoredBlockBodyIndices::default());
+            }
+        }
+
+        if block_body_indices.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // find blocks with transactions to determine transaction range
+        let non_empty_blocks: Vec<_> =
+            block_body_indices.iter().filter(|indices| indices.tx_count > 0).collect();
+
+        if non_empty_blocks.is_empty() {
+            // all blocks are empty
+            return Ok(vec![Vec::new(); block_body_indices.len()]);
+        }
+
+        // calculate the overall transaction range
+        let first_tx = non_empty_blocks[0].first_tx_num();
+        let last_tx = non_empty_blocks[non_empty_blocks.len() - 1].last_tx_num();
+
+        // fetch all receipts in the transaction range
+        let all_receipts = self.receipts_by_tx_range(first_tx..=last_tx)?;
+        let mut receipts_iter = all_receipts.into_iter();
+
+        // distribute receipts to their respective blocks
+        let mut result = Vec::with_capacity(block_body_indices.len());
+        for indices in &block_body_indices {
+            if indices.tx_count == 0 {
+                result.push(Vec::new());
+            } else {
+                let block_receipts =
+                    receipts_iter.by_ref().take(indices.tx_count as usize).collect();
+                result.push(block_receipts);
+            }
+        }
+
+        Ok(result)
     }
 }
 
@@ -2590,7 +2588,7 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypes> HashingWriter for DatabaseProvi
             let (state_root, trie_updates) = StateRoot::from_tx(&self.tx)
                 .with_prefix_sets(prefix_sets)
                 .root_with_updates()
-                .map_err(reth_db::DatabaseError::from)?;
+                .map_err(reth_db_api::DatabaseError::from)?;
             if state_root != expected_state_root {
                 return Err(ProviderError::StateRootMismatch(Box::new(RootMismatch {
                     root: GotExpected { got: state_root, expected: expected_state_root },
@@ -2757,7 +2755,7 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypesForProvider + 'static> BlockExecu
         // get execution res
         let execution_state = self.take_state_above(block, remove_from)?;
 
-        let blocks = self.sealed_block_with_senders_range(range)?;
+        let blocks = self.recovered_block_range(range)?;
 
         // remove block bodies it is needed for both get block range and get block execution results
         // that is why it is deleted afterwards.
@@ -2977,16 +2975,13 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypesForProvider + 'static> BlockWrite
         block: BlockNumber,
         remove_from: StorageLocation,
     ) -> ProviderResult<()> {
-        let mut canonical_headers_cursor = self.tx.cursor_write::<tables::CanonicalHeaders>()?;
-        let mut rev_headers = canonical_headers_cursor.walk_back(None)?;
-
-        while let Some(Ok((number, hash))) = rev_headers.next() {
-            if number <= block {
-                break
-            }
+        for hash in self.canonical_hashes_range(block + 1, self.last_block_number()? + 1)? {
             self.tx.delete::<tables::HeaderNumbers>(hash, None)?;
-            rev_headers.delete_current()?;
         }
+
+        // Only prune canonical headers after we've removed the block hashes as we rely on data from
+        // this table in `canonical_hashes_range`.
+        self.remove::<tables::CanonicalHeaders>(block + 1..)?;
         self.remove::<tables::Headers<HeaderTy<N>>>(block + 1..)?;
         self.remove::<tables::HeaderTerminalDifficulties>(block + 1..)?;
 
@@ -3200,5 +3195,259 @@ impl<TX: DbTx + 'static, N: NodeTypes + 'static> DBProvider for DatabaseProvider
 
     fn prune_modes_ref(&self) -> &PruneModes {
         self.prune_modes_ref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        test_utils::{blocks::BlockchainTestData, create_test_provider_factory},
+        BlockWriter,
+    };
+    use reth_testing_utils::generators::{self, random_block, BlockParams};
+
+    #[test]
+    fn test_receipts_by_block_range_empty_range() {
+        let factory = create_test_provider_factory();
+        let provider = factory.provider().unwrap();
+
+        // empty range should return empty vec
+        let start = 10u64;
+        let end = 9u64;
+        let result = provider.receipts_by_block_range(start..=end).unwrap();
+        assert_eq!(result, Vec::<Vec<reth_ethereum_primitives::Receipt>>::new());
+    }
+
+    #[test]
+    fn test_receipts_by_block_range_nonexistent_blocks() {
+        let factory = create_test_provider_factory();
+        let provider = factory.provider().unwrap();
+
+        // non-existent blocks should return empty vecs for each block
+        let result = provider.receipts_by_block_range(10..=12).unwrap();
+        assert_eq!(result, vec![vec![], vec![], vec![]]);
+    }
+
+    #[test]
+    fn test_receipts_by_block_range_single_block() {
+        let factory = create_test_provider_factory();
+        let data = BlockchainTestData::default();
+
+        let provider_rw = factory.provider_rw().unwrap();
+        provider_rw
+            .insert_block(
+                data.genesis.clone().try_recover().unwrap(),
+                crate::StorageLocation::Database,
+            )
+            .unwrap();
+        provider_rw
+            .insert_block(data.blocks[0].0.clone(), crate::StorageLocation::Database)
+            .unwrap();
+        provider_rw
+            .write_state(
+                &data.blocks[0].1,
+                crate::OriginalValuesKnown::No,
+                crate::StorageLocation::Database,
+            )
+            .unwrap();
+        provider_rw.commit().unwrap();
+
+        let provider = factory.provider().unwrap();
+        let result = provider.receipts_by_block_range(1..=1).unwrap();
+
+        // should have one vec with one receipt
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].len(), 1);
+        assert_eq!(result[0][0], data.blocks[0].1.receipts()[0][0]);
+    }
+
+    #[test]
+    fn test_receipts_by_block_range_multiple_blocks() {
+        let factory = create_test_provider_factory();
+        let data = BlockchainTestData::default();
+
+        let provider_rw = factory.provider_rw().unwrap();
+        provider_rw
+            .insert_block(
+                data.genesis.clone().try_recover().unwrap(),
+                crate::StorageLocation::Database,
+            )
+            .unwrap();
+        for i in 0..3 {
+            provider_rw
+                .insert_block(data.blocks[i].0.clone(), crate::StorageLocation::Database)
+                .unwrap();
+            provider_rw
+                .write_state(
+                    &data.blocks[i].1,
+                    crate::OriginalValuesKnown::No,
+                    crate::StorageLocation::Database,
+                )
+                .unwrap();
+        }
+        provider_rw.commit().unwrap();
+
+        let provider = factory.provider().unwrap();
+        let result = provider.receipts_by_block_range(1..=3).unwrap();
+
+        // should have 3 vecs, each with one receipt
+        assert_eq!(result.len(), 3);
+        for (i, block_receipts) in result.iter().enumerate() {
+            assert_eq!(block_receipts.len(), 1);
+            assert_eq!(block_receipts[0], data.blocks[i].1.receipts()[0][0]);
+        }
+    }
+
+    #[test]
+    fn test_receipts_by_block_range_blocks_with_varying_tx_counts() {
+        let factory = create_test_provider_factory();
+        let data = BlockchainTestData::default();
+
+        let provider_rw = factory.provider_rw().unwrap();
+        provider_rw
+            .insert_block(
+                data.genesis.clone().try_recover().unwrap(),
+                crate::StorageLocation::Database,
+            )
+            .unwrap();
+
+        // insert blocks 1-3 with receipts
+        for i in 0..3 {
+            provider_rw
+                .insert_block(data.blocks[i].0.clone(), crate::StorageLocation::Database)
+                .unwrap();
+            provider_rw
+                .write_state(
+                    &data.blocks[i].1,
+                    crate::OriginalValuesKnown::No,
+                    crate::StorageLocation::Database,
+                )
+                .unwrap();
+        }
+        provider_rw.commit().unwrap();
+
+        let provider = factory.provider().unwrap();
+        let result = provider.receipts_by_block_range(1..=3).unwrap();
+
+        // verify each block has one receipt
+        assert_eq!(result.len(), 3);
+        for block_receipts in &result {
+            assert_eq!(block_receipts.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_receipts_by_block_range_partial_range() {
+        let factory = create_test_provider_factory();
+        let data = BlockchainTestData::default();
+
+        let provider_rw = factory.provider_rw().unwrap();
+        provider_rw
+            .insert_block(
+                data.genesis.clone().try_recover().unwrap(),
+                crate::StorageLocation::Database,
+            )
+            .unwrap();
+        for i in 0..3 {
+            provider_rw
+                .insert_block(data.blocks[i].0.clone(), crate::StorageLocation::Database)
+                .unwrap();
+            provider_rw
+                .write_state(
+                    &data.blocks[i].1,
+                    crate::OriginalValuesKnown::No,
+                    crate::StorageLocation::Database,
+                )
+                .unwrap();
+        }
+        provider_rw.commit().unwrap();
+
+        let provider = factory.provider().unwrap();
+
+        // request range that includes both existing and non-existing blocks
+        let result = provider.receipts_by_block_range(2..=5).unwrap();
+        assert_eq!(result.len(), 4);
+
+        // blocks 2-3 should have receipts, blocks 4-5 should be empty
+        assert_eq!(result[0].len(), 1); // block 2
+        assert_eq!(result[1].len(), 1); // block 3
+        assert_eq!(result[2].len(), 0); // block 4 (doesn't exist)
+        assert_eq!(result[3].len(), 0); // block 5 (doesn't exist)
+
+        assert_eq!(result[0][0], data.blocks[1].1.receipts()[0][0]);
+        assert_eq!(result[1][0], data.blocks[2].1.receipts()[0][0]);
+    }
+
+    #[test]
+    fn test_receipts_by_block_range_all_empty_blocks() {
+        let factory = create_test_provider_factory();
+        let mut rng = generators::rng();
+
+        // create blocks with no transactions
+        let mut blocks = Vec::new();
+        for i in 1..=3 {
+            let block =
+                random_block(&mut rng, i, BlockParams { tx_count: Some(0), ..Default::default() });
+            blocks.push(block);
+        }
+
+        let provider_rw = factory.provider_rw().unwrap();
+        for block in blocks {
+            provider_rw
+                .insert_block(block.try_recover().unwrap(), crate::StorageLocation::Database)
+                .unwrap();
+        }
+        provider_rw.commit().unwrap();
+
+        let provider = factory.provider().unwrap();
+        let result = provider.receipts_by_block_range(1..=3).unwrap();
+
+        assert_eq!(result.len(), 3);
+        for block_receipts in result {
+            assert_eq!(block_receipts.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_receipts_by_block_range_consistency_with_individual_calls() {
+        let factory = create_test_provider_factory();
+        let data = BlockchainTestData::default();
+
+        let provider_rw = factory.provider_rw().unwrap();
+        provider_rw
+            .insert_block(
+                data.genesis.clone().try_recover().unwrap(),
+                crate::StorageLocation::Database,
+            )
+            .unwrap();
+        for i in 0..3 {
+            provider_rw
+                .insert_block(data.blocks[i].0.clone(), crate::StorageLocation::Database)
+                .unwrap();
+            provider_rw
+                .write_state(
+                    &data.blocks[i].1,
+                    crate::OriginalValuesKnown::No,
+                    crate::StorageLocation::Database,
+                )
+                .unwrap();
+        }
+        provider_rw.commit().unwrap();
+
+        let provider = factory.provider().unwrap();
+
+        // get receipts using block range method
+        let range_result = provider.receipts_by_block_range(1..=3).unwrap();
+
+        // get receipts using individual block calls
+        let mut individual_results = Vec::new();
+        for block_num in 1..=3 {
+            let receipts =
+                provider.receipts_by_block(block_num.into()).unwrap().unwrap_or_default();
+            individual_results.push(receipts);
+        }
+
+        assert_eq!(range_result, individual_results);
     }
 }

@@ -2,7 +2,7 @@
 //! Standalone http tests
 
 use crate::utils::{launch_http, launch_http_ws, launch_ws};
-use alloy_eips::{BlockId, BlockNumberOrTag};
+use alloy_eips::{eip1898::LenientBlockNumberOrTag, BlockId, BlockNumberOrTag};
 use alloy_primitives::{hex_literal::hex, Address, Bytes, TxHash, B256, B64, U256, U64};
 use alloy_rpc_types_eth::{
     transaction::TransactionRequest, Block, FeeHistory, Filter, Header, Index, Log,
@@ -18,8 +18,8 @@ use jsonrpsee::{
     rpc_params,
     types::error::ErrorCode,
 };
+use reth_ethereum_primitives::Receipt;
 use reth_network_peers::NodeRecord;
-use reth_primitives::Receipt;
 use reth_rpc_api::{
     clients::{AdminApiClient, EthApiClient},
     DebugApiClient, EthCallBundleApiClient, EthFilterApiClient, NetApiClient, OtterscanClient,
@@ -160,7 +160,9 @@ where
     let call_request = TransactionRequest::default();
     let transaction_request = TransactionRequest::default();
     let bytes = Bytes::default();
-    let tx = Bytes::from(hex!("02f871018303579880850555633d1b82520894eee27662c2b8eba3cd936a23f039f3189633e4c887ad591c62bdaeb180c080a07ea72c68abfb8fca1bd964f0f99132ed9280261bdca3e549546c0205e800f7d0a05b4ef3039e9c9b9babc179a1878fb825b5aaf5aed2fa8744854150157b08d6f3"));
+    let tx = Bytes::from(hex!(
+        "02f871018303579880850555633d1b82520894eee27662c2b8eba3cd936a23f039f3189633e4c887ad591c62bdaeb180c080a07ea72c68abfb8fca1bd964f0f99132ed9280261bdca3e549546c0205e800f7d0a05b4ef3039e9c9b9babc179a1878fb825b5aaf5aed2fa8744854150157b08d6f3"
+    ));
     let typed_data = serde_json::from_str(
         r#"{
         "types": {
@@ -282,6 +284,7 @@ where
         client,
         call_request.clone(),
         Some(block_number.into()),
+        None,
     )
     .await
     .unwrap_err();
@@ -365,7 +368,7 @@ where
     DebugApiClient::raw_block(client, block_id).await.unwrap_err();
     DebugApiClient::raw_transaction(client, B256::default()).await.unwrap();
     DebugApiClient::raw_receipts(client, block_id).await.unwrap();
-    assert!(is_unimplemented(DebugApiClient::bad_blocks(client).await.err().unwrap()));
+    DebugApiClient::bad_blocks(client).await.unwrap();
 }
 
 async fn test_basic_net_calls<C>(client: &C)
@@ -431,9 +434,12 @@ where
     let nonce = 1;
     let block_hash = B256::default();
 
-    OtterscanClient::<Transaction, Header>::get_header_by_number(client, block_number)
-        .await
-        .unwrap();
+    OtterscanClient::<Transaction, Header>::get_header_by_number(
+        client,
+        LenientBlockNumberOrTag::new(BlockNumberOrTag::Number(block_number)),
+    )
+    .await
+    .unwrap();
 
     OtterscanClient::<Transaction, Header>::has_code(client, address, None).await.unwrap();
     OtterscanClient::<Transaction, Header>::has_code(client, address, Some(block_number.into()))
@@ -448,7 +454,13 @@ where
 
     OtterscanClient::<Transaction, Header>::trace_transaction(client, tx_hash).await.unwrap();
 
-    OtterscanClient::<Transaction, Header>::get_block_details(client, block_number)
+    OtterscanClient::<Transaction, Header>::get_block_details(
+        client,
+        LenientBlockNumberOrTag::new(BlockNumberOrTag::Number(block_number)),
+    )
+    .await
+    .unwrap_err();
+    OtterscanClient::<Transaction, Header>::get_block_details(client, Default::default())
         .await
         .unwrap_err();
 
@@ -458,7 +470,7 @@ where
 
     OtterscanClient::<Transaction, Header>::get_block_transactions(
         client,
-        block_number,
+        LenientBlockNumberOrTag::new(BlockNumberOrTag::Number(block_number)),
         page_number,
         page_size,
     )
@@ -470,7 +482,7 @@ where
         OtterscanClient::<Transaction, Header>::search_transactions_before(
             client,
             address,
-            block_number,
+            LenientBlockNumberOrTag::new(BlockNumberOrTag::Number(block_number)),
             page_size,
         )
         .await
@@ -481,7 +493,7 @@ where
         OtterscanClient::<Transaction, Header>::search_transactions_after(
             client,
             address,
-            block_number,
+            LenientBlockNumberOrTag::new(BlockNumberOrTag::Number(block_number)),
             page_size,
         )
         .await

@@ -1,18 +1,18 @@
 //! An implementation of the eth gas price oracle, used for providing gas price estimates based on
 //! previous blocks.
 
+use super::{EthApiError, EthResult, EthStateCache, RpcInvalidTransactionError};
 use alloy_consensus::{constants::GWEI_TO_WEI, BlockHeader, Transaction};
 use alloy_eips::BlockNumberOrTag;
 use alloy_primitives::{B256, U256};
 use alloy_rpc_types_eth::BlockId;
 use derive_more::{Deref, DerefMut, From, Into};
 use itertools::Itertools;
-use reth_primitives_traits::{BlockBody, SignedTransaction};
 use reth_rpc_server_types::{
     constants,
     constants::gas_oracle::{
         DEFAULT_GAS_PRICE_BLOCKS, DEFAULT_GAS_PRICE_PERCENTILE, DEFAULT_IGNORE_GAS_PRICE,
-        DEFAULT_MAX_GAS_PRICE, MAX_HEADER_HISTORY, SAMPLE_NUMBER,
+        DEFAULT_MAX_GAS_PRICE, MAX_HEADER_HISTORY, MAX_REWARD_PERCENTILE_COUNT, SAMPLE_NUMBER,
     },
 };
 use reth_storage_api::{BlockReader, BlockReaderIdExt};
@@ -21,8 +21,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{self, Debug, Formatter};
 use tokio::sync::Mutex;
 use tracing::warn;
-
-use super::{EthApiError, EthResult, EthStateCache, RpcInvalidTransactionError};
 
 /// The default gas limit for `eth_call` and adjacent calls. See
 /// [`RPC_DEFAULT_GAS_CAP`](constants::gas_oracle::RPC_DEFAULT_GAS_CAP).
@@ -44,6 +42,12 @@ pub struct GasPriceOracleConfig {
     /// The maximum number of blocks for estimating gas price
     pub max_block_history: u64,
 
+    /// The maximum number for reward percentiles.
+    ///
+    /// This effectively limits how many transactions and receipts are fetched to compute the
+    /// reward percentile.
+    pub max_reward_percentile_count: u64,
+
     /// The default gas price to use if there are no blocks to use
     pub default: Option<U256>,
 
@@ -61,6 +65,7 @@ impl Default for GasPriceOracleConfig {
             percentile: DEFAULT_GAS_PRICE_PERCENTILE,
             max_header_history: MAX_HEADER_HISTORY,
             max_block_history: MAX_HEADER_HISTORY,
+            max_reward_percentile_count: MAX_REWARD_PERCENTILE_COUNT,
             default: None,
             max_price: Some(DEFAULT_MAX_GAS_PRICE),
             ignore_price: Some(DEFAULT_IGNORE_GAS_PRICE),
@@ -218,7 +223,7 @@ where
         limit: usize,
     ) -> EthResult<Option<(B256, Vec<U256>)>> {
         // check the cache (this will hit the disk if the block is not cached)
-        let Some(block) = self.cache.get_sealed_block_with_senders(block_hash).await? else {
+        let Some(block) = self.cache.get_recovered_block(block_hash).await? else {
             return Ok(None)
         };
 
@@ -226,7 +231,7 @@ where
         let parent_hash = block.parent_hash();
 
         // sort the functions by ascending effective tip first
-        let sorted_transactions = block.body().transactions_iter().sorted_by_cached_key(|tx| {
+        let sorted_transactions = block.transactions_recovered().sorted_by_cached_key(|tx| {
             if let Some(base_fee) = base_fee_per_gas {
                 (*tx).effective_tip_per_gas(base_fee)
             } else {
@@ -251,10 +256,8 @@ where
             }
 
             // check if the sender was the coinbase, if so, ignore
-            if let Ok(sender) = tx.recover_signer() {
-                if sender == block.beneficiary() {
-                    continue
-                }
+            if tx.signer() == block.beneficiary() {
+                continue
             }
 
             // a `None` effective_gas_tip represents a transaction where the max_fee_per_gas is

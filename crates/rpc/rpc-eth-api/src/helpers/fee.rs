@@ -7,13 +7,13 @@ use alloy_eips::eip7840::BlobParams;
 use alloy_primitives::U256;
 use alloy_rpc_types_eth::{BlockNumberOrTag, FeeHistory};
 use futures::Future;
-use reth_chainspec::EthChainSpec;
+use reth_chainspec::{ChainSpecProvider, EthChainSpec};
 use reth_primitives_traits::BlockBody;
-use reth_provider::{BlockIdReader, ChainSpecProvider, HeaderProvider};
 use reth_rpc_eth_types::{
     fee_history::calculate_reward_percentiles_for_block, EthApiError, FeeHistoryCache,
     FeeHistoryEntry, GasPriceOracle, RpcInvalidTransactionError,
 };
+use reth_storage_api::{BlockIdReader, BlockReaderIdExt, HeaderProvider};
 use tracing::debug;
 
 /// Fee related functions for the [`EthApiServer`](crate::EthApiServer) trait in the
@@ -58,6 +58,13 @@ pub trait EthFees: LoadFee {
         async move {
             if block_count == 0 {
                 return Ok(FeeHistory::default())
+            }
+
+            // ensure the given reward percentiles aren't excessive
+            if reward_percentiles.as_ref().map(|perc| perc.len() as u64) >
+                Some(self.gas_oracle().config().max_reward_percentile_count)
+            {
+                return Err(EthApiError::InvalidRewardPercentiles.into())
             }
 
             // See https://github.com/ethereum/go-ethereum/blob/2754b197c935ee63101cbbca2752338246384fec/eth/gasprice/feehistory.go#L218C8-L225
@@ -109,7 +116,7 @@ pub trait EthFees: LoadFee {
             // Fetch the headers and ensure we got all of them
             //
             // Treat a request for 1 block as a request for `newest_block..=newest_block`,
-            // otherwise `newest_block - 2
+            // otherwise `newest_block - 2`
             // NOTE: We ensured that block count is capped
             let start_block = end_block_plus - block_count;
 
@@ -174,10 +181,10 @@ pub trait EthFees: LoadFee {
                     base_fee_per_blob_gas.push(header.blob_fee(blob_params).unwrap_or_default());
                     blob_gas_used_ratio.push(
                         header.blob_gas_used().unwrap_or_default() as f64
-                            / alloy_eips::eip4844::MAX_DATA_GAS_PER_BLOCK as f64,
+                            / blob_params.max_blob_gas_per_block() as f64,
                     );
 
-                    // Percentiles were specified, so we need to collect reward percentile ino
+                    // Percentiles were specified, so we need to collect reward percentile info
                     if let Some(percentiles) = &reward_percentiles {
                         let (block, receipts) = self.cache()
                             .get_block_and_receipts(header.hash())
@@ -249,7 +256,10 @@ pub trait EthFees: LoadFee {
 /// Loads fee from database.
 ///
 /// Behaviour shared by several `eth_` RPC methods, not exclusive to `eth_` fees RPC methods.
-pub trait LoadFee: LoadBlock {
+pub trait LoadFee: LoadBlock
+where
+    Self::Provider: BlockReaderIdExt,
+{
     /// Returns a handle for reading gas price.
     ///
     /// Data access in default (L1) trait method implementations.
@@ -292,7 +302,7 @@ pub trait LoadFee: LoadBlock {
                 None => {
                     // fetch pending base fee
                     let base_fee = self
-                        .block_with_senders(BlockNumberOrTag::Pending.into())
+                        .recovered_block(BlockNumberOrTag::Pending.into())
                         .await?
                         .ok_or(EthApiError::HeaderNotFound(BlockNumberOrTag::Pending.into()))?
                         .base_fee_per_gas()
@@ -328,10 +338,9 @@ pub trait LoadFee: LoadBlock {
     ///
     /// See also: <https://github.com/ethereum/pm/issues/328#issuecomment-853234014>
     fn gas_price(&self) -> impl Future<Output = Result<U256, Self::Error>> + Send {
-        let header = self.block_with_senders(BlockNumberOrTag::Latest.into());
-        let suggested_tip = self.suggested_priority_fee();
         async move {
-            let (header, suggested_tip) = futures::try_join!(header, suggested_tip)?;
+            let header = self.provider().latest_header().map_err(Self::Error::from_eth_err)?;
+            let suggested_tip = self.suggested_priority_fee().await?;
             let base_fee = header.and_then(|h| h.base_fee_per_gas()).unwrap_or_default();
             Ok(suggested_tip + U256::from(base_fee))
         }
@@ -340,8 +349,9 @@ pub trait LoadFee: LoadBlock {
     /// Returns a suggestion for a base fee for blob transactions.
     fn blob_base_fee(&self) -> impl Future<Output = Result<U256, Self::Error>> + Send {
         async move {
-            self.block_with_senders(BlockNumberOrTag::Latest.into())
-                .await?
+            self.provider()
+                .latest_header()
+                .map_err(Self::Error::from_eth_err)?
                 .and_then(|h| {
                     h.maybe_next_block_blob_fee(
                         self.provider().chain_spec().blob_params_at_timestamp(h.timestamp()),

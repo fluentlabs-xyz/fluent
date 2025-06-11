@@ -4,7 +4,6 @@
 //!
 //! ## Feature Flags
 //!
-//! - `alloy-compat`: Adds compatibility conversions for certain alloy types.
 //! - `arbitrary`: Adds `proptest` and `arbitrary` support for primitive types.
 //! - `test-utils`: Export utilities for testing
 //! - `reth-codec`: Enables db codec support for reth types including zstd compression for certain
@@ -26,13 +25,14 @@ pub mod transaction;
 #[cfg(any(test, feature = "arbitrary"))]
 pub use block::{generate_valid_header, valid_header_strategy};
 pub use block::{Block, BlockBody, SealedBlock};
-#[allow(deprecated)]
+#[expect(deprecated)]
 pub use block::{BlockWithSenders, SealedBlockFor, SealedBlockWithSenders};
 
 pub use receipt::{gas_spent_by_transactions, Receipt};
 pub use reth_primitives_traits::{
-    logs_bloom, Account, Bytecode, GotExpected, GotExpectedBoxed, Header, HeaderError, Log,
-    LogData, NodePrimitives, RecoveredBlock, SealedHeader, StorageEntry,
+    logs_bloom, Account, BlockTy, BodyTy, Bytecode, GotExpected, GotExpectedBoxed, Header,
+    HeaderError, HeaderTy, Log, LogData, NodePrimitives, ReceiptTy, RecoveredBlock, SealedHeader,
+    StorageEntry, TxTy,
 };
 pub use static_file::StaticFileSegment;
 
@@ -49,7 +49,7 @@ pub use transaction::{
     util::secp256k1::{public_key_to_address, recover_signer_unchecked, sign_message},
     InvalidTransactionError, Transaction, TransactionSigned, TxType,
 };
-#[allow(deprecated)]
+#[expect(deprecated)]
 pub use transaction::{PooledTransactionsElementEcRecovered, TransactionSignedEcRecovered};
 
 // Re-exports

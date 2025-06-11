@@ -2,7 +2,7 @@
 
 use crate::{
     block::{error::SealedBlockRecoveryError, SealedBlock},
-    transaction::signed::{RecoveryError, SignedTransactionIntoRecoveredExt},
+    transaction::signed::{RecoveryError, SignedTransaction},
     Block, BlockBody, InMemorySize, SealedHeader,
 };
 use alloc::vec::Vec;
@@ -283,6 +283,15 @@ impl<B: Block> RecoveredBlock<B> {
         (self.block.into_block(), self.senders)
     }
 
+    /// Returns the `Recovered<&T>` transaction at the given index.
+    pub fn recovered_transaction(
+        &self,
+        idx: usize,
+    ) -> Option<Recovered<&<B::Body as BlockBody>::Transaction>> {
+        let sender = self.senders.get(idx).copied()?;
+        self.block.body().transactions().get(idx).map(|tx| Recovered::new_unchecked(tx, sender))
+    }
+
     /// Returns an iterator over all transactions and their sender.
     #[inline]
     pub fn transactions_with_sender(
@@ -291,11 +300,20 @@ impl<B: Block> RecoveredBlock<B> {
         self.senders.iter().zip(self.block.body().transactions())
     }
 
+    /// Returns an iterator over cloned `Recovered<Transaction>`
+    #[inline]
+    pub fn clone_transactions_recovered(
+        &self,
+    ) -> impl Iterator<Item = Recovered<<B::Body as BlockBody>::Transaction>> + '_ {
+        self.transactions_with_sender()
+            .map(|(sender, tx)| Recovered::new_unchecked(tx.clone(), *sender))
+    }
+
     /// Returns an iterator over `Recovered<&Transaction>`
     #[inline]
     pub fn transactions_recovered(
         &self,
-    ) -> impl Iterator<Item = Recovered<&'_ <B::Body as BlockBody>::Transaction>> {
+    ) -> impl Iterator<Item = Recovered<&'_ <B::Body as BlockBody>::Transaction>> + '_ {
         self.transactions_with_sender().map(|(sender, tx)| Recovered::new_unchecked(tx, *sender))
     }
 
@@ -451,7 +469,7 @@ where
 #[cfg(any(test, feature = "test-utils"))]
 impl<B: Block> RecoveredBlock<B> {
     /// Returns a mutable reference to the recovered senders.
-    pub fn senders_mut(&mut self) -> &mut Vec<Address> {
+    pub const fn senders_mut(&mut self) -> &mut Vec<Address> {
         &mut self.senders
     }
 
@@ -484,12 +502,12 @@ impl<B: crate::test_utils::TestBlock> RecoveredBlock<B> {
     }
 
     /// Returns a mutable reference to the header.
-    pub fn header_mut(&mut self) -> &mut B::Header {
+    pub const fn header_mut(&mut self) -> &mut B::Header {
         self.block.header_mut()
     }
 
     /// Returns a mutable reference to the header.
-    pub fn block_mut(&mut self) -> &mut B::Body {
+    pub const fn block_mut(&mut self) -> &mut B::Body {
         self.block.body_mut()
     }
 
@@ -554,6 +572,7 @@ pub(super) mod serde_bincode_compat {
             bound = "serde_bincode_compat::SealedBlock<'a, T>: Serialize + serde::de::DeserializeOwned"
         )]
         block: serde_bincode_compat::SealedBlock<'a, T>,
+        #[expect(clippy::owned_cow)]
         senders: Cow<'a, Vec<Address>>,
     }
 
@@ -605,6 +624,10 @@ pub(super) mod serde_bincode_compat {
 
         fn as_repr(&self) -> Self::BincodeRepr<'_> {
             self.into()
+        }
+
+        fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
+            repr.into()
         }
     }
 }

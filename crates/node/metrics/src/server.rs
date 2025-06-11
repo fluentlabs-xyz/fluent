@@ -59,7 +59,7 @@ impl MetricServer {
             task_executor.clone(),
         )
         .await
-        .wrap_err("Could not start Prometheus endpoint")?;
+        .wrap_err_with(|| format!("Could not start Prometheus endpoint at {listen_addr}"))?;
 
         // Describe metrics after recorder installation
         describe_db_metrics();
@@ -244,7 +244,7 @@ mod tests {
         MetricServer::new(config).serve().await.unwrap();
 
         // Send request to the metrics endpoint
-        let url = format!("http://{}", listen_addr);
+        let url = format!("http://{listen_addr}");
         let response = Client::new().get(&url).send().await.unwrap();
         assert!(response.status().is_success());
 
