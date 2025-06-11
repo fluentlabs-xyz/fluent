@@ -56,4 +56,3 @@ serde = [
     "reth-primitives-traits/serde",
 ]
 portable = ["revm/portable"]
-rwasm = ["reth-primitives-traits/rwasm"]
