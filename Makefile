@@ -254,6 +254,8 @@ docker-build-push-nightly: ## Build and push cross-arch Docker image tagged with
 
 # Create a cross-arch Docker image with the given tags and push it
 define docker_build_push
+	rustup target add wasm32-unknown-unknown
+
 	$(MAKE) build-x86_64-unknown-linux-gnu
 	mkdir -p $(BIN_DIR)/amd64
 	cp $(CARGO_TARGET_DIR)/x86_64-unknown-linux-gnu/$(PROFILE)/reth $(BIN_DIR)/amd64/reth
@@ -323,6 +325,8 @@ op-docker-build-push-nightly-profiling: ## Build and push cross-arch Docker imag
 
 # Create a cross-arch Docker image with the given tags and push it
 define op_docker_build_push
+	rustup target add wasm32-unknown-unknown
+
 	$(MAKE) op-build-x86_64-unknown-linux-gnu
 	mkdir -p $(BIN_DIR)/amd64
 	cp $(CARGO_TARGET_DIR)/x86_64-unknown-linux-gnu/$(PROFILE)/op-reth $(BIN_DIR)/amd64/op-reth
