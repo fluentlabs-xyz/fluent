@@ -7,6 +7,8 @@ use crate::{
 };
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use alloy_chains::{Chain, NamedChain};
+#[cfg(not(feature = "generate-genesis"))]
+use alloy_consensus::constants::DEV_GENESIS_HASH;
 use alloy_consensus::{
     constants::{
         EMPTY_WITHDRAWALS, HOLESKY_GENESIS_HASH, HOODI_GENESIS_HASH, MAINNET_GENESIS_HASH,
@@ -202,6 +204,29 @@ pub static HOODI: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 ///
 /// Includes 20 prefunded accounts with `10_000` ETH each derived from mnemonic "test test test test
 /// test test test test test test test junk".
+#[cfg(not(feature = "fluentbase-genesis"))]
+pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
+    let genesis = serde_json::from_str(include_str!("../res/genesis/dev.json"))
+        .expect("Can't deserialize Dev testnet genesis json");
+    let hardforks = DEV_HARDFORKS.clone();
+    ChainSpec {
+        chain: Chain::dev(),
+        genesis_header: SealedHeader::new(
+            make_genesis_header(&genesis, &hardforks),
+            DEV_GENESIS_HASH,
+        ),
+        genesis,
+        paris_block_and_final_difficulty: Some((0, U256::from(0))),
+        hardforks: DEV_HARDFORKS.clone(),
+        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
+        deposit_contract: None, // TODO: do we even have?
+        ..Default::default()
+    }
+    .into()
+});
+
+/// A genesis generator for Fluent Local Devnet
+#[cfg(feature = "fluentbase-genesis")]
 pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     let mut genesis = fluentbase_genesis::devnet_genesis_from_file();
     macro_rules! initial_test_balance {

@@ -12,7 +12,7 @@ workspace = true
 
 [dependencies]
 # fluentbase
-fluentbase-genesis.workspace = true
+fluentbase-genesis = { workspace = true, optional = true }
 
 # reth
 reth-ethereum-forks.workspace = true
@@ -38,7 +38,7 @@ derive_more.workspace = true
 alloy-trie = { workspace = true, features = ["arbitrary"] }
 alloy-eips = { workspace = true, features = ["arbitrary"] }
 alloy-rlp = { workspace = true, features = ["arrayvec"] }
-alloy-genesis.workspace = true
+alloy-genesis = { workspace = true }
 
 [features]
 default = ["std"]
@@ -68,4 +68,8 @@ arbitrary = [
 ]
 test-utils = [
     "reth-primitives-traits/test-utils",
+]
+generate-genesis = [
+    "fluentbase-genesis",
+    "fluentbase-genesis?/generate-genesis"
 ]
