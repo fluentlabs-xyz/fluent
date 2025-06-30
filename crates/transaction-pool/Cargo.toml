@@ -52,11 +52,15 @@ bitflags.workspace = true
 auto_impl.workspace = true
 smallvec.workspace = true
 
+# fluent
+fluentbase-types.workspace = true
+
 # testing
 rand = { workspace = true, optional = true }
 paste = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 proptest-arbitrary-interop = { workspace = true, optional = true }
+
 
 [dev-dependencies]
 reth-provider = { workspace = true, features = ["test-utils"] }
