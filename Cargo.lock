@@ -11592,6 +11592,7 @@ dependencies = [
  "auto_impl",
  "bitflags 2.9.1",
  "codspeed-criterion-compat",
+ "fluentbase-types",
  "futures-util",
  "metrics",
  "parking_lot",

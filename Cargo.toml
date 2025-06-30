@@ -463,6 +463,7 @@ revm-inspectors = "0.23.0"
 # fluentbase
 fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev", default-features = false }
 rwasm-revm = { package = "rwasm-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "v0.2.0-dev", default-features = false, features = ["wasmtime"] }
+fluentbase-types = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev", default-features = false }
 
 # eth
 alloy-chains = { version = "0.2.0", default-features = false }
