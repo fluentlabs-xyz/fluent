@@ -1,5 +1,5 @@
 [workspace.package]
-version = "0.2.0-dev"
+version = "0.3.0-dev"
 edition = "2021"
 rust-version = "1.86"
 license = "MIT OR Apache-2.0"
@@ -461,9 +461,9 @@ op-revm = { version = "5.0.0", default-features = false }
 revm-inspectors = "0.23.0"
 
 # fluentbase
-fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev", default-features = false }
+fluentbase-genesis = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev", default-features = false, features = ["generate-genesis"] }
 rwasm-revm = { package = "rwasm-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", branch = "v0.2.0-dev", default-features = false, features = ["wasmtime"] }
-fluentbase-types = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev", default-features = false }
+fluentbase-types = { git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev", default-features = false }
 
 # eth
 alloy-chains = { version = "0.2.0", default-features = false }
@@ -478,33 +478,33 @@ alloy-trie = { version = "0.8.1", default-features = false }
 
 alloy-hardforks = "0.2.2"
 
-alloy-consensus = { version = "1.0.9", default-features = false }
-alloy-contract = { version = "1.0.9", default-features = false }
-alloy-eips = { version = "1.0.9", default-features = false }
-alloy-genesis = { version = "1.0.9", default-features = false }
-alloy-json-rpc = { version = "1.0.9", default-features = false }
-alloy-network = { version = "1.0.9", default-features = false }
-alloy-network-primitives = { version = "1.0.9", default-features = false }
-alloy-provider = { version = "1.0.9", features = ["reqwest"], default-features = false }
-alloy-pubsub = { version = "1.0.9", default-features = false }
-alloy-rpc-client = { version = "1.0.9", default-features = false }
-alloy-rpc-types = { version = "1.0.9", features = ["eth"], default-features = false }
-alloy-rpc-types-admin = { version = "1.0.9", default-features = false }
-alloy-rpc-types-anvil = { version = "1.0.9", default-features = false }
-alloy-rpc-types-beacon = { version = "1.0.9", default-features = false }
-alloy-rpc-types-debug = { version = "1.0.9", default-features = false }
-alloy-rpc-types-engine = { version = "1.0.9", default-features = false }
-alloy-rpc-types-eth = { version = "1.0.9", default-features = false }
-alloy-rpc-types-mev = { version = "1.0.9", default-features = false }
-alloy-rpc-types-trace = { version = "1.0.9", default-features = false }
-alloy-rpc-types-txpool = { version = "1.0.9", default-features = false }
-alloy-serde = { version = "1.0.9", default-features = false }
-alloy-signer = { version = "1.0.9", default-features = false }
-alloy-signer-local = { version = "1.0.9", default-features = false }
-alloy-transport = { version = "1.0.9" }
-alloy-transport-http = { version = "1.0.9", features = ["reqwest-rustls-tls"], default-features = false }
-alloy-transport-ipc = { version = "1.0.9", default-features = false }
-alloy-transport-ws = { version = "1.0.9", default-features = false }
+alloy-consensus = { version = "1.0.11", default-features = false }
+alloy-contract = { version = "1.0.11", default-features = false }
+alloy-eips = { version = "1.0.12", default-features = false }
+alloy-genesis = { version = "1.0.11", default-features = false }
+alloy-json-rpc = { version = "1.0.11", default-features = false }
+alloy-network = { version = "1.0.11", default-features = false }
+alloy-network-primitives = { version = "1.0.11", default-features = false }
+alloy-provider = { version = "1.0.11", features = ["reqwest"], default-features = false }
+alloy-pubsub = { version = "1.0.11", default-features = false }
+alloy-rpc-client = { version = "1.0.11", default-features = false }
+alloy-rpc-types = { version = "1.0.11", features = ["eth"], default-features = false }
+alloy-rpc-types-admin = { version = "1.0.11", default-features = false }
+alloy-rpc-types-anvil = { version = "1.0.11", default-features = false }
+alloy-rpc-types-beacon = { version = "1.0.11", default-features = false }
+alloy-rpc-types-debug = { version = "1.0.11", default-features = false }
+alloy-rpc-types-engine = { version = "1.0.11", default-features = false }
+alloy-rpc-types-eth = { version = "1.0.11", default-features = false }
+alloy-rpc-types-mev = { version = "1.0.11", default-features = false }
+alloy-rpc-types-trace = { version = "1.0.11", default-features = false }
+alloy-rpc-types-txpool = { version = "1.0.11", default-features = false }
+alloy-serde = { version = "1.0.11", default-features = false }
+alloy-signer = { version = "1.0.11", default-features = false }
+alloy-signer-local = { version = "1.0.11", default-features = false }
+alloy-transport = { version = "1.0.11" }
+alloy-transport-http = { version = "1.0.11", features = ["reqwest-rustls-tls"], default-features = false }
+alloy-transport-ipc = { version = "1.0.11", default-features = false }
+alloy-transport-ws = { version = "1.0.11", default-features = false }
 
 # op
 alloy-op-evm = { version = "0.10.0", default-features = false }
@@ -708,18 +708,18 @@ walkdir = "2.3.3"
 vergen-git2 = "1.0.5"
 
 [patch.crates-io]
-revm = { package = "revm", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-revm-bytecode = { package = "revm-bytecode", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-revm-database = { package = "revm-database", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-revm-state = { package = "revm-state", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-revm-primitives = { package = "revm-primitives", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-revm-interpreter = { package = "revm-interpreter", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-revm-inspector = { package = "revm-inspector", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-revm-context = { package = "revm-context", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-revm-context-interface = { package = "revm-context-interface", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-revm-database-interface = { package = "revm-database-interface", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-op-revm = { package = "op-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.2.0-dev" }
-alloy-evm = { git = "https://github.com/fluentlabs-xyz/alloy-rwasm", branch = "feat/merge-revm-v71", default-features = false, features = ["enforce-rwasm"] }
+revm = { package = "revm", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+revm-bytecode = { package = "revm-bytecode", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+revm-database = { package = "revm-database", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+revm-state = { package = "revm-state", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+revm-primitives = { package = "revm-primitives", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+revm-interpreter = { package = "revm-interpreter", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+revm-inspector = { package = "revm-inspector", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+revm-context = { package = "revm-context", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+revm-context-interface = { package = "revm-context-interface", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+revm-database-interface = { package = "revm-database-interface", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+op-revm = { package = "op-revm", git = "https://github.com/fluentlabs-xyz/fluentbase", tag = "v0.3.0-dev" }
+alloy-evm = { git = "https://github.com/fluentlabs-xyz/alloy-rwasm", branch = "devel", features = ["enforce-rwasm"] }
 
 # alloy-consensus = { git = "https://github.com/alloy-rs/alloy", branch = "main" }
 # alloy-contract = { git = "https://github.com/alloy-rs/alloy", branch = "main" }

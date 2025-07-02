@@ -20,7 +20,7 @@ jobs:
   build-rc:
     if: contains(github.ref, '-rc')
     name: build and push
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-24.04
     permissions:
       packages: write
       contents: read
@@ -30,12 +30,14 @@ jobs:
         build:
           - name: "Build and push reth image"
             command: "make IMAGE_NAME=$IMAGE_NAME DOCKER_IMAGE_NAME=$DOCKER_IMAGE_NAME PROFILE=maxperf docker-build-push"
-          - name: "Build and push op-reth image"
-            command: "make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push"
+    #          - name: "Build and push op-reth image"
+    #            command: "make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push"
     steps:
       - uses: actions/checkout@v4
       - uses: rui314/setup-mold@v1
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
@@ -56,7 +58,7 @@ jobs:
   build:
     if: ${{ !contains(github.ref, '-rc') }}
     name: build and push
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-24.04
     permissions:
       packages: write
       contents: read
@@ -66,12 +68,14 @@ jobs:
         build:
           - name: "Build and push reth image"
             command: "make IMAGE_NAME=$IMAGE_NAME DOCKER_IMAGE_NAME=$DOCKER_IMAGE_NAME PROFILE=maxperf docker-build-push-latest"
-          - name: "Build and push op-reth image"
-            command: "make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push-latest"
+    #          - name: "Build and push op-reth image"
+    #            command: "make IMAGE_NAME=$OP_IMAGE_NAME DOCKER_IMAGE_NAME=$OP_DOCKER_IMAGE_NAME PROFILE=maxperf op-docker-build-push-latest"
     steps:
       - uses: actions/checkout@v4
       - uses: rui314/setup-mold@v1
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true

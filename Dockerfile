@@ -29,7 +29,7 @@ ENV RUSTFLAGS="$RUSTFLAGS"
 ARG FEATURES=""
 ENV FEATURES=$FEATURES
 
-# install wasm32 unknown
+# Make sure wasm32 target is installed
 RUN rustup target add wasm32-unknown-unknown
 
 # Builds dependencies
@@ -37,7 +37,6 @@ RUN cargo chef cook --profile $BUILD_PROFILE --features "$FEATURES" --recipe-pat
 
 # Build application
 COPY --exclude=.git --exclude=dist . .
-# Make sure wasm32 target is installed
 RUN cargo build --profile $BUILD_PROFILE --features "$FEATURES" --locked --bin reth
 
 # ARG is not resolved in COPY so we have to hack around it by copying the
