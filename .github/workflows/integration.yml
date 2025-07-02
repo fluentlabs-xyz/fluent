@@ -56,7 +56,7 @@ jobs:
 
   integration-success:
     name: integration success
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     if: always() && github.event_name != 'schedule'
     needs: [ test ]
     timeout-minutes: 30
@@ -69,7 +69,7 @@ jobs:
   era-files:
     name: era1 file integration tests once a day
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: rui314/setup-mold@v1

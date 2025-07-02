@@ -112,7 +112,7 @@ jobs:
 
   unit-success:
     name: unit success
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     if: always()
     needs: [ test, state, doc ]
     timeout-minutes: 30

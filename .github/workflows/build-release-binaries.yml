@@ -14,7 +14,7 @@ jobs:
       matrix:
         configs:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-amd64-8core
+            os: ubuntu-latest
             profile: maxperf
         #          - target: aarch64-unknown-linux-gnu
         #            os: ubuntu-24.04

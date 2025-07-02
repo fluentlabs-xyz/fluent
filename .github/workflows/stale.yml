@@ -9,7 +9,7 @@ on:
 
 jobs:
   close-issues:
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     permissions:
       issues: write
       pull-requests: write

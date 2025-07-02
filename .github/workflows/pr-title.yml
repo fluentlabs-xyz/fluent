@@ -15,7 +15,7 @@ permissions:
 jobs:
   conventional-title:
     name: Validate PR title is Conventional Commit
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:

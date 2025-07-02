@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: build reproducible binaries
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: rui314/setup-mold@v1

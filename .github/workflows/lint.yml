@@ -12,7 +12,7 @@ env:
 jobs:
   clippy-binaries:
     name: clippy binaries / ${{ matrix.type }}
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       matrix:
@@ -43,7 +43,7 @@ jobs:
 
   clippy:
     name: clippy
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -59,7 +59,7 @@ jobs:
           RUSTFLAGS: -D warnings
 
   wasm:
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +78,7 @@ jobs:
           .github/assets/check_wasm.sh
 
   riscv:
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +95,7 @@ jobs:
         run: .github/assets/check_rv32imac.sh
 
   crate-checks:
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -109,7 +109,7 @@ jobs:
 
   msrv:
     name: MSRV
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       matrix:
@@ -131,7 +131,7 @@ jobs:
 
   docs:
     name: docs
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -148,7 +148,7 @@ jobs:
 
   fmt:
     name: fmt
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -163,7 +163,7 @@ jobs:
 
   udeps:
     name: udeps
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -177,7 +177,7 @@ jobs:
 
   book:
     name: book
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -194,7 +194,7 @@ jobs:
         run: git diff --exit-code
 
   codespell:
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -203,7 +203,7 @@ jobs:
           skip: "*.json"
 
   check-toml:
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout repository
@@ -214,7 +214,7 @@ jobs:
           config-path: dprint.json
 
   grafana:
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -224,7 +224,7 @@ jobs:
           cmd: jq empty etc/grafana/dashboards/overview.json
 
   no-test-deps:
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -236,7 +236,7 @@ jobs:
   # Checks that selected rates can compile with power set of features
   features:
     name: features
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -253,7 +253,7 @@ jobs:
 
   # Check crates correctly propagate features
   feature-propagation:
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -272,7 +272,7 @@ jobs:
 
   lint-success:
     name: lint success
-    runs-on: ubuntu-amd64-8core
+    runs-on: ubuntu-latest
     if: always()
     needs:
       - clippy-binaries
