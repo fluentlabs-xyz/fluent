@@ -6,10 +6,10 @@ on:
   pull_request:
   merge_group:
   push:
-    branches: [main]
+    branches: [ main ]
   schedule:
-  # Run once a day at 3:00 UTC
-  - cron: '0 3 * * *'
+    # Run once a day at 3:00 UTC
+    - cron: '0 3 * * *'
 
 env:
   CARGO_TERM_COLOR: always
@@ -29,7 +29,7 @@ jobs:
       RUST_BACKTRACE: 1
     strategy:
       matrix:
-        network: ["ethereum", "optimism"]
+        network: [ "ethereum", "optimism" ]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -56,9 +56,9 @@ jobs:
 
   integration-success:
     name: integration success
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     if: always() && github.event_name != 'schedule'
-    needs: [test]
+    needs: [ test ]
     timeout-minutes: 30
     steps:
       - name: Decide whether the needed jobs succeeded or failed
@@ -66,17 +66,17 @@ jobs:
         with:
           jobs: ${{ toJSON(needs) }}
 
-  era-files: 
+  era-files:
     name: era1 file integration tests once a day
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     steps:
-    - uses: actions/checkout@v4
-    - uses: rui314/setup-mold@v1
-    - uses: dtolnay/rust-toolchain@stable
-    - uses: taiki-e/install-action@nextest
-    - uses: Swatinem/rust-cache@v2
-      with:
-        cache-on-failure: true
-    - name: run era1 files integration tests
-      run: cargo nextest run --package reth-era --test it -- --ignored
+      - uses: actions/checkout@v4
+      - uses: rui314/setup-mold@v1
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: run era1 files integration tests
+        run: cargo nextest run --package reth-era --test it -- --ignored

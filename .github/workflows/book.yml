@@ -4,14 +4,14 @@ name: book
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
   merge_group:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     name: test
     timeout-minutes: 60
 
@@ -34,7 +34,7 @@ jobs:
         run: mdbook test
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     name: lint
     timeout-minutes: 60
 
@@ -53,7 +53,7 @@ jobs:
         run: mdbook-linkcheck --standalone
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -114,8 +114,8 @@ jobs:
   deploy:
     # Only deploy if a push to main
     if: github.ref_name == 'main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    needs: [test, lint, build]
+    runs-on: ubuntu-amd64-8core
+    needs: [ test, lint, build ]
 
     # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
     permissions:

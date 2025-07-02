@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   update-superchain:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -6,7 +6,7 @@ on:
   pull_request:
   merge_group:
   push:
-    branches: [main]
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -112,9 +112,9 @@ jobs:
 
   unit-success:
     name: unit success
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     if: always()
-    needs: [test, state, doc]
+    needs: [ test, state, doc ]
     timeout-minutes: 30
     steps:
       - name: Decide whether the needed jobs succeeded or failed

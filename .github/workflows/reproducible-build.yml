@@ -1,14 +1,14 @@
 name: reproducible-build
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch: { }
   schedule:
     - cron: "0 1 */2 * *"
 
 jobs:
   build:
     name: build reproducible binaries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     steps:
       - uses: actions/checkout@v4
       - uses: rui314/setup-mold@v1

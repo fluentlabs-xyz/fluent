@@ -15,7 +15,7 @@ permissions:
 jobs:
   conventional-title:
     name: Validate PR title is Conventional Commit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     permissions:
       pull-requests: write
     steps:
@@ -71,7 +71,7 @@ jobs:
             **Help**
 
             For more information, follow the guidelines here: https://www.conventionalcommits.org/en/v1.0.0/
-      
+
       - name: Remove Comment for Valid Title
         if: steps.lint_pr_title.outcome == 'success'
         uses: marocchino/sticky-pull-request-comment@v2

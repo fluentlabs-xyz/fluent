@@ -13,7 +13,7 @@ env:
 jobs:
   extract-version:
     name: extract version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     steps:
       - name: Extract version
         run: echo "VERSION=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_OUTPUT
@@ -23,7 +23,7 @@ jobs:
 
   build-reproducible:
     name: build and push reproducible image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-amd64-8core
     needs: extract-version
     permissions:
       packages: write
