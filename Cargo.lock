@@ -281,8 +281,8 @@ dependencies = [
  "auto_impl",
  "derive_more 2.0.1",
  "op-alloy-consensus",
- "op-revm",
- "revm",
+ "op-revm 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
  "rwasm-revm",
  "thiserror 2.0.12",
 ]
@@ -393,8 +393,8 @@ dependencies = [
  "alloy-primitives",
  "auto_impl",
  "op-alloy-consensus",
- "op-revm",
- "revm",
+ "op-revm 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -3456,7 +3456,7 @@ dependencies = [
  "reth-tracing",
  "reth-trie",
  "reth-trie-db",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -3812,7 +3812,7 @@ dependencies = [
  "modular-bitfield",
  "op-alloy-consensus",
  "op-alloy-rpc-types-engine",
- "op-revm",
+ "op-revm 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "reth-chain-state",
  "reth-codecs",
  "reth-db-api",
@@ -3824,8 +3824,8 @@ dependencies = [
  "reth-payload-builder",
  "reth-rpc-api",
  "reth-rpc-engine-api",
- "revm",
- "revm-primitives",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "test-fuzz",
 ]
@@ -4227,11 +4227,34 @@ dependencies = [
  "chrono",
  "clap",
  "convert_case 0.8.0",
- "fluentbase-sdk-derive-core",
- "fluentbase-types",
+ "fluentbase-sdk-derive-core 0.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-types 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
  "proc-macro2",
  "quote",
- "rwasm",
+ "rwasm 0.0.0 (git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.0-dev)",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "syn 2.0.101",
+ "toml",
+ "tracing",
+]
+
+[[package]]
+name = "fluentbase-build"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "anyhow",
+ "cargo_metadata 0.19.2",
+ "chrono",
+ "clap",
+ "convert_case 0.8.0",
+ "fluentbase-sdk-derive-core 0.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-types 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "proc-macro2",
+ "quote",
+ "rwasm 0.0.0 (git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.1-dev)",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -4248,7 +4271,20 @@ dependencies = [
  "alloy-primitives",
  "byteorder",
  "bytes",
- "fluentbase-codec-derive",
+ "fluentbase-codec-derive 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "hashbrown 0.15.4",
+ "serde",
+]
+
+[[package]]
+name = "fluentbase-codec"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "alloy-primitives",
+ "byteorder",
+ "bytes",
+ "fluentbase-codec-derive 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "hashbrown 0.15.4",
  "serde",
 ]
@@ -4267,13 +4303,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "fluentbase-codec-derive"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "convert_case 0.6.0",
+ "crypto-hashes",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "fluentbase-contracts-blake2f"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-blake2f"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4281,9 +4340,19 @@ name = "fluentbase-contracts-bls12381"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-bls12381"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4291,9 +4360,19 @@ name = "fluentbase-contracts-bn256"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-bn256"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4301,9 +4380,19 @@ name = "fluentbase-contracts-ecrecover"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-ecrecover"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4311,8 +4400,17 @@ name = "fluentbase-contracts-eip2935"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-eip2935"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4320,9 +4418,19 @@ name = "fluentbase-contracts-erc20"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-erc20",
- "fluentbase-sdk",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-erc20 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-erc20"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-erc20 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4330,9 +4438,19 @@ name = "fluentbase-contracts-evm"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-evm",
- "fluentbase-sdk",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-evm 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-evm"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-evm 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4340,8 +4458,17 @@ name = "fluentbase-contracts-fairblock"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-fairblock"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4349,9 +4476,19 @@ name = "fluentbase-contracts-identity"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-identity"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4359,9 +4496,19 @@ name = "fluentbase-contracts-kzg"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-kzg"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4369,9 +4516,19 @@ name = "fluentbase-contracts-modexp"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-modexp"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4379,8 +4536,17 @@ name = "fluentbase-contracts-multicall"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-multicall"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4392,8 +4558,24 @@ dependencies = [
  "coset",
  "der",
  "ecdsa",
- "fluentbase-build",
- "fluentbase-sdk",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "hex",
+ "p384",
+ "x509-cert",
+]
+
+[[package]]
+name = "fluentbase-contracts-nitro"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "ciborium",
+ "coset",
+ "der",
+ "ecdsa",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "hex",
  "p384",
  "x509-cert",
@@ -4404,8 +4586,17 @@ name = "fluentbase-contracts-oauth2"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-oauth2"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4413,9 +4604,19 @@ name = "fluentbase-contracts-ripemd160"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-ripemd160"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4423,9 +4624,19 @@ name = "fluentbase-contracts-secp256r1"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-secp256r1"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4433,9 +4644,19 @@ name = "fluentbase-contracts-sha256"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "revm-precompile",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-sha256"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4443,9 +4664,19 @@ name = "fluentbase-contracts-svm"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "fluentbase-svm",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-svm 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-svm"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-svm 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4453,9 +4684,19 @@ name = "fluentbase-contracts-wasm"
 version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-build",
- "fluentbase-sdk",
- "rwasm",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "rwasm 0.0.0 (git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-contracts-wasm"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "rwasm 0.0.0 (git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.1-dev)",
 ]
 
 [[package]]
@@ -4464,10 +4705,23 @@ version = "0.1.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
  "base64 0.22.1",
- "fluentbase-build",
- "fluentbase-sdk",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
  "hex",
- "revm-precompile",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fluentbase-contracts-webauthn"
+version = "0.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "base64 0.22.1",
+ "fluentbase-build 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "hex",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "sha2 0.10.9",
 ]
 
@@ -4477,7 +4731,16 @@ version = "0.3.0-dev"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
  "bincode 2.0.1",
- "fluentbase-sdk",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-erc20"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "bincode 2.0.1",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4487,7 +4750,17 @@ source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6d
 dependencies = [
  "bincode 2.0.1",
  "bitvec",
- "fluentbase-sdk",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "fluentbase-evm"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "bincode 2.0.1",
+ "bitvec",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -4496,27 +4769,59 @@ version = "0.3.0-dev"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
  "alloy-genesis",
- "fluentbase-contracts-blake2f",
- "fluentbase-contracts-bls12381",
- "fluentbase-contracts-bn256",
- "fluentbase-contracts-ecrecover",
- "fluentbase-contracts-eip2935",
- "fluentbase-contracts-erc20",
- "fluentbase-contracts-evm",
- "fluentbase-contracts-fairblock",
- "fluentbase-contracts-identity",
- "fluentbase-contracts-kzg",
- "fluentbase-contracts-modexp",
- "fluentbase-contracts-multicall",
- "fluentbase-contracts-nitro",
- "fluentbase-contracts-oauth2",
- "fluentbase-contracts-ripemd160",
- "fluentbase-contracts-secp256r1",
- "fluentbase-contracts-sha256",
- "fluentbase-contracts-svm",
- "fluentbase-contracts-wasm",
- "fluentbase-contracts-webauthn",
- "fluentbase-types",
+ "fluentbase-contracts-blake2f 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-bls12381 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-bn256 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-ecrecover 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-eip2935 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-erc20 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-evm 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-fairblock 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-identity 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-kzg 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-modexp 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-multicall 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-nitro 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-oauth2 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-ripemd160 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-secp256r1 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-sha256 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-svm 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-wasm 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-contracts-webauthn 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-types 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "lazy_static",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fluentbase-genesis"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "alloy-genesis",
+ "fluentbase-contracts-blake2f 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-bls12381 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-bn256 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-ecrecover 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-eip2935 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-erc20 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-evm 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-fairblock 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-identity 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-kzg 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-modexp 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-multicall 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-nitro 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-oauth2 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-ripemd160 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-secp256r1 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-sha256 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-svm 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-wasm 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-contracts-webauthn 0.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-types 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "lazy_static",
  "serde",
  "serde_json",
@@ -4527,13 +4832,13 @@ name = "fluentbase-runtime"
 version = "0.3.0-dev"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-codec",
- "fluentbase-genesis",
- "fluentbase-types",
+ "fluentbase-codec 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-genesis 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-types 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
  "hashbrown 0.15.4",
  "k256",
  "num",
- "rwasm",
+ "rwasm 0.0.0 (git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.0-dev)",
  "secp256k1 0.29.1",
  "sp1-curves",
  "sp1-primitives",
@@ -4545,9 +4850,20 @@ name = "fluentbase-sdk"
 version = "0.3.0-dev"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-codec",
- "fluentbase-sdk-derive",
- "fluentbase-types",
+ "fluentbase-codec 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-sdk-derive 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "fluentbase-types 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "hashbrown 0.15.4",
+]
+
+[[package]]
+name = "fluentbase-sdk"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-codec 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-sdk-derive 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "fluentbase-types 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "hashbrown 0.15.4",
 ]
 
@@ -4558,7 +4874,21 @@ source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6d
 dependencies = [
  "alloy-sol-macro-input",
  "crypto-hashes",
- "fluentbase-sdk-derive-core",
+ "fluentbase-sdk-derive-core 0.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "fluentbase-sdk-derive"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "alloy-sol-macro-input",
+ "crypto-hashes",
+ "fluentbase-sdk-derive-core 0.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -4575,7 +4905,30 @@ dependencies = [
  "convert_case 0.8.0",
  "crypto-hashes",
  "darling",
- "fluentbase-codec",
+ "fluentbase-codec 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "hex",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.101",
+ "syn-solidity",
+ "thiserror 2.0.12",
+ "tracing",
+]
+
+[[package]]
+name = "fluentbase-sdk-derive-core"
+version = "0.0.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "alloy-sol-macro-input",
+ "anyhow",
+ "convert_case 0.8.0",
+ "crypto-hashes",
+ "darling",
+ "fluentbase-codec 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "hex",
  "proc-macro-error",
  "proc-macro2",
@@ -4599,7 +4952,62 @@ dependencies = [
  "bytemuck",
  "bytemuck_derive",
  "byteorder",
- "fluentbase-sdk",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "hashbrown 0.15.4",
+ "itertools 0.14.0",
+ "keccak-hash",
+ "lazy_static",
+ "num-derive",
+ "num-traits",
+ "paste",
+ "scopeguard",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "solana-account-info",
+ "solana-bincode",
+ "solana-clock",
+ "solana-decode-error",
+ "solana-epoch-schedule",
+ "solana-feature-set",
+ "solana-fee-calculator",
+ "solana-hash",
+ "solana-instruction",
+ "solana-last-restart-slot",
+ "solana-native-token",
+ "solana-precompile-error",
+ "solana-program-entrypoint",
+ "solana-program-error",
+ "solana-program-memory",
+ "solana-pubkey",
+ "solana-rent",
+ "solana-sanitize",
+ "solana-sdk-macro",
+ "solana-serialize-utils",
+ "solana-sha256-hasher",
+ "solana-short-vec",
+ "solana-slot-hashes",
+ "solana-slot-history",
+ "solana-stable-layout",
+ "solana-sysvar-id",
+ "solana-transaction-error",
+ "solana_rbpf",
+ "spin 0.10.0",
+ "static_assertions",
+]
+
+[[package]]
+name = "fluentbase-svm"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "bincode 2.0.1",
+ "bitflags 2.9.1",
+ "blake3",
+ "bytemuck",
+ "bytemuck_derive",
+ "byteorder",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "hashbrown 0.15.4",
  "itertools 0.14.0",
  "keccak-hash",
@@ -4653,12 +5061,31 @@ dependencies = [
  "auto_impl",
  "bincode 2.0.1",
  "byteorder",
- "fluentbase-codec",
+ "fluentbase-codec 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
  "hashbrown 0.15.4",
  "paste",
- "revm-precompile",
- "revm-primitives",
- "rwasm",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "rwasm 0.0.0 (git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.0-dev)",
+ "strum_macros 0.27.1",
+]
+
+[[package]]
+name = "fluentbase-types"
+version = "0.3.0-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "auto_impl",
+ "bincode 2.0.1",
+ "byteorder",
+ "fluentbase-codec 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "hashbrown 0.15.4",
+ "paste",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "rwasm 0.0.0 (git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.1-dev)",
  "strum_macros 0.27.1",
 ]
 
@@ -7235,7 +7662,18 @@ source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6d
 dependencies = [
  "auto_impl",
  "once_cell",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+]
+
+[[package]]
+name = "op-revm"
+version = "5.0.1"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "auto_impl",
+ "once_cell",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
 ]
 
@@ -8755,8 +9193,8 @@ dependencies = [
  "reth-storage-api",
  "reth-testing-utils",
  "reth-trie",
- "revm-database",
- "revm-state",
+ "revm-database 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "tokio",
  "tokio-stream",
@@ -8777,7 +9215,7 @@ dependencies = [
  "alloy-trie 0.8.1",
  "auto_impl",
  "derive_more 2.0.1",
- "fluentbase-genesis",
+ "fluentbase-genesis 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "reth-ethereum-forks",
  "reth-network-peers",
  "reth-primitives-traits",
@@ -9271,7 +9709,7 @@ dependencies = [
  "reth-tasks",
  "reth-tokio-util",
  "reth-tracing",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde_json",
  "tokio",
  "tokio-stream",
@@ -9449,9 +9887,9 @@ dependencies = [
  "reth-trie-db",
  "reth-trie-parallel",
  "reth-trie-sparse",
- "revm",
- "revm-primitives",
- "revm-state",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "schnellru",
  "thiserror 2.0.12",
  "tokio",
@@ -9784,7 +10222,7 @@ dependencies = [
  "reth-revm",
  "reth-storage-api",
  "reth-transaction-pool",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "tracing",
 ]
 
@@ -9845,7 +10283,7 @@ dependencies = [
  "reth-storage-api",
  "reth-storage-errors",
  "reth-trie-common",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -9866,7 +10304,7 @@ dependencies = [
  "reth-execution-types",
  "reth-primitives-traits",
  "reth-testing-utils",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "secp256k1 0.30.0",
 ]
 
@@ -9897,7 +10335,7 @@ dependencies = [
  "reth-ethereum-primitives",
  "reth-primitives-traits",
  "reth-trie-common",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "serde_with",
 ]
@@ -10025,8 +10463,8 @@ dependencies = [
  "reth-rpc-api",
  "reth-tracing",
  "reth-trie",
- "revm-bytecode",
- "revm-database",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-database 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "serde_json",
 ]
@@ -10452,7 +10890,7 @@ dependencies = [
  "reth-tracing",
  "reth-transaction-pool",
  "reth-trie-db",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde_json",
  "tokio",
 ]
@@ -10651,7 +11089,7 @@ dependencies = [
  "reth-storage-errors",
  "reth-trie",
  "reth-trie-common",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "thiserror 2.0.12",
  "tracing",
 ]
@@ -10667,7 +11105,7 @@ dependencies = [
  "alloy-op-evm",
  "alloy-primitives",
  "op-alloy-consensus",
- "op-revm",
+ "op-revm 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "reth-chainspec",
  "reth-evm",
  "reth-execution-errors",
@@ -10678,7 +11116,7 @@ dependencies = [
  "reth-optimism-primitives",
  "reth-primitives-traits",
  "reth-revm",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "thiserror 2.0.12",
 ]
 
@@ -10709,7 +11147,7 @@ dependencies = [
  "op-alloy-consensus",
  "op-alloy-network",
  "op-alloy-rpc-types-engine",
- "op-revm",
+ "op-revm 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "reth-chainspec",
  "reth-consensus",
  "reth-db",
@@ -10745,7 +11183,7 @@ dependencies = [
  "reth-transaction-pool",
  "reth-trie-common",
  "reth-trie-db",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "serde_json",
  "tokio",
@@ -10782,7 +11220,7 @@ dependencies = [
  "reth-revm",
  "reth-storage-api",
  "reth-transaction-pool",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "sha2 0.10.9",
  "thiserror 2.0.12",
@@ -10842,7 +11280,7 @@ dependencies = [
  "op-alloy-rpc-jsonrpsee",
  "op-alloy-rpc-types",
  "op-alloy-rpc-types-engine",
- "op-revm",
+ "op-revm 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "parking_lot",
  "reqwest",
  "reth-chain-state",
@@ -10868,7 +11306,7 @@ dependencies = [
  "reth-storage-api",
  "reth-tasks",
  "reth-transaction-pool",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -10909,7 +11347,7 @@ dependencies = [
  "op-alloy-consensus",
  "op-alloy-flz",
  "op-alloy-rpc-types",
- "op-revm",
+ "op-revm 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "parking_lot",
  "reth-chain-state",
  "reth-chainspec",
@@ -11044,9 +11482,9 @@ dependencies = [
  "rayon",
  "reth-chainspec",
  "reth-codecs",
- "revm-bytecode",
- "revm-primitives",
- "revm-state",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "secp256k1 0.30.0",
  "serde",
  "serde_json",
@@ -11095,9 +11533,9 @@ dependencies = [
  "reth-testing-utils",
  "reth-trie",
  "reth-trie-db",
- "revm-database",
- "revm-database-interface",
- "revm-state",
+ "revm-database 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "strum 0.27.1",
  "tempfile",
  "tokio",
@@ -11218,7 +11656,7 @@ dependencies = [
  "reth-storage-api",
  "reth-storage-errors",
  "reth-trie",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -11285,9 +11723,9 @@ dependencies = [
  "reth-testing-utils",
  "reth-transaction-pool",
  "reth-trie-common",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "revm-inspectors",
- "revm-primitives",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -11472,7 +11910,7 @@ dependencies = [
  "reth-tasks",
  "reth-transaction-pool",
  "reth-trie-common",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "revm-inspectors",
  "tokio",
  "tracing",
@@ -11509,7 +11947,7 @@ dependencies = [
  "reth-tasks",
  "reth-transaction-pool",
  "reth-trie",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "revm-inspectors",
  "schnellru",
  "serde",
@@ -11748,7 +12186,7 @@ dependencies = [
  "reth-storage-errors",
  "reth-trie-common",
  "reth-trie-db",
- "revm-database",
+ "revm-database 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -11762,7 +12200,7 @@ dependencies = [
  "reth-primitives-traits",
  "reth-prune-types",
  "reth-static-file-types",
- "revm-database-interface",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "thiserror 2.0.12",
 ]
 
@@ -11847,7 +12285,7 @@ dependencies = [
  "auto_impl",
  "bitflags 2.9.1",
  "codspeed-criterion-compat",
- "fluentbase-types",
+ "fluentbase-types 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "futures-util",
  "metrics",
  "parking_lot",
@@ -11867,8 +12305,8 @@ dependencies = [
  "reth-storage-api",
  "reth-tasks",
  "reth-tracing",
- "revm-interpreter",
- "revm-primitives",
+ "revm-interpreter 20.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "rustc-hash 2.1.1",
  "schnellru",
  "serde",
@@ -11907,8 +12345,8 @@ dependencies = [
  "reth-tracing",
  "reth-trie-common",
  "reth-trie-sparse",
- "revm-database",
- "revm-state",
+ "revm-database 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "tracing",
  "triehash",
 ]
@@ -11938,8 +12376,8 @@ dependencies = [
  "rayon",
  "reth-codecs",
  "reth-primitives-traits",
- "revm-database",
- "revm-state",
+ "revm-database 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "serde_json",
  "serde_with",
@@ -11963,8 +12401,8 @@ dependencies = [
  "reth-storage-errors",
  "reth-trie",
  "reth-trie-common",
- "revm",
- "revm-database",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-database 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde_json",
  "similar-asserts",
  "tracing",
@@ -12044,17 +12482,35 @@ name = "revm"
 version = "24.0.1"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "revm-bytecode",
- "revm-context",
- "revm-context-interface",
- "revm-database",
- "revm-database-interface",
- "revm-handler",
- "revm-inspector",
- "revm-interpreter",
- "revm-precompile",
- "revm-primitives",
- "revm-state",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-context 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-context-interface 5.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-database 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-handler 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-inspector 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-interpreter 20.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+]
+
+[[package]]
+name = "revm"
+version = "24.0.1"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-context 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-context-interface 5.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-database 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-handler 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-inspector 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-interpreter 20.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
 ]
 
 [[package]]
@@ -12065,7 +12521,19 @@ dependencies = [
  "bitvec",
  "once_cell",
  "phf",
- "revm-primitives",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+]
+
+[[package]]
+name = "revm-bytecode"
+version = "4.0.1"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "bitvec",
+ "once_cell",
+ "phf",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
 ]
 
@@ -12076,12 +12544,28 @@ source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6d
 dependencies = [
  "cfg-if",
  "derive-where",
- "fluentbase-genesis",
- "revm-bytecode",
- "revm-context-interface",
- "revm-database-interface",
- "revm-primitives",
- "revm-state",
+ "fluentbase-genesis 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-context-interface 5.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+]
+
+[[package]]
+name = "revm-context"
+version = "5.0.1"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "cfg-if",
+ "derive-where",
+ "fluentbase-genesis 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-context-interface 5.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
 ]
 
@@ -12094,9 +12578,24 @@ dependencies = [
  "alloy-eip7702",
  "auto_impl",
  "either",
- "revm-database-interface",
- "revm-primitives",
- "revm-state",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+]
+
+[[package]]
+name = "revm-context-interface"
+version = "5.0.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "alloy-eip2930",
+ "alloy-eip7702",
+ "auto_impl",
+ "either",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
 ]
 
@@ -12106,10 +12605,23 @@ version = "4.0.1"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
  "alloy-eips",
- "revm-bytecode",
- "revm-database-interface",
- "revm-primitives",
- "revm-state",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+]
+
+[[package]]
+name = "revm-database"
+version = "4.0.1"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "alloy-eips",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
 ]
 
@@ -12119,8 +12631,19 @@ version = "4.0.1"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
  "auto_impl",
- "revm-primitives",
- "revm-state",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+]
+
+[[package]]
+name = "revm-database-interface"
+version = "4.0.1"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "auto_impl",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
 ]
 
@@ -12130,15 +12653,33 @@ version = "5.0.1"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
  "auto_impl",
- "fluentbase-sdk",
- "revm-bytecode",
- "revm-context",
- "revm-context-interface",
- "revm-database-interface",
- "revm-interpreter",
- "revm-precompile",
- "revm-primitives",
- "revm-state",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-context 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-context-interface 5.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-interpreter 20.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+]
+
+[[package]]
+name = "revm-handler"
+version = "5.0.1"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "auto_impl",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-context 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-context-interface 5.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-interpreter 20.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-precompile 21.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
 ]
 
@@ -12148,12 +12689,28 @@ version = "5.0.1"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
  "auto_impl",
- "revm-context",
- "revm-database-interface",
- "revm-handler",
- "revm-interpreter",
- "revm-primitives",
- "revm-state",
+ "revm-context 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-handler 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-interpreter 20.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "revm-inspector"
+version = "5.0.1"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "auto_impl",
+ "revm-context 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-database-interface 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-handler 5.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-interpreter 20.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-state 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "serde_json",
 ]
@@ -12172,7 +12729,7 @@ dependencies = [
  "boa_engine",
  "boa_gc",
  "colorchoice",
- "revm",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -12183,10 +12740,22 @@ name = "revm-interpreter"
 version = "20.0.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-sdk",
- "revm-bytecode",
- "revm-context-interface",
- "revm-primitives",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-context-interface 5.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+]
+
+[[package]]
+name = "revm-interpreter"
+version = "20.0.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-context-interface 5.0.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
 ]
 
@@ -12209,7 +12778,32 @@ dependencies = [
  "libsecp256k1",
  "once_cell",
  "p256",
- "revm-primitives",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "ripemd",
+ "secp256k1 0.30.0",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "revm-precompile"
+version = "21.0.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "ark-bls12-381",
+ "ark-bn254",
+ "ark-ec",
+ "ark-ff 0.5.0",
+ "ark-serialize 0.5.0",
+ "aurora-engine-modexp",
+ "blst",
+ "c-kzg",
+ "cfg-if",
+ "k256",
+ "kzg-rs",
+ "libsecp256k1",
+ "once_cell",
+ "p256",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "ripemd",
  "secp256k1 0.30.0",
  "sha2 0.10.9",
@@ -12226,13 +12820,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "revm-primitives"
+version = "19.1.0"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "alloy-primitives",
+ "num_enum",
+ "serde",
+]
+
+[[package]]
 name = "revm-state"
 version = "4.0.1"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
  "bitflags 2.9.1",
- "revm-bytecode",
- "revm-primitives",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "serde",
+]
+
+[[package]]
+name = "revm-state"
+version = "4.0.1"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+dependencies = [
+ "bitflags 2.9.1",
+ "revm-bytecode 4.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
+ "revm-primitives 19.1.0 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev)",
  "serde",
 ]
 
@@ -12597,15 +13212,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "rwasm"
+version = "0.0.0"
+source = "git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.1-dev#477962561297c91a85aba69b7a4a0439eb8f194c"
+dependencies = [
+ "anyhow",
+ "bincode 2.0.1",
+ "bitvec",
+ "bytes",
+ "directories",
+ "downcast-rs",
+ "hashbrown 0.15.4",
+ "libm",
+ "num-traits",
+ "paste",
+ "smallvec",
+ "tiny-keccak",
+ "wasmparser-nostd",
+ "wasmtime",
+]
+
+[[package]]
 name = "rwasm-revm"
 version = "4.0.0"
 source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev#950a6dc096484152c34795f25b141ab8bd17d9b1"
 dependencies = [
- "fluentbase-genesis",
+ "fluentbase-genesis 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
  "fluentbase-runtime",
- "fluentbase-sdk",
- "revm",
- "rwasm",
+ "fluentbase-sdk 0.3.0-dev (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "revm 24.0.1 (git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.0-dev)",
+ "rwasm 0.0.0 (git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.0-dev)",
  "serde",
 ]
 
