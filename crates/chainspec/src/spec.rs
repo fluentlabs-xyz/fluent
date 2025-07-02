@@ -205,7 +205,7 @@ pub static HOODI: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 ///
 /// Includes 20 prefunded accounts with `10_000` ETH each derived from mnemonic "test test test test
 /// test test test test test test test junk".
-#[cfg(not(feature = "fluentbase-genesis"))]
+#[cfg(not(feature = "generate-genesis"))]
 pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     let genesis = serde_json::from_str(include_str!("../res/genesis/dev.json"))
         .expect("Can't deserialize Dev testnet genesis json");
@@ -227,7 +227,7 @@ pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 });
 
 /// A genesis generator for Fluent Local Devnet
-#[cfg(feature = "fluentbase-genesis")]
+#[cfg(feature = "generate-genesis")]
 pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     let mut genesis = fluentbase_genesis::devnet_genesis_from_file();
     macro_rules! initial_test_balance {
