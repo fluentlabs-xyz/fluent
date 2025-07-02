@@ -8776,6 +8776,7 @@ dependencies = [
  "alloy-trie",
  "auto_impl",
  "derive_more 2.0.1",
+ "flate2",
  "fluentbase-genesis",
  "reth-ethereum-forks",
  "reth-network-peers",

@@ -33,6 +33,7 @@ use reth_network_peers::{
     NodeRecord,
 };
 use reth_primitives_traits::{sync::LazyLock, SealedHeader};
+use std::io::Read;
 
 /// Helper method building a [`Header`] given [`Genesis`] and [`ChainHardforks`].
 pub fn make_genesis_header(genesis: &Genesis, hardforks: &ChainHardforks) -> Header {
@@ -274,9 +275,13 @@ pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 
 /// Fluent Developer Preview
 pub static DEVELOPER_PREVIEW: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
-    let json_file = include_str!("../res/genesis/developer-preview.json");
+    let json_file_compressed = include_bytes!("../res/genesis/genesis-v0.3.0-dev.json.gz");
+    use flate2::read::GzDecoder;
+    let mut decoder = GzDecoder::new(&json_file_compressed[..]);
+    let mut json_string = String::new();
+    decoder.read_to_string(&mut json_string).expect("failed to decompress a genesis gz file");
     let genesis =
-        serde_json::from_str::<Genesis>(json_file).expect("failed to parse genesis json file");
+        serde_json::from_str::<Genesis>(&json_string).expect("failed to parse a genesis JSON file");
     let hardforks = DEV_HARDFORKS.clone();
     ChainSpec {
         chain: Chain::from(0x5201),
