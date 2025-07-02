@@ -3,7 +3,10 @@ use alloy_genesis::GenesisAccount;
 use alloy_primitives::{keccak256, Bytes, B256, U256};
 use alloy_trie::TrieAccount;
 use derive_more::Deref;
-use revm_bytecode::{Bytecode as RevmBytecode, BytecodeDecodeError};
+use revm_bytecode::{
+    ownable_account::{OWNABLE_ACCOUNT_MAGIC_BYTES, OWNABLE_ACCOUNT_VERSION},
+    Bytecode as RevmBytecode, BytecodeDecodeError,
+};
 use revm_state::AccountInfo;
 
 #[cfg(any(test, feature = "reth-codec"))]
@@ -23,6 +26,9 @@ pub mod compact_ids {
 
     /// Identifier for [`Eip7702`](revm_bytecode::Bytecode::Eip7702).
     pub const EIP7702_BYTECODE_ID: u8 = 4;
+
+    /// Identifier for [`Rwasm`](revm_primitives::Bytecode::OwnableAccount).
+    pub const OWNABLE_ACCOUNT_BYTECODE_ID: u8 = 0x44; // ASCII code for the latter 'D'
 
     /// Identifier for [`Rwasm`](revm_primitives::Bytecode::Rwasm).
     pub const RWASM_BYTECODE_ID: u8 = 0x52; // ASCII code for the letter 'R'
@@ -128,16 +134,32 @@ impl reth_codecs::Compact for Bytecode {
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
-        use compact_ids::{EIP7702_BYTECODE_ID, EOF_BYTECODE_ID, LEGACY_ANALYZED_BYTECODE_ID, RWASM_BYTECODE_ID};
+        use compact_ids::{
+            EIP7702_BYTECODE_ID, EOF_BYTECODE_ID, LEGACY_ANALYZED_BYTECODE_ID,
+            OWNABLE_ACCOUNT_BYTECODE_ID, RWASM_BYTECODE_ID,
+        };
+
+        let mut bytecode_len = 0;
 
         let bytecode = match &self.0 {
-            RevmBytecode::LegacyAnalyzed(analyzed) => analyzed.bytecode(),
-            RevmBytecode::Eof(eof) => eof.raw(),
-            RevmBytecode::Eip7702(eip7702) => eip7702.raw(),
-            RevmBytecode::Rwasm(bytes) => bytes,
+            RevmBytecode::LegacyAnalyzed(analyzed) => Some(analyzed.bytecode()),
+            RevmBytecode::Eof(eof) => Some(eof.raw()),
+            RevmBytecode::Eip7702(eip7702) => Some(eip7702.raw()),
+            RevmBytecode::Rwasm(bytes) => Some(bytes),
+            RevmBytecode::OwnableAccount(account) => {
+                bytecode_len = OWNABLE_ACCOUNT_MAGIC_BYTES.len() + 1 + 20 + account.metadata.len();
+                buf.put_u32(bytecode_len as u32);
+                buf.put_u8(OWNABLE_ACCOUNT_VERSION);
+                buf.put_slice(account.owner_address.as_slice());
+                buf.put_slice(account.metadata.as_ref());
+                None
+            }
         };
-        buf.put_u32(bytecode.len() as u32);
-        buf.put_slice(bytecode.as_ref());
+        if let Some(bytecode) = bytecode {
+            bytecode_len = bytecode.len();
+            buf.put_u32(bytecode.len() as u32);
+            buf.put_slice(bytecode.as_ref());
+        }
         let len = match &self.0 {
             // [`REMOVED_BYTECODE_ID`] has been removed.
             RevmBytecode::LegacyAnalyzed(analyzed) => {
@@ -155,12 +177,16 @@ impl reth_codecs::Compact for Bytecode {
                 buf.put_u8(EIP7702_BYTECODE_ID);
                 1
             }
+            RevmBytecode::OwnableAccount(_) => {
+                buf.put_u8(OWNABLE_ACCOUNT_BYTECODE_ID);
+                1
+            }
             RevmBytecode::Rwasm(_) => {
                 buf.put_u8(RWASM_BYTECODE_ID);
                 1
             }
         };
-        len + bytecode.len() + 4
+        len + bytecode_len + 4
     }
 
     // # Panics
@@ -200,7 +226,10 @@ impl reth_codecs::Compact for Bytecode {
                     revm_bytecode::JumpTable::from_slice(buf, jump_table_len),
                 ))
             }
-            EOF_BYTECODE_ID | EIP7702_BYTECODE_ID | RWASM_BYTECODE_ID => {
+            EOF_BYTECODE_ID |
+            EIP7702_BYTECODE_ID |
+            OWNABLE_ACCOUNT_BYTECODE_ID |
+            RWASM_BYTECODE_ID => {
                 // EOF and EIP-7702 bytecode objects will be decoded from the raw bytecode
                 Self(RevmBytecode::new_raw(bytes))
             }
