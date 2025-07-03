@@ -31,8 +31,8 @@ pub use info::ChainInfo;
 pub use spec::test_fork_ids;
 pub use spec::{
     make_genesis_header, BaseFeeParams, BaseFeeParamsKind, ChainSpec, ChainSpecBuilder,
-    ChainSpecProvider, DepositContract, ForkBaseFeeParams, DEV, DEVELOPER_PREVIEW, HOLESKY,
-   HOODI, MAINNET, SEPOLIA,
+    ChainSpecProvider, DepositContract, ForkBaseFeeParams, DEV, DEVELOPER_PREVIEW, FLUENT_TESTNET,
+    HOLESKY, HOODI, MAINNET, SEPOLIA,
 };
 
 use reth_primitives_traits::sync::OnceLock;

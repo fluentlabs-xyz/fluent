@@ -296,6 +296,52 @@ pub static DEVELOPER_PREVIEW: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
     .into()
 });
 
+/// Fluent Testnet
+pub static FLUENT_TESTNET: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
+    let json_file_compressed = include_bytes!("../res/genesis/genesis-v0.3.2-dev.json.gz");
+    use flate2::read::GzDecoder;
+    let mut decoder = GzDecoder::new(&json_file_compressed[..]);
+    let mut json_string = String::new();
+    decoder.read_to_string(&mut json_string).expect("failed to decompress a genesis gz file");
+    let genesis =
+        serde_json::from_str::<Genesis>(&json_string).expect("failed to parse a genesis JSON file");
+    let hardforks = ChainHardforks::new(vec![
+        (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Dao.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Constantinople.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Petersburg.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Istanbul.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
+        (
+            EthereumHardfork::Paris.boxed(),
+            ForkCondition::TTD {
+                activation_block_number: 0,
+                fork_block: None,
+                total_difficulty: U256::ZERO,
+            },
+        ),
+        (EthereumHardfork::Shanghai.boxed(), ForkCondition::Timestamp(0)),
+        (EthereumHardfork::Cancun.boxed(), ForkCondition::Timestamp(0)),
+        (EthereumHardfork::Prague.boxed(), ForkCondition::Timestamp(0)),
+    ]);
+    ChainSpec {
+        chain: Chain::from(0x5202),
+        genesis_header: SealedHeader::new_unhashed(make_genesis_header(&genesis, &hardforks)),
+        genesis,
+        paris_block_and_final_difficulty: Some((0, U256::from(0))),
+        hardforks,
+        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::ethereum()),
+        deposit_contract: None,
+        ..Default::default()
+    }
+    .into()
+});
+
 /// A wrapper around [`BaseFeeParams`] that allows for specifying constant or dynamic EIP-1559
 /// parameters based on the active [Hardfork].
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -108,9 +108,9 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "alloy-chains"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19a9cc9d81ace3da457883b0bdf76776e55f1b84219a9e9d55c27ad308548d3f"
+checksum = "5674914c2cfdb866c21cb0c09d82374ee39a1395cf512e7515f4c014083b3fff"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -271,7 +271,7 @@ dependencies = [
 [[package]]
 name = "alloy-evm"
 version = "0.10.0"
-source = "git+https://github.com/fluentlabs-xyz/alloy-rwasm?branch=devel#da42b410cb7d49dfd5a4b19db3a7e5e3fb63a9d1"
+source = "git+https://github.com/fluentlabs-xyz/alloy-rwasm?branch=devel#949feb0cae317f8e8c2f6090335f81f81baf7318"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -4203,8 +4203,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-build"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "anyhow",
  "cargo_metadata 0.19.2",
@@ -4226,8 +4226,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-codec"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "alloy-primitives",
  "byteorder",
@@ -4239,8 +4239,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-codec-derive"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "convert_case 0.6.0",
  "crypto-hashes",
@@ -4253,7 +4253,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-blake2f"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4263,7 +4263,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-bls12381"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4273,7 +4273,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-bn256"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4283,7 +4283,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-ecrecover"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4293,7 +4293,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-eip2935"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4302,7 +4302,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-erc20"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-erc20",
@@ -4312,7 +4312,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-evm"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-evm",
@@ -4322,7 +4322,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-fairblock"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4331,7 +4331,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-identity"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4341,7 +4341,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-kzg"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4351,7 +4351,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-modexp"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4361,7 +4361,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-multicall"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4370,7 +4370,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-nitro"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "ciborium",
  "coset",
@@ -4386,7 +4386,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-oauth2"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4395,7 +4395,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-ripemd160"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4405,7 +4405,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-secp256r1"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4415,7 +4415,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-sha256"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4425,7 +4425,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-svm"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4435,7 +4435,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-wasm"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-build",
  "fluentbase-sdk",
@@ -4445,7 +4445,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-contracts-webauthn"
 version = "0.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "base64 0.22.1",
  "fluentbase-build",
@@ -4457,8 +4457,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-erc20"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "bincode 2.0.1",
  "fluentbase-sdk",
@@ -4466,8 +4466,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-evm"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "bincode 2.0.1",
  "bitvec",
@@ -4476,8 +4476,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-genesis"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "alloy-genesis",
  "fluentbase-contracts-blake2f",
@@ -4508,11 +4508,10 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-runtime"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-codec",
- "fluentbase-genesis",
  "fluentbase-types",
  "hashbrown 0.15.4",
  "k256",
@@ -4526,8 +4525,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-sdk"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-codec",
  "fluentbase-sdk-derive",
@@ -4537,8 +4536,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-sdk-derive"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "alloy-sol-macro-input",
  "crypto-hashes",
@@ -4552,7 +4551,7 @@ dependencies = [
 [[package]]
 name = "fluentbase-sdk-derive-core"
 version = "0.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "alloy-sol-macro-input",
  "anyhow",
@@ -4574,8 +4573,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-svm"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "bincode 2.0.1",
  "bitflags 2.9.1",
@@ -4629,8 +4628,8 @@ dependencies = [
 
 [[package]]
 name = "fluentbase-types"
-version = "0.3.0-dev"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+version = "0.3.2-dev"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -6851,12 +6850,11 @@ dependencies = [
 
 [[package]]
 name = "notify"
-version = "8.0.0"
+version = "8.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fee8403b3d66ac7b26aee6e40a897d85dc5ce26f44da36b8b73e987cc52e943"
+checksum = "3163f59cd3fa0e9ef8c32f242966a7b9994fd7378366099593e0e73077cd8c97"
 dependencies = [
  "bitflags 2.9.1",
- "filetime",
  "fsevent-sys",
  "inotify",
  "kqueue",
@@ -6865,7 +6863,7 @@ dependencies = [
  "mio",
  "notify-types",
  "walkdir",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7213,7 +7211,7 @@ dependencies = [
 [[package]]
 name = "op-revm"
 version = "5.0.1"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "auto_impl",
  "once_cell",
@@ -12042,7 +12040,7 @@ dependencies = [
 [[package]]
 name = "revm"
 version = "24.0.1"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "revm-bytecode",
  "revm-context",
@@ -12060,7 +12058,7 @@ dependencies = [
 [[package]]
 name = "revm-bytecode"
 version = "4.0.1"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "bitvec",
  "once_cell",
@@ -12072,7 +12070,7 @@ dependencies = [
 [[package]]
 name = "revm-context"
 version = "5.0.1"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "cfg-if",
  "derive-where",
@@ -12088,7 +12086,7 @@ dependencies = [
 [[package]]
 name = "revm-context-interface"
 version = "5.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "alloy-eip2930",
  "alloy-eip7702",
@@ -12103,7 +12101,7 @@ dependencies = [
 [[package]]
 name = "revm-database"
 version = "4.0.1"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "alloy-eips",
  "revm-bytecode",
@@ -12116,7 +12114,7 @@ dependencies = [
 [[package]]
 name = "revm-database-interface"
 version = "4.0.1"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "auto_impl",
  "revm-primitives",
@@ -12127,7 +12125,7 @@ dependencies = [
 [[package]]
 name = "revm-handler"
 version = "5.0.1"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "auto_impl",
  "fluentbase-sdk",
@@ -12145,7 +12143,7 @@ dependencies = [
 [[package]]
 name = "revm-inspector"
 version = "5.0.1"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "auto_impl",
  "revm-context",
@@ -12181,7 +12179,7 @@ dependencies = [
 [[package]]
 name = "revm-interpreter"
 version = "20.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-sdk",
  "revm-bytecode",
@@ -12193,7 +12191,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "21.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -12218,7 +12216,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "19.1.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "alloy-primitives",
  "num_enum",
@@ -12228,7 +12226,7 @@ dependencies = [
 [[package]]
 name = "revm-state"
 version = "4.0.1"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "bitflags 2.9.1",
  "revm-bytecode",
@@ -12578,7 +12576,7 @@ dependencies = [
 [[package]]
 name = "rwasm"
 version = "0.0.0"
-source = "git+https://github.com/fluentlabs-xyz/rwasm?tag=v0.2.1-dev#477962561297c91a85aba69b7a4a0439eb8f194c"
+source = "git+https://github.com/fluentlabs-xyz/rwasm?branch=devel#21b74544cbb8e45894a93d7097d2453e6db9366e"
 dependencies = [
  "anyhow",
  "bincode 2.0.1",
@@ -12599,7 +12597,7 @@ dependencies = [
 [[package]]
 name = "rwasm-revm"
 version = "4.0.0"
-source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.1-dev#91f3b9b6351c80ff6c4abb77ff5413a91b50fece"
+source = "git+https://github.com/fluentlabs-xyz/fluentbase?tag=v0.3.2-dev#9c87024d1a308645a811b60c4a2a10bdb1016d78"
 dependencies = [
  "fluentbase-genesis",
  "fluentbase-runtime",
@@ -13242,7 +13240,7 @@ dependencies = [
 [[package]]
 name = "solana-account-info"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "serde",
@@ -13255,12 +13253,12 @@ dependencies = [
 [[package]]
 name = "solana-atomic-u64"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 
 [[package]]
 name = "solana-bincode"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "lazy_static",
@@ -13270,7 +13268,7 @@ dependencies = [
 [[package]]
 name = "solana-clock"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "serde",
@@ -13282,7 +13280,7 @@ dependencies = [
 [[package]]
 name = "solana-decode-error"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "num-traits",
 ]
@@ -13290,12 +13288,12 @@ dependencies = [
 [[package]]
 name = "solana-define-syscall"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 
 [[package]]
 name = "solana-epoch-schedule"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "serde",
@@ -13307,7 +13305,7 @@ dependencies = [
 [[package]]
 name = "solana-feature-set"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "hashbrown 0.15.4",
  "lazy_static",
@@ -13321,7 +13319,7 @@ dependencies = [
 [[package]]
 name = "solana-fee-calculator"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "log",
@@ -13332,7 +13330,7 @@ dependencies = [
 [[package]]
 name = "solana-hash"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "bs58",
@@ -13347,7 +13345,7 @@ dependencies = [
 [[package]]
 name = "solana-instruction"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "num-traits",
@@ -13361,7 +13359,7 @@ dependencies = [
 [[package]]
 name = "solana-last-restart-slot"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "serde",
@@ -13373,7 +13371,7 @@ dependencies = [
 [[package]]
 name = "solana-msg"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "solana-define-syscall",
 ]
@@ -13381,12 +13379,12 @@ dependencies = [
 [[package]]
 name = "solana-native-token"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 
 [[package]]
 name = "solana-precompile-error"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "num-traits",
  "solana-decode-error",
@@ -13395,7 +13393,7 @@ dependencies = [
 [[package]]
 name = "solana-program-entrypoint"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "solana-account-info",
  "solana-msg",
@@ -13406,7 +13404,7 @@ dependencies = [
 [[package]]
 name = "solana-program-error"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "num-traits",
  "serde",
@@ -13420,7 +13418,7 @@ dependencies = [
 [[package]]
 name = "solana-program-memory"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "num-traits",
  "solana-define-syscall",
@@ -13429,7 +13427,7 @@ dependencies = [
 [[package]]
 name = "solana-pubkey"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "bs58",
@@ -13454,7 +13452,7 @@ dependencies = [
 [[package]]
 name = "solana-rent"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "serde",
@@ -13466,12 +13464,12 @@ dependencies = [
 [[package]]
 name = "solana-sanitize"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 
 [[package]]
 name = "solana-sdk-macro"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bs58",
  "proc-macro2",
@@ -13482,7 +13480,7 @@ dependencies = [
 [[package]]
 name = "solana-serialize-utils"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "solana-instruction",
  "solana-pubkey",
@@ -13492,7 +13490,7 @@ dependencies = [
 [[package]]
 name = "solana-sha256-hasher"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "sha2 0.10.9",
  "solana-define-syscall",
@@ -13502,7 +13500,7 @@ dependencies = [
 [[package]]
 name = "solana-short-vec"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "serde",
 ]
@@ -13510,7 +13508,7 @@ dependencies = [
 [[package]]
 name = "solana-slot-hashes"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "serde",
@@ -13522,7 +13520,7 @@ dependencies = [
 [[package]]
 name = "solana-slot-history"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "bincode 2.0.1",
  "bv",
@@ -13534,7 +13532,7 @@ dependencies = [
 [[package]]
 name = "solana-stable-layout"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "solana-instruction",
  "solana-pubkey",
@@ -13543,7 +13541,7 @@ dependencies = [
 [[package]]
 name = "solana-sysvar-id"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "solana-pubkey",
 ]
@@ -13551,7 +13549,7 @@ dependencies = [
 [[package]]
 name = "solana-transaction-error"
 version = "2.1.18"
-source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#d3e1552485b1e7e1269e48968a1cf80290ba0223"
+source = "git+https://github.com/fluentlabs-xyz/agave?branch=feat%2Fsvm#5fb3e19ee5688ea43ad4f505a409149dc830aa3a"
 dependencies = [
  "serde",
  "serde_derive",
