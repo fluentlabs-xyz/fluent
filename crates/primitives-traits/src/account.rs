@@ -139,27 +139,16 @@ impl reth_codecs::Compact for Bytecode {
             OWNABLE_ACCOUNT_BYTECODE_ID, RWASM_BYTECODE_ID,
         };
 
-        let mut bytecode_len = 0;
-
         let bytecode = match &self.0 {
-            RevmBytecode::LegacyAnalyzed(analyzed) => Some(analyzed.bytecode()),
-            RevmBytecode::Eof(eof) => Some(eof.raw()),
-            RevmBytecode::Eip7702(eip7702) => Some(eip7702.raw()),
-            RevmBytecode::Rwasm(bytes) => Some(bytes),
-            RevmBytecode::OwnableAccount(account) => {
-                bytecode_len = OWNABLE_ACCOUNT_MAGIC_BYTES.len() + 1 + 20 + account.metadata.len();
-                buf.put_u32(bytecode_len as u32);
-                buf.put_u8(OWNABLE_ACCOUNT_VERSION);
-                buf.put_slice(account.owner_address.as_slice());
-                buf.put_slice(account.metadata.as_ref());
-                None
-            }
+            RevmBytecode::LegacyAnalyzed(analyzed) => analyzed.bytecode(),
+            RevmBytecode::Eof(eof) => eof.raw(),
+            RevmBytecode::Eip7702(eip7702) => eip7702.raw(),
+            RevmBytecode::Rwasm(bytes) => bytes,
+            RevmBytecode::OwnableAccount(account) => account.raw(),
         };
-        if let Some(bytecode) = bytecode {
-            bytecode_len = bytecode.len();
-            buf.put_u32(bytecode.len() as u32);
-            buf.put_slice(bytecode.as_ref());
-        }
+        let bytecode_len = bytecode.len();
+        buf.put_u32(bytecode.len() as u32);
+        buf.put_slice(bytecode.as_ref());
         let len = match &self.0 {
             // [`REMOVED_BYTECODE_ID`] has been removed.
             RevmBytecode::LegacyAnalyzed(analyzed) => {
