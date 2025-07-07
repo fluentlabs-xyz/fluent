@@ -275,7 +275,7 @@ pub static DEV: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 
 /// Fluent Developer Preview
 pub static DEVELOPER_PREVIEW: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
-    let json_file_compressed = include_bytes!("../res/genesis/genesis-v0.3.3-dev.json.gz");
+    let json_file_compressed = include_bytes!("../res/genesis/genesis-v0.3.4-dev.json.gz");
     use flate2::read::GzDecoder;
     let mut decoder = GzDecoder::new(&json_file_compressed[..]);
     let mut json_string = String::new();
@@ -298,7 +298,7 @@ pub static DEVELOPER_PREVIEW: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 
 /// Fluent Testnet
 pub static FLUENT_TESTNET: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
-    let json_file_compressed = include_bytes!("../res/genesis/genesis-v0.3.3-dev.json.gz");
+    let json_file_compressed = include_bytes!("../res/genesis/genesis-v0.3.4-dev.json.gz");
     use flate2::read::GzDecoder;
     let mut decoder = GzDecoder::new(&json_file_compressed[..]);
     let mut json_string = String::new();
