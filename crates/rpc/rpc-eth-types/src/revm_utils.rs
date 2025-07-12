@@ -273,7 +273,7 @@ where
     Ok(())
 }
 
-fn try_override_evm_bytecode(bytecode: Bytecode, code_hash: B256) -> Option<Bytecode> {
+fn try_override_evm_bytecode(bytecode: Bytecode, code_hash: &mut B256) -> Option<Bytecode> {
     match bytecode {
         Bytecode::LegacyAnalyzed(bytecode) => {
             let evm_bytecode = bytecode.original_byte_slice();
@@ -281,6 +281,7 @@ fn try_override_evm_bytecode(bytecode: Bytecode, code_hash: B256) -> Option<Byte
             evm_metadata.extend_from_slice(&code_hash[..]);
             evm_metadata.extend_from_slice(evm_bytecode);
             let bytecode = OwnableAccountBytecode::new(PRECOMPILE_EVM_RUNTIME, evm_metadata.into());
+            *code_hash = keccak256(bytecode.raw());
             Some(Bytecode::OwnableAccount(bytecode))
         }
         Bytecode::Eof(_) => None,
@@ -313,7 +314,7 @@ where
         info.code_hash = keccak256(&code);
         let bytecode = Bytecode::new_raw_checked(code)
             .map_err(|err| EthApiError::InvalidBytecode(err.to_string()))?;
-        info.code = try_override_evm_bytecode(bytecode, info.code_hash);
+        info.code = try_override_evm_bytecode(bytecode, &mut info.code_hash);
     }
     if let Some(balance) = account_override.balance {
         info.balance = balance;
