@@ -11486,6 +11486,7 @@ dependencies = [
  "alloy-rpc-types-eth",
  "alloy-sol-types",
  "derive_more 2.0.1",
+ "fluentbase-types",
  "futures",
  "itertools 0.14.0",
  "jsonrpsee-core",

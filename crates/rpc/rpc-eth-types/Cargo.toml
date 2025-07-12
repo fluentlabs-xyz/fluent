@@ -58,6 +58,9 @@ rand.workspace = true
 tracing.workspace = true
 itertools.workspace = true
 
+# fluentbase
+fluentbase-types.workspace = true
+
 [dev-dependencies]
 serde_json.workspace = true
 

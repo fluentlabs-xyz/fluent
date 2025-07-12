@@ -1,12 +1,15 @@
 //! utilities for working with revm
 
+use super::{EthApiError, EthResult, RpcInvalidTransactionError};
 use alloy_primitives::{keccak256, Address, B256, U256};
 use alloy_rpc_types_eth::{
     state::{AccountOverride, StateOverride},
     BlockOverrides,
 };
+use fluentbase_types::PRECOMPILE_EVM_RUNTIME;
 use reth_evm::TransactionEnv;
 use revm::{
+    bytecode::ownable_account::OwnableAccountBytecode,
     context::BlockEnv,
     database::{CacheDB, State},
     state::{Account, AccountStatus, Bytecode, EvmStorageSlot},
@@ -16,8 +19,6 @@ use std::{
     cmp::min,
     collections::{BTreeMap, HashMap},
 };
-
-use super::{EthApiError, EthResult, RpcInvalidTransactionError};
 
 /// Calculates the caller gas allowance.
 ///
@@ -272,6 +273,26 @@ where
     Ok(())
 }
 
+fn try_override_evm_bytecode(bytecode: Bytecode, code_hash: B256) -> Option<Bytecode> {
+    match bytecode {
+        Bytecode::LegacyAnalyzed(bytecode) => {
+            let evm_bytecode = bytecode.original_byte_slice();
+            let mut evm_metadata = Vec::with_capacity(32 + evm_bytecode.len());
+            evm_metadata.extend_from_slice(&code_hash[..]);
+            evm_metadata.extend_from_slice(evm_bytecode);
+            let bytecode = OwnableAccountBytecode::new(PRECOMPILE_EVM_RUNTIME, evm_metadata.into());
+            Some(Bytecode::OwnableAccount(bytecode))
+        }
+        Bytecode::Eof(_) => None,
+        // rWasm is a trusted code, letting pass invalid bytecode without validation can cause
+        // memory out of bounds or UB, ownable accounts can only be controlled by deployer, this can
+        // be allowed once fully covered with tests and doesn't cause any side effects
+        // TODO(dmitry123): "let developers use Wasm bytecode instead"
+        Bytecode::OwnableAccount(_) | Bytecode::Rwasm(_) => None,
+        bytecode => Some(bytecode),
+    }
+}
+
 /// Applies a single [`AccountOverride`] to the [`CacheDB`].
 fn apply_account_override<DB>(
     account: Address,
@@ -290,10 +311,9 @@ where
     if let Some(code) = account_override.code {
         // we need to set both the bytecode and the codehash
         info.code_hash = keccak256(&code);
-        info.code = Some(
-            Bytecode::new_raw_checked(code)
-                .map_err(|err| EthApiError::InvalidBytecode(err.to_string()))?,
-        );
+        let bytecode = Bytecode::new_raw_checked(code)
+            .map_err(|err| EthApiError::InvalidBytecode(err.to_string()))?;
+        info.code = try_override_evm_bytecode(bytecode, info.code_hash);
     }
     if let Some(balance) = account_override.balance {
         info.balance = balance;
