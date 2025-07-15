@@ -6,7 +6,7 @@ use alloy_rpc_types_eth::{
     state::{AccountOverride, StateOverride},
     BlockOverrides,
 };
-use fluentbase_types::PRECOMPILE_EVM_RUNTIME;
+pub use fluentbase_types::PRECOMPILE_EVM_RUNTIME;
 use reth_evm::TransactionEnv;
 use revm::{
     bytecode::ownable_account::OwnableAccountBytecode,

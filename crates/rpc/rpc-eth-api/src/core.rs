@@ -200,6 +200,14 @@ pub trait EthApi<T: RpcObject, B: RpcObject, R: RpcObject, H: RpcObject> {
     #[method(name = "getCode")]
     async fn get_code(&self, address: Address, block_number: Option<BlockId>) -> RpcResult<Bytes>;
 
+    /// Returns raw code at a given address at given block number.
+    #[method(name = "getRawCode")]
+    async fn get_raw_code(
+        &self,
+        address: Address,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<Bytes>;
+
     /// Returns the block's header at given number.
     #[method(name = "getHeaderByNumber")]
     async fn header_by_number(&self, hash: BlockNumberOrTag) -> RpcResult<Option<H>>;
@@ -628,6 +636,16 @@ where
     async fn get_code(&self, address: Address, block_number: Option<BlockId>) -> RpcResult<Bytes> {
         trace!(target: "rpc::eth", ?address, ?block_number, "Serving eth_getCode");
         Ok(EthState::get_code(self, address, block_number).await?)
+    }
+
+    /// Handler for: `eth_getRawCode`
+    async fn get_raw_code(
+        &self,
+        address: Address,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<Bytes> {
+        trace!(target: "rpc::eth", ?address, ?block_number, "Serving eth_getCode");
+        Ok(EthState::get_raw_code(self, address, block_number).await?)
     }
 
     /// Handler for: `eth_getHeaderByNumber`

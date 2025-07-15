@@ -190,6 +190,9 @@ where
     EthApiClient::<Transaction, Block, Receipt, Header>::get_code(client, address, None)
         .await
         .unwrap();
+    EthApiClient::<Transaction, Block, Receipt, Header>::get_raw_code(client, address, None)
+        .await
+        .unwrap();
     EthApiClient::<Transaction, Block, Receipt, Header>::send_raw_transaction(client, tx)
         .await
         .unwrap();

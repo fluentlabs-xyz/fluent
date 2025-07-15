@@ -11,7 +11,9 @@ use futures::Future;
 use reth_chainspec::{ChainSpecProvider, EthChainSpec, EthereumHardforks};
 use reth_errors::RethError;
 use reth_evm::{ConfigureEvm, EvmEnvFor};
-use reth_rpc_eth_types::{EthApiError, PendingBlockEnv, RpcInvalidTransactionError};
+use reth_rpc_eth_types::{
+    revm_utils::PRECOMPILE_EVM_RUNTIME, EthApiError, PendingBlockEnv, RpcInvalidTransactionError,
+};
 use reth_storage_api::{
     BlockIdReader, BlockNumReader, StateProvider, StateProviderBox, StateProviderFactory,
 };
@@ -41,6 +43,14 @@ pub trait EthState: LoadState + SpawnBlocking {
         block_id: Option<BlockId>,
     ) -> impl Future<Output = Result<Bytes, Self::Error>> + Send {
         LoadState::get_code(self, address, block_id)
+    }
+    /// Returns code of given account, at given blocknumber.
+    fn get_raw_code(
+        &self,
+        address: Address,
+        block_id: Option<BlockId>,
+    ) -> impl Future<Output = Result<Bytes, Self::Error>> + Send {
+        LoadState::get_raw_code(self, address, block_id)
     }
 
     /// Returns balance of given account, at given blocknumber.
@@ -350,7 +360,40 @@ pub trait LoadState:
     }
 
     /// Returns code of given account, at the given identifier.
+    /// Returns the account’s original code (runtime compatible).
     fn get_code(
+        &self,
+        address: Address,
+        block_id: Option<BlockId>,
+    ) -> impl Future<Output = Result<Bytes, Self::Error>> + Send
+    where
+        Self: SpawnBlocking,
+    {
+        const OFFSET: usize = 2 + 1 + 20; // account-type (2) + version (1) + address (20)
+        const METADATA_OFFSET: usize = 32;
+
+        self.spawn_blocking_io(move |this| {
+            let bytecode = this
+                .state_at_block_id_or_latest(block_id)?
+                .account_code(&address)
+                .map_err(Self::Error::from_eth_err)?
+                .unwrap_or_default();
+
+            match &bytecode.0 {
+                // Only this very runtime + owner gets «stripped» code
+                reth_revm::bytecode::Bytecode::OwnableAccount(acc)
+                    if acc.owner_address == PRECOMPILE_EVM_RUNTIME =>
+                {
+                    Ok(acc.raw.slice(OFFSET + METADATA_OFFSET..))
+                }
+                // Everything else – return as-is
+                _ => Ok(bytecode.original_bytes()),
+            }
+        })
+    }
+
+    /// Returns code of given account, at the given identifier.
+    fn get_raw_code(
         &self,
         address: Address,
         block_id: Option<BlockId>,
