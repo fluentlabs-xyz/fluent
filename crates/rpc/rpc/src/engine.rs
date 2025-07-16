@@ -87,6 +87,11 @@ where
         self.eth.get_code(address, block_id).instrument(engine_span!()).await
     }
 
+    /// Handler for: `eth_getRawCode`
+    async fn get_raw_code(&self, address: Address, block_id: Option<BlockId>) -> Result<Bytes> {
+        self.eth.get_raw_code(address, block_id).instrument(engine_span!()).await
+    }
+
     /// Handler for: `eth_getBlockByHash`
     async fn block_by_hash(
         &self,
